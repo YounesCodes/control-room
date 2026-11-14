@@ -1,17 +1,18 @@
 # Testing
 
-Control Room uses Rust and Vitest component tests for contracts and failure paths. Chromium journeys mount the real app with typed fixtures at the Tauri boundary and exercise navigation, keyboard input, layout, and accessibility. Native desktop tests cross React, real IPC, Rust, SQLite, and Windows processes. Ignored SSH tests and the local Ubuntu journeys provide read-only proof against a configured host.
+Control Room uses Rust and Vitest component tests for contracts and failure paths. Chromium journeys mount the real app with typed fixtures at the Tauri boundary and exercise navigation, keyboard input, layout, and accessibility. Native desktop tests cross React, real IPC, Rust, SQLite, and native processes. Ignored SSH tests and the local Ubuntu journeys provide read-only proof against a configured host.
 
-| Layer                       | Command                           | Runs in pull request CI           |
-| --------------------------- | --------------------------------- | --------------------------------- |
-| Frontend and tooling        | `npm test`                        | Yes                               |
-| Chromium components and axe | `npm run test:browser`            | Yes                               |
-| Rust unit tests             | `npm run check:rust`              | Yes, with fmt and Clippy          |
-| Frontend coverage           | `npm run test:coverage`           | Manual coverage workflow          |
-| Rust coverage               | `npm run test:rust-coverage`      | Manual coverage workflow          |
-| Windows desktop E2E         | `npm run test:desktop`            | Yes, on a hosted Windows runner   |
-| Debian SSH fixture          | `npm run test:live-ssh`           | Manual live fixture workflow      |
-| Hosted Ubuntu SSH fixture   | `bash scripts/test-hosted-ssh.sh` | Yes, on a disposable Linux runner |
+| Layer                       | Command                           | Runs in pull request CI             |
+| --------------------------- | --------------------------------- | ----------------------------------- |
+| Frontend and tooling        | `npm test`                        | Yes                                 |
+| Chromium components and axe | `npm run test:browser`            | Yes                                 |
+| Rust unit tests             | `npm run check:rust`              | Yes, with fmt and Clippy            |
+| Frontend coverage           | `npm run test:coverage`           | Manual coverage workflow            |
+| Rust coverage               | `npm run test:rust-coverage`      | Manual coverage workflow            |
+| Linux desktop E2E           | `bash scripts/test-linux-wdio.sh` | Yes, Ubuntu 24.04 with Xvfb/Openbox |
+| Windows desktop E2E         | `npm run test:desktop`            | Yes, on a hosted Windows runner     |
+| Debian SSH fixture          | `npm run test:live-ssh`           | Manual live fixture workflow        |
+| Hosted Ubuntu SSH fixture   | `bash scripts/test-hosted-ssh.sh` | Yes, on a disposable Linux runner   |
 
 Start with `npm ci`. The normal Windows CI still runs Prettier, ESLint, TypeScript and Vite builds, `cargo audit`, and the NSIS installer build. `src/ui-hierarchy.test.ts` keeps architecture and permission contracts; browser and desktop tests check user behavior. Neither normal test command needs an SSH host.
 
@@ -131,6 +132,12 @@ and register a motion trigger and animated target only when that transition can
 run headlessly. The harness lives outside the product entry point; it is not
 included in the packaged app. Vitest browser tests stay independent.
 
+## Linux desktop smoke test
+
+The Ubuntu 24.04 CI job runs Clippy and Rust tests, builds the `.deb` and AppImage, then installs the `.deb` on the runner. WebKitWebDriver and Openbox exercise the installed app in Xvfb with a temporary XDG data directory. The separate hosted SSH job uses the system OpenSSH client and a loopback server to verify a Linux PTY and read-only inspection.
+
+To build on Ubuntu 24.04, install the Tauri development packages (`libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, `patchelf`, `file`, and build tools), then run `npm ci` and `npm run tauri build`. Use a separate Linux desktop session for interactive verification.
+
 ## Windows desktop E2E
 
 On Windows 11 with WebView2 and the Rust/Tauri build prerequisites, run:
@@ -144,7 +151,7 @@ PR and main CI run the desktop suite on a hosted Windows runner. The `Desktop E2
 
 This suite uses an external `tauri-driver` on Windows. WebdriverIO's helper plugin, permissions, and read-only `e2e_runtime_status` command load only with the debug `desktop-e2e` feature. The release build refuses that feature. The service installs a matching driver if needed; once provisioned, the deterministic tests need no external network. Offline connections use loopback port 1 and updater checks are disabled in each new test database. The debug test app passes the driver's debugging port and profile directly to WebView2, so session creation also works on elevated Windows runners.
 
-Each test starts a fresh app process, SQLite database, and WebView2 profile. Persistence tests explicitly restart with the same database. Mocha setup failures fail the test, and teardown closes owned sessions and streams even after assertion failures. Diagnostics expose the app PID and active session/stream IDs; cleanup waits for those resources and app processes to exit before removing temporary files. Tests run serially with no automatic test retries.
+Each test starts a fresh app process, SQLite database, and isolated webview data. Persistence tests explicitly restart with the same database. Mocha setup failures fail the test, and teardown closes owned sessions and streams even after assertion failures. Diagnostics expose the app PID and active session/stream IDs; cleanup waits for those resources and app processes to exit before removing temporary files. Tests run serially with no automatic test retries.
 
 Run one feature suite with `npm run test:desktop -- --spec e2e/connections.spec.ts` (or `settings`, `terminals`, or `local-data`). Run each independently and the complete suite twice when changing isolation or process lifecycle. Failures save a screenshot, test name, DOM state, and runtime diagnostics under ignored `test-results/desktop/`, alongside driver/application logs. The manual `Desktop E2E` workflow uploads only sanitized text diagnostics. Screenshots stay local. If the shared launcher log contains NUL padding, its contents are omitted; sanitized per-spec logs remain available. Other sanitization failures block the upload. Live-host screenshots stay local and are never included in that workflow.
 
@@ -176,9 +183,71 @@ Run `npm run test:local-gate` explicitly for the ordinary checks, Chromium tests
 
 Run `npm run install:dev-hooks` to install the fast pre-commit check. It checks whitespace and formatting of the staged content, including partially staged files, without rewriting files. The installer backs up the old managed Control Room hooks and removes their duplicate pre-push gate. It refuses to replace unrelated hooks or a custom `core.hooksPath`. The old `install:local-lab-hooks` command now installs the same fast hooks. Hooks remain in this checkout across branch switches.
 
-Run focused tests while implementing changes. Required PR checks run the full frontend, Rust, Chromium, Windows desktop, hosted SSH, and installer checks on GitHub. The release workflow verifies that the tagged commit belongs to main and has a successful main CI run with all those jobs. It builds a draft release, verifies its signature and updater assets, then publishes it. An incomplete or failed validation leaves the release unpublished.
+Run focused tests while implementing changes. Required PR checks run the full frontend, Rust, Chromium, Windows desktop, hosted SSH, and installer checks on GitHub. The release workflow also requires the Linux desktop job. It attaches the Windows and Linux packages to the existing draft, verifies the signed NSIS and AppImage assets against the updater feed, and then publishes it. An incomplete or failed validation leaves the release unpublished.
 
 This fixture proves behavior against this one Ubuntu VM at the time it runs. It cannot prove that every Linux distribution, permission state, network failure, or production desktop environment behaves the same way. Existing deterministic tests cover those branches; add a disposable fixture when a new host-specific behavior needs live proof.
+
+## Native input and keyboard layouts
+
+`native-clipboard.spec.ts` reads and writes the real OS clipboard. It double-clicks
+terminal output with the OS pointer, copies with the platform shortcut, and checks
+the actual clipboard contents. A raw Node PTY collector verifies multiline Unicode
+and the exact bracketed-paste delimiters. Separate raw-input cases verify shell
+Ctrl+C and Ctrl+W. The clipboard is restored after each case.
+
+`native-shortcuts.spec.ts` sends native keys for the command palette, workspace
+reordering, restart, terminal search and close confirmation, Settings categories,
+and Settings tabs. It also checks that arrows in a text field still edit the
+caret. `native-inspection-shortcuts.live.ts` covers Logs search, returning to
+Terminal, Systemd inventory and dependency navigation, Ports and Docker graph
+navigation, refocusing, and Escape dismissal against a real SSH host. Select that
+file explicitly with `--spec` and configure `CONTROL_ROOM_TEST_HOST`,
+`CONTROL_ROOM_TEST_USER`, and optionally `CONTROL_ROOM_TEST_PORT`. Missing access,
+journald, Docker, or usable graph data fails the fixture instead of skipping it.
+History integration stays disabled for this account. Debug `desktop-e2e` builds
+accept `CONTROL_ROOM_TEST_SSH_CONFIG` for an isolated pinned SSH configuration;
+ordinary application builds ignore it.
+
+`italian-keyboard.spec.ts` selects an actual Italian input source and restores it
+in `finally`. Linux uses XKB with a dead acute followed by e; macOS discovers the
+Italian source's dead-key mapping through Carbon. Windows uses the standard
+[Italian layout's direct è/é keys](https://learn.microsoft.com/en-us/globalization/keyboards/kbdit.html).
+That layout defines no dead-key states, so its cases exercise the direct accent keys.
+The assertions check both a text field and the UTF-8 bytes received by the PTY.
+Linux requires `xdotool`, `xclip`, and the XKB utilities on the private Xvfb
+display. macOS requires the command-line tools plus Accessibility and Automation
+permission for `osascript` to control System Events. Missing permission fails the
+test and must be reported as unvalidated, not a successful native-input check.
+
+`windows-scaling.spec.ts` changes the real Windows Display Scale control through
+UI Automation to 125% and 150%, verifies the WebView's devicePixelRatio, and checks
+maximize/restore geometry and a live shell. It restores the original OS scale in
+`finally`. Its two cases skip on Linux/macOS because they exercise Windows display
+settings. Small VM display modes hide the 150% option, so that case selects the
+largest advertised mode of at least 1600×900 and restores the original resolution
+afterward. It tests the mode before applying it and does not update the display
+registry. A missing suitable mode fails only the 150% fixture; 125% still runs.
+Run it only on a disposable desktop with no concurrent test run.
+
+The native suites use Cmd on macOS and Ctrl elsewhere for application shortcuts;
+shell Ctrl+C and Ctrl+W always retain Ctrl. macOS execution depends on the native
+support branch. Compact workspace and focus-motion specs have no blanket macOS
+skip. macOS minimum-width checks start at its native 960-pixel minimum and use
+fullscreen/restore in place of the Windows maximize control. The macOS lab now
+uses a dedicated `tester` account and `~/Developer/control-room-e2e`; the devbox
+`control-room-mac` SSH alias selects that account. Cold boots reach its unlocked
+console, with Finder active and CGSession reporting an on-console session.
+Accessibility and Automation permissions for System Events remain unvalidated.
+Account-authenticated Screen Sharing caused the guest to lose its GUI session;
+do not connect it during automated runs. Native input must still report missing
+permissions as a fixture failure. ARM macOS is not in the lab.
+
+Linux lab validation: four clipboard/control-key cases, two Italian-layout cases,
+and four application-shortcut cases passed on the Linux integration build. These
+are native X11/WebKit results; the existing Chromium fixtures do not replace them.
+Hosted Windows CI passed the full offline suite, including both 125% and 150%
+native display scale. The local LTSC VM passed 125%; its only advertised physical
+mode is 1280×800, so the missing 150% option fails that local fixture explicitly.
 
 ## Feature-to-test matrix
 
@@ -199,3 +268,119 @@ Browser fixtures prove user interactions against controlled results; they do not
 | Updates and accessibility | Real App manual check/download retry/progress; updater fixtures; release-note safety, palette/keyboard, dialog focus, axe, minimum-size layout                                    | Settings and native window journey                                                                                                 | Updater endpoint, signature, installer and restart safeguards; E2E feature rejected in release builds |
 
 Coverage reports support this matrix; there is no arbitrary percentage target. PR checks run unit, Chromium, desktop, and hosted SSH tests. Local Ubuntu and Windows SSH journeys remain explicit.
+
+## Linux native WebDriver
+
+The Linux suite requires native Linux support from PR #227. The shared platform helper
+is adapted from macOS PR #65. Build with `npm run test:desktop:build`, then run
+`bash scripts/test-linux-wdio.sh`. Install `webkit2gtk-driver`, Xvfb, Openbox,
+`x11-utils`, `dbus-x11`, and the Tauri GTK development libraries first. The service
+starts tauri-driver and WebKitWebDriver. The runner owns its X11 display and window
+manager and waits for the WM before exercising maximize and restore.
+
+Install `scripts/e2e-linux-lab.sh` as `~/e2e-linux.sh` on the Linux lab VM. It builds
+the debug automation binary and runs the full suite, with an optional spec argument.
+A lock prevents concurrent runs. This replaces the installed-package smoke runner;
+installed-package behavior needs separate lifecycle checks.
+
+All deterministic specs run on Linux, including compact workspaces, focus motion,
+and shell-reported titles. Linux uses Bash and PTYs, Windows uses Command Prompt
+and ConPTY, and macOS uses zsh. Process cleanup on Linux checks executable paths and
+`/proc` start times before removing temporary app data or stopping owned drivers.
+Linux checks installed-font preview without network access. The Windows/macOS online font catalog requires `CONTROL_ROOM_LIVE_FONTS=1` and network access.
+Live Linux and Windows SSH suites still require their explicit fixture variables.
+The Linux lab fixture must provide readable journald and accessible Docker with a
+container; missing fixture capabilities fail the live tests.
+
+The Linux documentation launcher reports immediate browser-start failures and
+returns while a long-lived browser remains open. A real child-process regression
+holds the browser fixture alive until the test releases its input pipe and checks
+that the native request has already completed. The native documentation journey
+then verifies that the button and Settings remain available after dispatch.
+
+## Installed package lifecycle
+
+Run `npm run test:install-lifecycle` in a disposable desktop account with no existing
+Control Room installation or app data. The command selects the newest stable
+published version that is not newer than the branch, downloads its native installer,
+and builds the branch installer. A branch that still carries the published version
+upgrades from that release, and the runner requires the installed executable to change.
+Use `-- --from v0.9.4` (or `CONTROL_ROOM_LIFECYCLE_FROM`) to upgrade from an older
+release and exercise its migrations.
+Use `-- --candidate /absolute/path/to/installer` to supply an already-built package.
+`-- --preflight` checks release availability without installing anything.
+
+The fixture creates real SQLite data through registered production IPC commands.
+It creates the local split layout through the UI and exercises real shell input.
+After an installer upgrade it checks connections, groups, tag colors, global,
+connection and local notes, settings, history, and the complete saved layout. It
+checks SQLite integrity and the removal of the retired Baselines table. It then
+runs the native uninstaller, removes only its own data, reinstalls the candidate,
+and checks launch, empty collections and default settings.
+
+The runner also exercises the updater against a loopback `latest.json`. The Rust
+`modified_installer_cannot_reach_installation` test calls download-and-install with
+tampered bytes and requires a signature rejection. On Windows the existing signed
+NSIS fixture verifies the real installer handoff. That updater fixture uses a mock
+Tauri runtime and an isolated payload; it does not replace the running app through
+the updater UI.
+
+Select `e2e/updater-lifecycle.spec.ts` explicitly on Windows to exercise the actual
+application updater UI. On Linux, run `node scripts/test-updater-lifecycle.mjs` on
+the private X11 display with native support from PR #227. It builds two native
+NSIS or AppImage versions from disposable source
+with a separate product identifier and signing key. A loopback `latest.json` first
+serves modified bytes. The UI must report signature rejection and the installed
+executable must remain unchanged. A retry serves correctly signed bytes, installs
+the candidate, and must automatically launch its window. A fresh native session
+then checks the new version and all seeded user data. The runner uninstalls this
+separate fixture and removes only marked fixture data. Linux AppImages live in
+the owned temporary installation directory and do not replace the system .deb.
+These builds use the debug
+profile without the desktop automation plugin; production commands, UI, signature
+verification and installer code run unchanged. This supplements the published
+release upgrade test, whose previous installer comes from GitHub.
+The Linux x86_64 AppImage journey passed on integration e03d62e, including bad
+signature rejection, exact candidate bytes, automatic visible relaunch and every
+seeded data field. The Windows x86_64 NSIS journey passed on 9a8869b with the same signature,
+installation, relaunch and data checks. The fixture explicitly passes its owned
+installation directory to NSIS and compares against the actual NSIS payload.
+Relaunch checks require a different application PID and a visible native window
+before the original driver is closed. Windows inherits the configured installer
+mode; Linux keeps verbose bundler output for packaging failures.
+If a failed updater run leaves its marked installation, explicitly select
+`e2e/updater-lifecycle-cleanup.spec.ts` before retrying. Cleanup verifies the marker
+and temporary-directory boundary and never removes the ordinary app's data.
+
+For the Windows lab helper, explicitly select `e2e/install-upgrade.spec.ts`. Ordinary
+desktop runs exclude that spec. It closes the debug app before installing packages
+and reuses the matching native WebView2 driver. A standalone Windows invocation can
+set `CONTROL_ROOM_LIFECYCLE_NATIVE_DRIVER` to the matching msedgedriver executable.
+The external installed-app driver does not require the debug WDIO plugin.
+
+Published releases through v0.9.5 include only a Windows installer. Linux
+and macOS preflight fail with the missing-package reason. Linux requires native
+support from PR #227 and an earlier published .deb before its upgrade can run.
+Production macOS WKWebViews additionally need an accessibility adapter; the debug
+embedded driver cannot stand in for a published application. Installed macOS
+lifecycle automation remains incomplete. ARM macOS is outside this lab.
+
+To check Linux clean uninstall/reinstall before a previous published .deb exists,
+run `node scripts/test-linux-install-clean.mjs --candidate /path/to/branch.deb
+--restore /path/to/original.deb --version 0.9.5` on the private X11 display. The
+restore package must contain the exact currently installed executable. The test
+uses private XDG data/config/cache directories, seeds real data through the app,
+uninstalls the candidate, removes its data, and checks clean reinstall defaults.
+It restores the original package and verifies its binary hash even after failure.
+This is clean-install coverage and does not claim a published-release upgrade.
+The Linux x86_64 lab passed this installed release-package check on integration
+46bc2e1, including clean defaults and the original-package hash verification.
+
+Successful runs remove their fixture and user data. A failed run preserves its
+owned temporary directory and reports the data path for diagnosis; it refuses to
+overwrite an existing user database on the next run. After inspecting a failure,
+run `npm run test:install-lifecycle -- --cleanup` to uninstall and remove only the
+fixture with this runner's ownership marker. Cleanup refuses unmarked user data.
+The Windows lab helper can run `e2e/install-lifecycle-cleanup.spec.ts` explicitly for
+the same cleanup without exposing arbitrary shell access.
+It does not create or restore Proxmox snapshots.

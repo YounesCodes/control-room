@@ -14,6 +14,8 @@ import "../styles.css";
 const session = vi.hoisted(() => ({
   output: null as { onmessage: ((message: ArrayBuffer) => void) | null } | null,
   acknowledgeSessionOutput: vi.fn(() => Promise.resolve()),
+  readClipboard: vi.fn<() => Promise<string | null>>(),
+  writeClipboard: vi.fn<(text: string) => Promise<void>>(),
   writeSession: vi.fn<(id: string, data: Uint8Array) => Promise<void>>(() => Promise.resolve()),
   resizeSession: vi.fn<(id: string, cols: number, rows: number) => Promise<void>>(() =>
     Promise.resolve(),
@@ -48,6 +50,8 @@ vi.mock("../lib/api", () => ({
     resizeSession: session.resizeSession,
     closeSession: vi.fn(() => Promise.resolve()),
     writeSession: session.writeSession,
+    readClipboard: session.readClipboard,
+    writeClipboard: session.writeClipboard,
   },
   errorMessage: (error: unknown) => String(error),
 }));
@@ -83,6 +87,8 @@ afterEach(() => {
   session.output = null;
   session.acknowledgeSessionOutput.mockClear();
   session.writeSession.mockClear();
+  session.readClipboard.mockReset();
+  session.writeClipboard.mockReset();
   session.resizeSession.mockClear();
   vi.restoreAllMocks();
 });
@@ -356,6 +362,52 @@ it("pastes Unicode and multiple lines once and copies the actual terminal select
   });
   handle.current!.copySelection();
   await vi.waitFor(() => expect(write).toHaveBeenCalledWith("COPY_NEEDLE"));
+});
+
+it("pastes and copies through the GTK clipboard with Ctrl+Shift+V and Ctrl+Shift+C", async () => {
+  const text = "日本語-é\nsecond line";
+  session.readClipboard.mockResolvedValue(text);
+  session.writeClipboard.mockResolvedValue();
+  const webRead = vi.spyOn(navigator.clipboard, "readText");
+  container = document.createElement("div");
+  container.style.height = "400px";
+  document.body.append(container);
+  root = createRoot(container);
+  const handle = createRef<TerminalPaneHandle>();
+  root.render(
+    <TerminalPane
+      ref={handle}
+      workspace={createLocalWorkspace({
+        id: "test-shell",
+        label: "Test shell",
+        kind: "command-prompt",
+        elevated: false,
+      })}
+      settings={settings}
+      visible
+      active
+      nativeClipboard
+      onActivate={() => undefined}
+      onSession={() => undefined}
+      onState={() => undefined}
+    />,
+  );
+  await vi.waitFor(() => expect(session.output).not.toBeNull());
+  handle.current!.focus();
+  await userEvent.keyboard("{Control>}{Shift>}v{/Shift}{/Control}");
+  await vi.waitFor(() => expect(session.writeSession).toHaveBeenCalledTimes(1));
+  expect(session.readClipboard).toHaveBeenCalledTimes(1);
+  expect(webRead).not.toHaveBeenCalled();
+  expect(new TextDecoder().decode(session.writeSession.mock.calls[0][1])).toBe(
+    text.replaceAll("\n", "\r"),
+  );
+  session.output!.onmessage!(new TextEncoder().encode("COPY_NEEDLE\r\n").buffer);
+  await expect.element(page.getByText("COPY_NEEDLE", { exact: true })).toBeVisible();
+  await userEvent.dblClick(container.querySelector(".xterm-screen")!, {
+    position: { x: 15, y: 5 },
+  });
+  await userEvent.keyboard("{Control>}{Shift>}c{/Shift}{/Control}");
+  await vi.waitFor(() => expect(session.writeClipboard).toHaveBeenCalledWith("COPY_NEEDLE"));
 });
 
 it("keeps a mouse-tracking program's selection when moving to Copy", async () => {

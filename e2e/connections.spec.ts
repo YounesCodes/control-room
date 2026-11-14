@@ -61,7 +61,16 @@ describe("Saved Connections through real SQLite", () => {
     await addConnection("Grouped fixture");
     await connectionMenu("Grouped fixture");
     await $("aria/Edit connection").click();
-    await $("//label[span[normalize-space()='Group']]/select").selectByVisibleText("Production");
+    const groupSelect = await $("//label[span[normalize-space()='Group']]/select");
+    if (isMac) {
+      // The embedded driver's synthetic option click has no native selection default.
+      await browser.execute((select: HTMLSelectElement) => {
+        select.value = Array.from(select.options).find(
+          (option) => option.text === "Production",
+        )!.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }, groupSelect);
+    } else await groupSelect.selectByVisibleText("Production");
     await $("[aria-label='Available tags']").$("button=database").click();
     await $("button=Save changes").click();
     await restartApp();
@@ -111,3 +120,4 @@ describe("Saved Connections through real SQLite", () => {
     expect(await ipc("list_connections")).toEqual([]);
   });
 });
+import { isMac } from "./platform";

@@ -17,12 +17,57 @@ use wait_timeout::ChildExt;
 use crate::models::SavedConnection;
 
 pub fn background_command<S: AsRef<OsStr>>(program: S) -> Command {
-    let mut command = Command::new(program);
+    let command = Command::new(program);
     #[cfg(windows)]
-    command.creation_flags(CREATE_NO_WINDOW);
+    let command = {
+        let mut command = command;
+        command.creation_flags(CREATE_NO_WINDOW);
+        command
+    };
+    #[cfg(target_os = "linux")]
+    let command = {
+        let mut command = command;
+        for (name, value) in crate::appimage::host_environment() {
+            if let Some(value) = value {
+                command.env(name, value);
+            } else {
+                command.env_remove(name);
+            }
+        }
+        command
+    };
     command
 }
 
+#[cfg(not(target_os = "linux"))]
+pub const MISSING_SSH: &str =
+    "Windows OpenSSH client was not found. Install the OpenSSH Client optional feature.";
+#[cfg(target_os = "linux")]
+pub const MISSING_SSH: &str = "OpenSSH client was not found. Install the openssh-client package.";
+
+#[cfg(target_os = "linux")]
+pub(crate) fn executable_file(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    path.is_absolute()
+        && path
+            .metadata()
+            .is_ok_and(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(target_os = "linux")]
+pub fn detect_ssh_path() -> Option<PathBuf> {
+    let system = PathBuf::from("/usr/bin/ssh");
+    if executable_file(&system) {
+        return Some(system);
+    }
+    env::var_os("PATH").and_then(|paths| {
+        env::split_paths(&paths)
+            .map(|path| path.join("ssh"))
+            .find(|path| executable_file(path))
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
 pub fn detect_ssh_path() -> Option<PathBuf> {
     let system = PathBuf::from(r"C:\Windows\System32\OpenSSH\ssh.exe");
     if system.is_file() {
@@ -39,7 +84,11 @@ pub fn ssh_agent_available(ssh_path: Option<&Path>) -> bool {
     let Some(ssh_path) = ssh_path else {
         return false;
     };
-    let ssh_add = ssh_path.with_file_name("ssh-add.exe");
+    let ssh_add = ssh_path.with_file_name(if cfg!(target_os = "linux") {
+        "ssh-add"
+    } else {
+        "ssh-add.exe"
+    });
     if !ssh_add.is_file() {
         return false;
     }
@@ -63,9 +112,11 @@ pub fn ssh_agent_available(ssh_path: Option<&Path>) -> bool {
 }
 
 pub fn ssh_config_path() -> String {
-    env::var_os("USERPROFILE")
-        .map(PathBuf::from)
-        .unwrap_or_default()
+    #[cfg(target_os = "linux")]
+    let home = env::home_dir();
+    #[cfg(not(target_os = "linux"))]
+    let home = env::var_os("USERPROFILE").map(PathBuf::from);
+    home.unwrap_or_default()
         .join(".ssh")
         .join("config")
         .to_string_lossy()
@@ -74,8 +125,8 @@ pub fn ssh_config_path() -> String {
 
 pub fn connection_arguments(connection: &SavedConnection, terminal: bool) -> Vec<String> {
     let mut arguments = Vec::new();
-    #[cfg(test)]
-    if let Ok(config) = env::var("CONTROL_ROOM_TEST_SSH_CONFIG")
+    #[cfg(any(test, feature = "desktop-e2e"))]
+    if let Ok(config) = std::env::var("CONTROL_ROOM_TEST_SSH_CONFIG")
         && !config.is_empty()
     {
         arguments.extend(["-F".into(), config]);

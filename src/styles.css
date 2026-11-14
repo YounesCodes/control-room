@@ -206,6 +206,22 @@ body {
   user-select: none;
 }
 
+/* Linux draws the window corners Windows 11 draws natively. The window is
+   transparent, so the page clips itself, including fixed dialogs and menus. */
+html[data-window-corners="rounded"],
+html[data-window-corners="rounded"] body {
+  background: transparent;
+}
+
+html[data-window-corners="rounded"] body {
+  clip-path: inset(0 round var(--radius-lg));
+}
+
+html[data-window-corners="rounded"] .app-shell {
+  overflow: clip;
+  border-radius: var(--radius-lg);
+}
+
 button,
 input,
 select,
@@ -9525,4 +9541,63 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   .modal-header > button {
     flex-shrink: 0;
   }
+}
+
+/* Resize borders for the undecorated GTK window. */
+.window-resize-handles {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.window-resize-handle {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.window-resize-handle[data-edge="North"],
+.window-resize-handle[data-edge="South"] {
+  inset-inline: 6px;
+  height: 4px;
+  cursor: ns-resize;
+}
+
+.window-resize-handle[data-edge="East"],
+.window-resize-handle[data-edge="West"] {
+  inset-block: 6px;
+  width: 4px;
+  cursor: ew-resize;
+}
+
+.window-resize-handle[data-edge$="East"] {
+  right: 0;
+}
+
+.window-resize-handle[data-edge$="West"] {
+  left: 0;
+}
+
+.window-resize-handle[data-edge^="North"] {
+  top: 0;
+}
+
+.window-resize-handle[data-edge^="South"] {
+  bottom: 0;
+}
+
+.window-resize-handle[data-edge^="North"]:not([data-edge="North"]),
+.window-resize-handle[data-edge^="South"]:not([data-edge="South"]) {
+  width: 6px;
+  height: 6px;
+}
+
+.window-resize-handle[data-edge="NorthWest"],
+.window-resize-handle[data-edge="SouthEast"] {
+  cursor: nwse-resize;
+}
+
+.window-resize-handle[data-edge="NorthEast"],
+.window-resize-handle[data-edge="SouthWest"] {
+  cursor: nesw-resize;
 }

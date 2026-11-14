@@ -27,7 +27,12 @@ pub fn get_environment_info() -> EnvironmentInfo {
         ssh_path: ssh_path.map(|path| path.to_string_lossy().to_string()),
         ssh_config_path: ssh_config_path(),
         ssh_agent_available: agent_available,
-        platform_supported: cfg!(all(windows, target_arch = "x86_64")),
+        platform_supported: cfg!(all(
+            any(windows, target_os = "linux"),
+            target_arch = "x86_64"
+        )),
+        desktop_os: std::env::consts::OS,
+        in_app_updates: crate::updater::in_app_updates(),
     }
 }
 
@@ -241,7 +246,7 @@ pub fn list_local_shells() -> LocalShellCatalog {
     local_shell::installed_shells()
 }
 
-/// Starts a local Windows shell. `shell_id` is a Local Shell Profile id and
+/// Starts a local shell. `shell_id` is a Local Shell Profile id and
 /// nothing else: the executable, its arguments, privilege mode, and working
 /// directory are resolved in Rust, so there is no way to ask for an arbitrary
 /// process here.

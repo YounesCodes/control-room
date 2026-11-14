@@ -15,7 +15,16 @@
   },
   "scenarios": {
     "settings": {
-      "states": ["populated", "monitoring", "logs", "diagnostics", "update-failed", "save-failed"],
+      "states": [
+        "populated",
+        "monitoring",
+        "logs",
+        "diagnostics",
+        "update-failed",
+        "save-failed",
+        "linux-package",
+        "linux-font"
+      ],
       "ready": ".app-shell",
       "prepare": {
         "populated": [
@@ -101,6 +110,28 @@
           {
             "selector": ".settings-save"
           }
+        ],
+        "linux-package": [
+          {
+            "role": "button",
+            "name": "Open Settings"
+          },
+          {
+            "role": "searchbox",
+            "name": "Search settings",
+            "fill": "Control Room updates"
+          }
+        ],
+        "linux-font": [
+          {
+            "role": "button",
+            "name": "Open Settings"
+          },
+          {
+            "role": "searchbox",
+            "name": "Search settings",
+            "fill": "Font family"
+          }
         ]
       },
       "settled": {
@@ -109,7 +140,9 @@
         "logs": ".settings-page",
         "diagnostics": ".settings-ssh",
         "update-failed": ".settings-update-error",
-        "save-failed": ".settings-status.failed"
+        "save-failed": ".settings-status.failed",
+        "linux-package": ".settings-page button:has-text('Open releases')",
+        "linux-font": ".settings-page .terminal-appearance-controls input[type='number']"
       },
       "motion": {
         "description": "Settings category reveal, General to Terminal",
@@ -390,17 +423,45 @@
       "states": ["stopped", "populated", "errors", "search", "restricted"],
       "ready": ".app-shell",
       "prepare": {
-        "populated": [{ "role": "button", "name": "Start" }],
-        "restricted": [{ "role": "button", "name": "Start" }],
+        "populated": [
+          {
+            "role": "button",
+            "name": "Start"
+          }
+        ],
+        "restricted": [
+          {
+            "role": "button",
+            "name": "Start"
+          }
+        ],
         "errors": [
-          { "role": "button", "name": "Start" },
-          { "selector": ".log-line[data-level='error']", "wait": true },
-          { "selector": ".log-level-filter [data-level='error']" }
+          {
+            "role": "button",
+            "name": "Start"
+          },
+          {
+            "selector": ".log-line[data-level='error']",
+            "wait": true
+          },
+          {
+            "selector": ".log-level-filter [data-level='error']"
+          }
         ],
         "search": [
-          { "role": "button", "name": "Start" },
-          { "selector": ".log-line[data-level='error']", "wait": true },
-          { "role": "textbox", "name": "Search loaded lines", "fill": "batch 4813" }
+          {
+            "role": "button",
+            "name": "Start"
+          },
+          {
+            "selector": ".log-line[data-level='error']",
+            "wait": true
+          },
+          {
+            "role": "textbox",
+            "name": "Search loaded lines",
+            "fill": "batch 4813"
+          }
         ]
       },
       "settled": {

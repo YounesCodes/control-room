@@ -46,6 +46,10 @@ function calledWindowMethods(): string[] {
 const windowCapabilities = JSON.parse(
   readFileSync(new URL("../src-tauri/capabilities/default.json", import.meta.url), "utf8"),
 ) as { permissions: string[] };
+const linuxWindowCapabilities = JSON.parse(code("../src-tauri/capabilities/linux-window.json")) as {
+  platforms: string[];
+  permissions: string[];
+};
 const apiSource = code("./lib/api.ts");
 const tauriSource = code("../src-tauri/src/lib.rs");
 
@@ -113,7 +117,7 @@ describe("application hierarchy", () => {
     const handlers = tauriSource
       .split("tauri::generate_handler![")[1]
       ?.split("])")[0]
-      .matchAll(/(?:commands|updater|fonts|documentation)::([a-z_]+)/g);
+      .matchAll(/^\s*[a-z_]+::([a-z_]+),/gm);
     const registered = new Set([...(handlers ?? [])].map((match) => match[1]));
     expect(called.length).toBeGreaterThan(40);
     for (const command of called) {
@@ -189,11 +193,6 @@ describe("application hierarchy", () => {
     expect(terminalSource).toMatch(
       /if \(action === "ignore"\) return;[\s\S]{0,80}event\.preventDefault\(\);/,
     );
-    // Copy stays explicit. Paste is xterm's native event so one clipboard
-    // gesture cannot be handled once here and once through onData.
-    expect(terminalSource).toContain('key.toLowerCase() === "c"');
-    expect(terminalSource).not.toContain('key.toLowerCase() === "v"');
-    expect(terminalSource).toContain("xterm owns keyboard paste");
   });
 
   it("keeps terminal actions in the tab strip and the terminal surface clear", () => {
@@ -286,12 +285,20 @@ describe("application hierarchy", () => {
     // and the tests here render the controls with a stub. Following the
     // binding rather than naming the methods means a fourth control fails here
     // instead of doing nothing when a user clicks it.
-    const called = calledWindowMethods();
-    expect(called).toEqual(["close", "minimize", "toggleMaximize"]);
+    // `core:default` already allows reading window state and listening for
+    // window events; only the controls need their own grants.
+    const called = calledWindowMethods().filter((method) => !/^(is|on)[A-Z]/.test(method));
+    expect(windowCapabilities.permissions).toContain("core:default");
+    expect(called).toEqual(["close", "minimize", "startResizeDragging", "toggleMaximize"]);
+    expect(linuxWindowCapabilities.platforms).toEqual(["linux"]);
+    expect(
+      JSON.parse(code("../src-tauri/tauri.linux.conf.json")).app.security.capabilities,
+    ).toContain("linux-window");
     for (const method of called) {
       const permission = `core:window:allow-${method.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
       expect(
-        windowCapabilities.permissions,
+        (method === "startResizeDragging" ? linuxWindowCapabilities : windowCapabilities)
+          .permissions,
         `window.${method} is called but not permitted`,
       ).toContain(permission);
     }

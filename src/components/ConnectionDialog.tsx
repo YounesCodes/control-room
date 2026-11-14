@@ -158,7 +158,7 @@ export function ConnectionDialog({
             required
             spellCheck={false}
           />
-          <small>Uses your Windows OpenSSH configuration.</small>
+          <small>Uses your OpenSSH configuration.</small>
         </label>
         <label>
           <span>Username</span>

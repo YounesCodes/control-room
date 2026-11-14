@@ -145,8 +145,7 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
   it("starts and stops journal streaming and tears down on navigation", async function () {
     const { saved, caps } = await connect();
     if (!caps.journaldAvailable) {
-      console.log("Optional journal streaming unavailable: journald absent");
-      this.skip();
+      throw new Error("The lab fixture requires journald");
     }
     const units = await ipc<SystemdUnit[]>("list_services", { connectionId: saved.id });
     await feature("Logs");
@@ -162,9 +161,7 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     if (await $(".inline-error").isExisting()) {
       const reason = await $(".inline-error").getText();
       if (!/permission denied/i.test(reason)) throw new Error(reason);
-      console.log("Optional journal streaming unavailable: permission denied");
-      if (await $("[role=dialog]").isExisting()) await $("button=Cancel").click();
-      this.skip();
+      throw new Error("The lab fixture requires readable journal data");
     }
     await $("button=Pause").click();
     await $("button=Resume").click();
@@ -174,10 +171,7 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
   it("discovers Docker containers and follows real container details to Logs", async function () {
     const { saved, caps } = await connect();
     if (!caps.dockerAvailable || !caps.dockerAccessible) {
-      console.log(
-        `Optional Docker unavailable: ${caps.dockerAvailable ? "account cannot access Docker" : "Docker absent"}`,
-      );
-      this.skip();
+      throw new Error("The lab fixture requires accessible Docker");
     }
     const containers = await ipc<DockerContainer[]>("list_containers", {
       connectionId: saved.id,
@@ -186,8 +180,7 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     await feature("Docker");
     await expect($("h2=Containers")).toBeDisplayed();
     if (!containers.length) {
-      console.log("Optional Docker details: host has no containers");
-      this.skip();
+      throw new Error("The lab fixture requires at least one Docker container");
     }
     await $("input[placeholder='Search projects, services, or containers']").setValue(
       containers[0].name,

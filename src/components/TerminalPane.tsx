@@ -37,6 +37,7 @@ interface TerminalPaneProps {
   settings: AppSettings;
   visible: boolean;
   active: boolean;
+  nativeClipboard?: boolean;
   onActivate: () => void;
   onSession: (sessionId: string | null) => void;
   onState: (state: ConnectionState, reason: string | null) => void;
@@ -66,6 +67,7 @@ export function TerminalPane({
   settings,
   visible,
   active,
+  nativeClipboard = false,
   onActivate,
   onSession,
   onState,
@@ -130,12 +132,15 @@ export function TerminalPane({
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResult, setSearchResult] = useState({ index: -1, count: 0 });
 
+  const nativeClipboardRef = useRef(nativeClipboard);
+  nativeClipboardRef.current = nativeClipboard;
   const copySelection = useCallback(() => {
     const text = terminalRef.current?.getSelection();
     if (!text) return;
-    void navigator.clipboard
-      .writeText(text)
-      .catch((error) => setLocalError(clipboardFailure("copy", error)));
+    const write = nativeClipboardRef.current
+      ? api.writeClipboard(text)
+      : navigator.clipboard.writeText(text);
+    void write.catch((error) => setLocalError(clipboardFailure("copy", error)));
   }, []);
 
   const pasteClipboard = useCallback(() => {
@@ -143,8 +148,8 @@ export function TerminalPane({
     if (!terminal) return;
     const generation = sessionGenerationRef.current;
     terminal.focus();
-    void navigator.clipboard
-      .readText()
+    const read = nativeClipboardRef.current ? api.readClipboard() : navigator.clipboard.readText();
+    void read
       .then((text) => {
         if (
           text &&
@@ -276,16 +281,23 @@ export function TerminalPane({
     terminal.attachCustomKeyEventHandler((event) => {
       if (isControlRoomShortcut(event)) return false;
       if (event.type !== "keydown" || !event.ctrlKey || event.altKey || event.metaKey) return true;
-      if (event.key.toLowerCase() === "c" && terminal.hasSelection()) {
+      const key = event.key.toLowerCase();
+      if (key === "c" && terminal.hasSelection()) {
         event.preventDefault();
         copySelection();
         return false;
       }
-      // xterm owns keyboard paste through its textarea's native paste event.
-      // Reading the clipboard here as well sends the same text twice: once
-      // from this keydown handler and once when xterm emits the paste through
-      // `onData`. Right-click paste still uses `pasteClipboard` below because
-      // that pointer gesture never reaches xterm's textarea.
+      if (key === "v" && event.shiftKey && nativeClipboardRef.current) {
+        // WebKitGTK does not map Ctrl+Shift+V to a native paste, so this is the
+        // only paste xterm sees and nothing is sent twice.
+        event.preventDefault();
+        pasteClipboard();
+        return false;
+      }
+      // Elsewhere xterm owns keyboard paste through its textarea's native paste
+      // event. Reading the clipboard here as well would send the same text twice.
+      // Right-click paste still uses `pasteClipboard` because that pointer
+      // gesture never reaches xterm's textarea.
       return true;
     });
 

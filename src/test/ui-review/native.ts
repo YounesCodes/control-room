@@ -14,6 +14,7 @@ import registry from "./scenarios.json";
 const params = new URLSearchParams(location.search);
 const scenario = params.get("scenario") ?? "settings";
 const state = params.get("state") ?? "populated";
+const linux = scenario === "settings" && state.startsWith("linux-");
 if (
   !Object.hasOwn(registry.scenarios, scenario) ||
   !registry.scenarios[scenario as keyof typeof registry.scenarios].states.includes(state)
@@ -180,10 +181,11 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
   switch (command) {
     case "get_environment_info":
       result = {
-        sshPath: "C:\\Windows\\System32\\OpenSSH\\ssh.exe",
-        sshConfigPath: "C:\\Users\\example\\.ssh\\config",
+        sshPath: linux ? "/usr/bin/ssh" : "C:\\Windows\\System32\\OpenSSH\\ssh.exe",
+        sshConfigPath: linux ? "/home/example/.ssh/config" : "C:\\Users\\example\\.ssh\\config",
         sshAgentAvailable: false,
         platformSupported: true,
+        ...(linux && { desktopOs: "linux", inAppUpdates: false }),
       };
       break;
     case "list_connections":
@@ -254,21 +256,29 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       break;
     case "list_local_shells":
       result = {
-        profiles: [
-          { id: "powershell-7", kind: "powershell-7", label: "PowerShell 7", elevated: false },
-        ],
-        administratorStatus: "disabled",
+        profiles: linux
+          ? [{ id: "bash", kind: "bash", label: "Bash", elevated: false }]
+          : [{ id: "powershell-7", kind: "powershell-7", label: "PowerShell 7", elevated: false }],
+        administratorStatus: linux ? "unsupportedPlatform" : "disabled",
       };
       break;
-    case "get_settings_contract":
+    case "get_settings_contract": {
+      const desktop = (value: typeof settings) =>
+        linux ? { ...value, terminalFontFamily: "monospace" } : value;
       result = {
-        current: metricsSettings,
-        defaults: settings,
+        current: desktop(metricsSettings),
+        defaults: desktop(settings),
         logTailOptions: [50, 100, 200, 500, 1000],
       };
       break;
+    }
     case "get_workspace_state":
       result = workspace;
+      break;
+    case "window_compositing":
+      // Without a compositor the window keeps square corners, so captures
+      // match the native frame on every platform.
+      result = false;
       break;
     case "current_app_version":
       result = "0.0.0-example";

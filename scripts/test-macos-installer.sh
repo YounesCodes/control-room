@@ -1,0 +1,91 @@
+#!/bin/bash
+# Build the release .app and DMG, install the app from the DMG into a private
+# folder, launch it on the logged-in desktop and check its window and database.
+# Needs native macOS support (PR #65) and a disposable account: the release app
+# uses the account's real data folder, which must not exist beforehand.
+# Production WKWebViews cannot be driven without Accessibility approval, so this
+# does not click through the UI.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+version=$(node -p 'require("./package.json").version')
+data="$HOME/Library/Application Support/app.controlroom.desktop"
+if [[ -e $data ]]; then
+  [[ -f $data/.installer-fixture ]] || {
+    echo "Refusing to use existing user data: $data" >&2
+    exit 1
+  }
+  rm -rf "$data"
+fi
+work=$(mktemp -d /tmp/control-room-macos-installer-XXXXXX)
+pid=
+cleanup() {
+  [[ -z $pid ]] || kill "$pid" 2>/dev/null || true
+  hdiutil detach "$work/dmg" -quiet 2>/dev/null || true
+  [[ ! -f $data/.installer-fixture ]] || rm -rf "$data"
+  rm -rf "$work"
+}
+trap cleanup EXIT
+
+# CI=true keeps the DMG step from scripting Finder, which needs Automation approval.
+CI=true npm run tauri -- build --bundles app,dmg
+bundle=src-tauri/target/release/bundle
+dmg=$(find "$bundle/dmg" -maxdepth 1 -name "*_${version}_*.dmg" -print -quit)
+[[ -n $dmg ]] || { echo 'The release DMG is missing' >&2; exit 1; }
+hdiutil verify -quiet "$dmg"
+mkdir "$work/dmg" "$work/Applications"
+hdiutil attach "$dmg" -nobrowse -readonly -quiet -mountpoint "$work/dmg"
+ditto "$work/dmg/Control Room.app" "$work/Applications/Control Room.app"
+hdiutil detach "$work/dmg" -quiet
+app="$work/Applications/Control Room.app"
+[[ $(defaults read "$app/Contents/Info" CFBundleShortVersionString) == "$version" ]]
+[[ $(defaults read "$app/Contents/Info" CFBundleIdentifier) == app.controlroom.desktop ]]
+# Local builds have no Developer ID and stay unsigned; verify only a signed app.
+if codesign --display "$app" 2>/dev/null; then
+  codesign --verify --deep --strict "$app"
+else
+  echo 'Unsigned local build: signature verification skipped'
+fi
+
+mkdir -p "$data"
+touch "$data/.installer-fixture"
+"$app/Contents/MacOS/control-room" > "$work/app.log" 2>&1 &
+pid=$!
+# Count the app's ordinary on-screen windows. A compiled probe starts instantly;
+# the Swift interpreter can take longer than the whole check.
+cat > "$work/windows.c" <<'C'
+#include <CoreGraphics/CoreGraphics.h>
+#include <stdio.h>
+#include <stdlib.h>
+int main(int argc, char **argv) {
+  long pid = argc > 1 ? atol(argv[1]) : -1;
+  int count = 0;
+  CFArrayRef list = CGWindowListCopyWindowInfo(kCGWindowListOptionOnScreenOnly, kCGNullWindowID);
+  for (CFIndex index = 0; list && index < CFArrayGetCount(list); index++) {
+    CFDictionaryRef window = CFArrayGetValueAtIndex(list, index);
+    long owner = -1, layer = -1;
+    CFNumberRef value;
+    if ((value = CFDictionaryGetValue(window, kCGWindowOwnerPID))) CFNumberGetValue(value, kCFNumberLongType, &owner);
+    if ((value = CFDictionaryGetValue(window, kCGWindowLayer))) CFNumberGetValue(value, kCFNumberLongType, &layer);
+    if (owner == pid && layer == 0) count++;
+  }
+  if (list) CFRelease(list);
+  printf("%d\n", count);
+  return 0;
+}
+C
+clang "$work/windows.c" -framework CoreGraphics -framework CoreFoundation -o "$work/windows"
+windows() { "$work/windows" "$pid"; }
+shown=0
+for _ in {1..30}; do
+  kill -0 "$pid" 2>/dev/null || { cat "$work/app.log" >&2; echo 'The installed app exited during startup' >&2; exit 1; }
+  if [[ -f $data/control-room.db && $(windows) -ge 1 ]]; then shown=1; break; fi
+  sleep 2
+done
+[[ $shown == 1 ]] || { cat "$work/app.log" >&2; echo 'The installed app showed no window or database' >&2; exit 1; }
+[[ $(sqlite3 "file:$data/control-room.db?mode=ro" 'PRAGMA integrity_check') == ok ]]
+schema=$(sqlite3 "file:$data/control-room.db?mode=ro" 'PRAGMA user_version')
+kill "$pid"
+for _ in {1..40}; do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
+if kill -0 "$pid" 2>/dev/null; then echo 'The installed app did not quit' >&2; exit 1; fi
+pid=
+echo "macOS $version DMG installed, opened a window, created schema $schema and quit cleanly"

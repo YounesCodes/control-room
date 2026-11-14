@@ -232,6 +232,25 @@ fn installer_signed_for_another_version_is_a_signature_failure() {
 }
 
 #[test]
+fn modified_installer_cannot_reach_installation() {
+    let mut modified = fixture();
+    modified["payload"] = "modified installer bytes".into();
+    let server = server_using(modified, false, "1.0.0", Duration::ZERO, Duration::ZERO);
+    let app = app();
+    tauri::async_runtime::block_on(async {
+        let update = check_with_download_timeout(updater(&app, &server), DOWNLOAD_TIMEOUT)
+            .await
+            .unwrap()
+            .unwrap();
+        let error = update
+            .download_and_install(|_, _| {}, || {})
+            .await
+            .expect_err("modified bytes must never reach the platform installer");
+        assert!(matches!(error, tauri_plugin_updater::Error::Minisign(_)));
+    });
+}
+
+#[test]
 fn stalled_installer_download_respects_its_own_deadline() {
     let server = server(false, "1.0.0", Duration::ZERO, Duration::from_secs(4));
     let app = app();

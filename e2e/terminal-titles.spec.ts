@@ -1,6 +1,14 @@
+import { isWindows, localShellLabel } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
-import { openLocal, runtime, terminalCommand, terminalContains } from "./helpers";
+import {
+  openLocal,
+  runtime,
+  terminalCommand,
+  terminalContains,
+  typeTerminalText,
+  expectNativeText,
+} from "./helpers";
 
 describe("Shell-reported terminal titles", () => {
   it("shows only the program, restores identity on prompt return and preserves manual names", async () => {
@@ -13,24 +21,26 @@ describe("Shell-reported terminal titles", () => {
     // forward cmd.exe's SetConsoleTitle updates.
     const report =
       "process.stdout.write(String.fromCharCode(27)+']0;python --token private-title-argument'+String.fromCharCode(7));";
-    await browser.keys(
-      `node -e "${report}process.stdin.once('data',function(){process.exit(0)})" & echo TITLE_FINISHED`,
+    await typeTerminalText(
+      `node -e "${report}process.stdin.once('data',function(){process.stdout.write(String.fromCharCode(27)+']133;D;0'+String.fromCharCode(7));process.exit(0)})" ${isWindows ? "&" : ";"} echo TITLE_FINISHED`,
     );
     await browser.keys("Enter");
-    await expect(tab).toHaveText("python · Command Prompt");
-    await expect(tab).toHaveAttribute("title", "python · Command Prompt");
+    await expectNativeText(await tab.$(".session-tab-label"), `python · ${localShellLabel}`);
+    await expect(tab).toHaveAttribute("title", `python · ${localShellLabel}`);
     await browser.keys("Enter");
     await terminalContains("TITLE_FINISHED");
-    await expect(tab).toHaveText("Command Prompt");
+    await expectNativeText(await tab.$(".session-tab-label"), localShellLabel);
     await tab.moveTo();
     await $(".session-tab-wrap.active .session-tab-rename").click();
     await $("[role=dialog] input").setValue("Build");
     await $("button=Rename").click();
     await terminalCommand(
-      "title npm --token private-title-argument & echo MANUAL_TITLE_OK",
+      isWindows
+        ? "title npm --token private-title-argument & echo MANUAL_TITLE_OK"
+        : `printf '\\033]0;npm --token private-title-argument\\007'; echo MANUAL_TITLE_OK`,
       "MANUAL_TITLE_OK",
     );
-    await expect(tab).toHaveText("Build");
+    await expectNativeText(await tab.$(".session-tab-label"), "Build");
     expect((await runtime()).sessionIds).toEqual(sessions);
   });
 });

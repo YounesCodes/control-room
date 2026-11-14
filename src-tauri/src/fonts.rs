@@ -2,10 +2,12 @@
 use std::{
     collections::HashMap,
     io::Read,
-    path::Path,
     sync::{Arc, OnceLock},
     time::Duration,
 };
+
+#[cfg(any(windows, test))]
+use std::path::Path;
 
 use parking_lot::Mutex;
 use reqwest::blocking::Client;
@@ -14,9 +16,12 @@ use skrifa::{
     FontRef, MetadataProvider, raw::TableProvider, raw::types::Version16Dot16, string::StringId,
 };
 use tauri::{
-    AppHandle, Manager, State,
+    AppHandle, State,
     ipc::{Channel, Response},
 };
+
+#[cfg(windows)]
+use tauri::Manager;
 
 const CATALOG: &str = "https://api.fontsource.org/v1/fonts?category=monospace&type=google&weights=400&styles=normal&subsets=latin";
 const MAX_DOWNLOAD: usize = 8 * 1024 * 1024;
@@ -26,6 +31,7 @@ const MAX_PREVIEW_CACHE: usize = 16 * 1024 * 1024;
 pub struct FontState {
     catalog: Arc<Mutex<Vec<CatalogFont>>>,
     previews: Arc<Mutex<HashMap<String, Vec<u8>>>>,
+    #[cfg(windows)]
     installation: Arc<Mutex<()>>,
 }
 
@@ -313,6 +319,7 @@ fn preview_font(state: &FontState, id: String) -> Result<Response, String> {
     Ok(Response::new(bytes))
 }
 
+#[cfg(any(windows, test))]
 struct InstalledFile {
     path: std::path::PathBuf,
     created: bool,
@@ -320,6 +327,7 @@ struct InstalledFile {
     key: String,
 }
 
+#[cfg(any(windows, test))]
 trait FontRegistration {
     // Returns true only when this call created a registry entry and resource.
     fn register(&self, path: &Path, key: &str) -> Result<bool, String>;
@@ -327,6 +335,7 @@ trait FontRegistration {
 }
 
 // Publish a fully synced staging file without replacing an existing font.
+#[cfg(any(windows, test))]
 fn write_font_file(path: &Path, bytes: &[u8]) -> Result<bool, String> {
     use std::io::Write;
     let staging = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
@@ -356,6 +365,7 @@ fn write_font_file(path: &Path, bytes: &[u8]) -> Result<bool, String> {
     result
 }
 
+#[cfg(any(windows, test))]
 fn install_files(
     directory: &Path,
     font: &CatalogFont,
@@ -530,10 +540,19 @@ pub async fn install_catalog_font(
     id: String,
     progress: Channel<FontProgress>,
 ) -> Result<String, String> {
-    let state = state.inner().clone();
-    font_worker(move || install_font(app, &state, id, progress)).await
+    #[cfg(windows)]
+    {
+        let state = state.inner().clone();
+        font_worker(move || install_font(app, &state, id, progress)).await
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (app, state, id, progress);
+        Err("Install fonts through your desktop, then enter the font family in Settings.".into())
+    }
 }
 
+#[cfg(windows)]
 fn install_font(
     app: AppHandle,
     state: &FontState,
@@ -576,39 +595,27 @@ fn install_font(
         completed: 0,
         total: Some(files.len() as u64),
     });
-    #[cfg(windows)]
-    {
-        install_files(
-            &directory,
-            &font,
-            &files,
-            &windows::UserFonts,
-            |completed, total| {
-                let _ = progress.send(FontProgress {
-                    stage: "installing",
-                    completed,
-                    total: Some(total),
-                });
-            },
-        )?;
-        windows::notify();
-        let mut cache = state.previews.lock();
-        cache_preview(&mut cache, id, files[0].1.clone());
-    }
-    #[cfg(not(windows))]
-    {
-        let _ = directory;
-        return Err("Font installation requires Windows.".into());
-    }
-    #[cfg(windows)]
-    {
-        let _ = progress.send(FontProgress {
-            stage: "ready",
-            completed: files.len() as u64,
-            total: Some(files.len() as u64),
-        });
-        Ok(font.family)
-    }
+    install_files(
+        &directory,
+        &font,
+        &files,
+        &windows::UserFonts,
+        |completed, total| {
+            let _ = progress.send(FontProgress {
+                stage: "installing",
+                completed,
+                total: Some(total),
+            });
+        },
+    )?;
+    windows::notify();
+    cache_preview(&mut state.previews.lock(), id, files[0].1.clone());
+    let _ = progress.send(FontProgress {
+        stage: "ready",
+        completed: files.len() as u64,
+        total: Some(files.len() as u64),
+    });
+    Ok(font.family)
 }
 
 #[cfg(test)]

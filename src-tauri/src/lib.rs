@@ -1,9 +1,14 @@
+#[cfg(target_os = "linux")]
+mod appimage;
+#[cfg(target_os = "linux")]
+mod clipboard;
 mod commands;
 mod database;
 mod documentation;
 mod fonts;
 mod header_metrics;
 mod history;
+#[cfg_attr(target_os = "linux", path = "local_shell_linux.rs")]
 mod local_shell;
 mod models;
 mod remote;
@@ -11,6 +16,8 @@ mod session;
 mod ssh;
 mod systemd;
 mod updater;
+#[cfg(target_os = "linux")]
+mod window_corners;
 mod windows_inspection;
 mod windows_ssh;
 
@@ -49,9 +56,12 @@ fn dev_window_title(branch: &str) -> String {
 }
 
 pub fn run() {
-    let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_updater::Builder::new().build());
+    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    let builder = if updater::in_app_updates() {
+        builder.plugin(tauri_plugin_updater::Builder::new().build())
+    } else {
+        builder
+    };
     #[cfg(feature = "desktop-e2e")]
     let builder = builder.plugin(tauri_plugin_wdio::init());
     builder
@@ -100,15 +110,30 @@ pub fn run() {
                 {
                     window = window.additional_browser_args(&arguments);
                 }
+                // The test configuration replaces the Linux window, which is
+                // transparent so its corners can be rounded.
+                #[cfg(target_os = "linux")]
+                {
+                    window = window.transparent(true);
+                }
                 window.build()?;
             }
+            #[cfg(target_os = "linux")]
+            window_corners::watch(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             #[cfg(feature = "desktop-e2e")]
             e2e::e2e_runtime_status,
             commands::get_environment_info,
+            #[cfg(target_os = "linux")]
+            clipboard::read_clipboard,
+            #[cfg(target_os = "linux")]
+            clipboard::write_clipboard,
+            #[cfg(target_os = "linux")]
+            window_corners::window_compositing,
             documentation::open_documentation,
+            documentation::open_releases,
             fonts::list_catalog_fonts,
             fonts::preview_catalog_font,
             fonts::install_catalog_font,

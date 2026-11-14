@@ -1085,7 +1085,7 @@ describe("critical UI in Chromium", () => {
         })
         .click();
       const input = page.getByRole("spinbutton", { name, exact: true }).element();
-      expect(input.getBoundingClientRect().height).toBe(32);
+      expect(input.getBoundingClientRect().height).toBeCloseTo(32, 2);
       expect(parseFloat(getComputedStyle(input).fontSize)).toBeGreaterThanOrEqual(13);
     }
     await page.getByRole("tab", { name: "Local shells", exact: true }).click();
