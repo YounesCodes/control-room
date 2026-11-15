@@ -441,13 +441,24 @@ interface WorkspaceBase {
   restored?: boolean;
 }
 
+/// The container a Container Terminal runs in. The ID is the full Docker ID
+/// the backend validates and execs into; name and image only label the tab.
+export interface ContainerTerminalTarget {
+  id: string;
+  name: string;
+  image: string;
+}
+
 /// A Workspace on a Remote Host. Inspection caches, Enhanced History, and the
-/// Saved Connection snapshot live here and nowhere else.
+/// Saved Connection snapshot live here and nowhere else. With `container` set
+/// it is a Container Terminal: a shell inside that container on this host,
+/// terminal-only like a local Workspace.
 export interface RemoteWorkspace extends WorkspaceBase {
   kind: "remote";
   connectionId: string;
   connectionSnapshot: SavedConnection;
   remoteShell?: RemoteShellProfile | null;
+  container?: ContainerTerminalTarget | null;
   historyPaused: boolean;
   servicesCache: CachedList<SystemdUnit>;
   portsCache: CachedList<ListeningSocket>;
@@ -480,6 +491,7 @@ interface PersistedWorkspace {
   connectionId: string | null;
   localShellId: string | null;
   remoteShell?: RemoteShellProfile | null;
+  container?: ContainerTerminalTarget | null;
   /** Older app versions persisted the standalone Scratchpad page. */
   view: WorkspaceView | "scratchpad";
   historyPaused: boolean;

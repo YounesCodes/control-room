@@ -1,6 +1,11 @@
 import { pruneTerminalLayout } from "./terminal-layout";
 import { pruneTerminalGroups, type TerminalGroup } from "./terminal-groups";
-import { createLocalWorkspace, createRemoteWorkspace, isRemoteWorkspace } from "./workspace-target";
+import {
+  createContainerWorkspace,
+  createLocalWorkspace,
+  createRemoteWorkspace,
+  isRemoteWorkspace,
+} from "./workspace-target";
 import type {
   LocalShellProfile,
   PersistedWorkspaceState,
@@ -52,6 +57,17 @@ export function restoreWorkspaceState(
     }
     const connection = saved.connectionId ? connectionsById.get(saved.connectionId) : undefined;
     if (!connection) return [];
+    // A Container Terminal reopens on the same container, in its terminal.
+    // If the container is gone, `docker exec` says so in the terminal.
+    if (saved.container && !saved.remoteShell) {
+      return [
+        {
+          ...createContainerWorkspace(connection, saved.container),
+          ...reconnecting,
+          view: "terminal",
+        },
+      ];
+    }
     return [
       {
         ...createRemoteWorkspace(connection, saved.remoteShell),
@@ -102,6 +118,9 @@ export function persistWorkspaceState(
       localShellId: isRemoteWorkspace(workspace) ? null : workspace.shell.id,
       ...(isRemoteWorkspace(workspace) && workspace.remoteShell
         ? { remoteShell: workspace.remoteShell }
+        : {}),
+      ...(isRemoteWorkspace(workspace) && workspace.container
+        ? { container: workspace.container }
         : {}),
       view: workspace.view,
       historyPaused: isRemoteWorkspace(workspace) ? workspace.historyPaused : false,

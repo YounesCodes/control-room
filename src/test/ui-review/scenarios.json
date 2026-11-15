@@ -321,7 +321,14 @@
       }
     },
     "terminal": {
-      "states": ["find", "find-matches", "find-none", "notice-error", "notice-ended"],
+      "states": [
+        "find",
+        "find-matches",
+        "find-none",
+        "notice-error",
+        "notice-ended",
+        "running-command"
+      ],
       "ready": ".app-shell",
       "prepare": {
         "find": [
@@ -364,13 +371,18 @@
         "find-matches": ".terminal-search",
         "find-none": ".terminal-search",
         "notice-error": ".terminal-notice",
-        "notice-ended": ".terminal-notice"
+        "notice-ended": ".terminal-notice",
+        "running-command": ".session-tab-main[title^='htop · ']"
       }
     },
     "pages": {
-      "states": ["docker", "logs", "history"],
+      "states": ["docker", "logs", "history", "container-terminal"],
       "ready": ".app-shell",
+      "prepare": {
+        "container-terminal": [{ "selector": ".compact-navigation-toggle", "optional": true }]
+      },
       "settled": {
+        "container-terminal": ".host-child-row.active[data-session-state='connected']",
         "docker": ".docker-page",
         "logs": ".log-output",
         "history": ".history-list"

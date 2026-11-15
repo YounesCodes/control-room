@@ -47,11 +47,17 @@ const workspaceView = {
   terminal: "terminal",
   ports: "ports",
   logs: "logs",
-  pages: state,
+  pages: state === "container-terminal" ? "docker" : state,
 }[scenario] as "services" | "terminal" | "ports" | "docker" | "logs" | "history" | undefined;
 // Pages show the Docker, Logs, and History screens with ordinary readings.
 const containers = [
-  { ...container, name: "example-web", composeProject: "example", composeService: "web" },
+  {
+    ...container,
+    name: "example-web",
+    image: "nginx:1.27",
+    composeProject: "example",
+    composeService: "web",
+  },
   {
     ...container,
     id: "b".repeat(64),
@@ -134,6 +140,19 @@ const journalOutput = Array.from({ length: 48 }, (_, index) => {
   }
 `;
 }).join("");
+// Container Terminals open from Docker and hang under the host as leaves.
+const containerTerminals =
+  scenario === "pages" && state === "container-terminal"
+    ? containers.slice(0, 2).map(({ id, name, image }) => ({
+        id: `example-container-${name}`,
+        connectionId: host.id,
+        localShellId: null,
+        container: { id, name, image },
+        label: null,
+        view: "terminal" as const,
+        historyPaused: false,
+      }))
+    : [];
 const workspace: PersistedWorkspaceState = {
   workspaces: workspaceView
     ? [
@@ -145,9 +164,10 @@ const workspace: PersistedWorkspaceState = {
           view: workspaceView,
           historyPaused: false,
         },
+        ...containerTerminals,
       ]
     : [],
-  activeWorkspaceId: workspaceView ? "example-workspace" : null,
+  activeWorkspaceId: containerTerminals[0]?.id ?? (workspaceView ? "example-workspace" : null),
   terminalGroups: [],
   terminalLayout: null,
 };
@@ -295,38 +315,53 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
     case "refresh_capabilities":
       result = capabilities(host.id);
       break;
-    case "start_session":
-      result = { sessionId: "example-session", connectionId: host.id };
+    case "start_session": {
+      // Each container shell is its own session; the host shell keeps the
+      // single session ID the other scenarios use.
+      const sessionId = args.containerId
+        ? `example-container-${args.containerId.slice(0, 12)}`
+        : "example-session";
+      result = { sessionId, connectionId: host.id };
       setTimeout(() => {
         listeners.get("session-state-changed")?.forEach((callback) =>
           callback({
             payload:
               state === "notice-ended"
                 ? {
-                    sessionId: "example-session",
+                    sessionId,
                     state: "disconnected",
-                    reason: "Connection to example.invalid closed by remote host.",
+                    reason: "SSH session ended.",
                   }
-                : { sessionId: "example-session", state: "connected", reason: null },
+                : { sessionId, state: "connected", reason: null },
           }),
         );
-        // The terminal scenario prints a short service log so Find has
-        // several matches to step through.
+        // A running command names the tab; the local ssh.exe window title
+        // that ConPTY reports first must never appear. The terminal scenario
+        // prints a short service log so Find has several matches to step through.
         const output =
-          scenario === "terminal"
+          state === "running-command"
             ? [
-                "example$ journalctl -u worker.service -n 6 --no-pager",
-                "Nov 01 09:58:02 example worker[1234]: Starting worker.service",
-                "Nov 01 09:58:03 example worker[1234]: Connected to queue example",
-                "Nov 01 09:59:41 example worker[1234]: warning: retrying job 41",
-                "Nov 01 09:59:44 example worker[1234]: job 41 finished",
-                "Nov 01 10:00:00 example worker[1234]: Idle, waiting for jobs",
-                "example$ ",
+                "\x1b]0;C:\\Windows\\System32\\OpenSSH\\ssh.exe\x07example$ htop -d 5",
+                "\x1b]633;E;htop -d 5\x07\x1b]133;C\x07  PID USER      PRI  NI  VIRT   RES S CPU% MEM%",
+                " 1234 example    20   0  412M 38.2M S  2.1  0.9 worker",
               ].join("\r\n")
-            : "example$ ";
+            : scenario === "terminal"
+              ? [
+                  "example$ journalctl -u worker.service -n 6 --no-pager",
+                  "Nov 01 09:58:02 example worker[1234]: Starting worker.service",
+                  "Nov 01 09:58:03 example worker[1234]: Connected to queue example",
+                  "Nov 01 09:59:41 example worker[1234]: warning: retrying job 41",
+                  "Nov 01 09:59:44 example worker[1234]: job 41 finished",
+                  "Nov 01 10:00:00 example worker[1234]: Idle, waiting for jobs",
+                  "example$ ",
+                ].join("\r\n")
+              : args.containerId
+                ? `root@${args.containerId.slice(0, 12)}:/# `
+                : "example$ ";
         args.output.onmessage(new TextEncoder().encode(output).buffer);
       }, 0);
       break;
+    }
     case "save_settings":
       if (state === "save-failed") throw new Error("Settings file is read-only");
       break;

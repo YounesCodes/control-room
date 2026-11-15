@@ -110,6 +110,8 @@
   --fill-control: #171717;
   --fill-control-hover: #242424;
   --fill-text-selection: #474747;
+  --fill-current: #191918;
+  --border-current: #3b3a37;
 
   /* Text roles. */
   --text-strong: #fff;
@@ -1637,7 +1639,7 @@ code,
   content: "";
   position: absolute;
   inset: 0;
-  border: 1.5px solid transparent;
+  border: 1px solid transparent;
   border-radius: inherit;
   pointer-events: none;
   transition: border-color var(--motion-fast) var(--ease);
@@ -1648,12 +1650,12 @@ code,
 }
 
 .host-row.active {
-  background: var(--fill-active);
+  background: var(--fill-current);
 }
 
 .host-row.active::before,
 .feature-nav button.active::before {
-  border-color: var(--accent);
+  border-color: var(--border-current);
 }
 
 .host-row.menu-open {
@@ -1781,6 +1783,150 @@ code,
   color: var(--text-strong);
 }
 
+/* Container Terminals hang under their host card as leaves. A thin elbow runs
+   from under the host's OS mark to each leaf, and the leaf's own mark lines up
+   with the host's text column, so the pair reads as one host with a shell
+   inside one of its containers. */
+.host-children {
+  --leaf-indent: 30px;
+  --leaf-rail: calc(11px + var(--identity-size) / 2 - var(--leaf-indent));
+  display: flex;
+  flex-direction: column;
+  margin: -1px 0 3px;
+  padding: 0;
+  list-style: none;
+}
+
+.host-child-row {
+  position: relative;
+  display: flex;
+  min-height: 30px;
+  align-items: stretch;
+  margin: 1px 0 1px var(--leaf-indent);
+  border-radius: var(--radius-md);
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    box-shadow var(--motion-fast) var(--ease);
+}
+
+.host-child-row::before,
+.host-child-row::after {
+  content: "";
+  position: absolute;
+  left: var(--leaf-rail);
+  border-left: 1px solid var(--border-strong);
+  pointer-events: none;
+}
+
+/* The elbow into this leaf. */
+.host-child-row::before {
+  top: -2px;
+  width: calc(-1 * var(--leaf-rail) - 3px);
+  height: calc(50% + 2px);
+  border-bottom: 1px solid var(--border-strong);
+  border-bottom-left-radius: 5px;
+}
+
+/* The rail continues past a leaf to the next one. */
+.host-child-row:not(:last-child)::after {
+  top: 50%;
+  bottom: -2px;
+}
+
+.host-child-row:last-child::after {
+  display: none;
+}
+
+.host-child-row:hover {
+  background: var(--fill-hover);
+}
+
+.host-child-row.active {
+  background: var(--fill-current);
+  box-shadow: inset 0 0 0 1px var(--border-current);
+}
+
+.host-child-main {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  border-radius: inherit;
+  background: transparent;
+  padding: 4px 11px 4px 8px;
+  color: var(--text);
+  text-align: left;
+  transition: padding var(--motion-med) var(--ease);
+}
+
+.host-child-row:hover .host-child-main,
+.host-child-row:focus-within .host-child-main {
+  padding-right: 32px;
+}
+
+.host-child-label {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.host-child-label strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+/* An ended container shell stays listed, quieter, until its tab is closed. */
+.host-child-row:is([data-session-state="disconnected"], [data-session-state="error"])
+  .host-child-label
+  strong {
+  color: var(--text-muted);
+}
+
+.host-child-close {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 4px;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  transform: translateY(-50%);
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--motion-fast) var(--ease),
+    background-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
+}
+
+.host-child-row:hover .host-child-close,
+.host-child-row:focus-within .host-child-close {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.host-child-close:hover {
+  background: var(--fill-active);
+  color: var(--text-strong);
+}
+
+/* A container mark rides the shared identity footprint; the logo inside
+   follows the mark's color so the reveal rules below apply to it too. */
+.container-terminal-mark > .docker-image-icon,
+.container-terminal-mark > svg {
+  color: inherit;
+}
+
 .host-context-menu {
   position: fixed;
   z-index: 60;
@@ -1875,7 +2021,7 @@ code,
 }
 
 .feature-nav button.active {
-  background: var(--fill-active);
+  background: var(--fill-current);
   color: var(--text-strong);
   font-weight: 600;
 }
@@ -2463,6 +2609,27 @@ code,
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* A Container Terminal's tab names its container and, quieter, its host. The
+   host gives way first when the tab narrows, so the container name stays. */
+.session-tab-main.has-context .session-tab-label {
+  flex: 0 1 auto;
+}
+
+.session-tab-context {
+  overflow: hidden;
+  flex: 1 1 0;
+  min-width: 0;
+  margin-left: -2px;
+  color: var(--text-faint);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-tab-wrap:not(.active) .session-tab-context {
+  color: #767673;
 }
 
 /* The cue pops in when output or a bell arrives on an inactive terminal, so
@@ -3526,6 +3693,12 @@ code,
   color: color-mix(in srgb, var(--notice-tone) 45%, var(--text));
 }
 
+.terminal-notice[data-tone="neutral"] {
+  --notice-tone: var(--text-muted);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+}
+
 .terminal-notice::before {
   content: "";
   align-self: center;
@@ -3541,6 +3714,11 @@ code,
 .terminal-notice[data-tone="warning"]::before {
   /* lucide triangle-alert */
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
+}
+
+.terminal-notice[data-tone="neutral"]::before {
+  /* lucide unplug */
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m19 5 3-3'/%3E%3Cpath d='m2 22 3-3'/%3E%3Cpath d='M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z'/%3E%3Cpath d='M7.5 13.5 10 11'/%3E%3Cpath d='M10.5 16.5 13 14'/%3E%3Cpath d='m12 6 6 6 2.3-2.3a2.4 2.4 0 0 0 0-3.4l-2.6-2.6a2.4 2.4 0 0 0-3.4 0Z'/%3E%3C/svg%3E");
 }
 
 .terminal-notice-message {
@@ -4912,6 +5090,7 @@ dd {
   border-radius: var(--radius-sm);
   background: var(--surface-sunken);
   color: var(--text);
+  user-select: text;
 }
 .systemd-code code {
   font: inherit;
@@ -5556,6 +5735,11 @@ dd {
   align-items: baseline;
   border-bottom: 1px solid var(--border-subtle);
   padding: 11px 0;
+}
+
+/* Values stay copyable; labels keep the app-wide non-selectable chrome. */
+.detail-list dd {
+  user-select: text;
 }
 
 /* ==========================================================================
@@ -8165,6 +8349,9 @@ kbd {
 .host-row:focus-within .identity-mark,
 .host-row.active .identity-mark,
 .host-row.menu-open .identity-mark,
+.host-child-row:hover .identity-mark,
+.host-child-row:focus-within .identity-mark,
+.host-child-row.active .identity-mark,
 .terminal-target-group button:hover .identity-mark,
 .terminal-target-group button:focus-visible .identity-mark,
 .terminal-target-group button[data-active="true"] .identity-mark,

@@ -629,7 +629,11 @@ fn classify_session_exit(
         return ("error", Some("process".into()), Some(reason));
     }
     if success {
-        return ("disconnected", Some("remote-exit".into()), None);
+        return (
+            "disconnected",
+            Some("remote-exit".into()),
+            Some("SSH session ended.".into()),
+        );
     }
     let hint = if connected {
         hint.filter(|hint| *hint == TerminalFailureHint::ConnectionLost)
@@ -901,7 +905,11 @@ mod tests {
         for connected in [true, false] {
             assert_eq!(
                 classify_session_exit(false, None, true, 0, None, connected),
-                ("disconnected", Some("remote-exit".into()), None),
+                (
+                    "disconnected",
+                    Some("remote-exit".into()),
+                    Some("SSH session ended.".into())
+                ),
                 "connected: {connected}"
             );
         }

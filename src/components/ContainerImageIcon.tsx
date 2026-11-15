@@ -31,3 +31,23 @@ export function ContainerImageIcon({ image, size = 14 }: { image: string; size?:
     />
   );
 }
+
+/// A Container Terminal's identity mark in tabs, menus, and the host's leaf:
+/// the image logo in the shared identity footprint, gray at rest, revealing
+/// the image's brand color where other OS and shell marks reveal theirs.
+export function ContainerTerminalMark({ image }: { image: string }) {
+  const logo = containerImageLogo(image);
+  return (
+    <span
+      className="host-os-icon identity-mark container-terminal-mark"
+      aria-hidden="true"
+      style={
+        {
+          "--identity": logo ? `#${logo.displayHex}` : "var(--text-strong)",
+        } as CSSProperties
+      }
+    >
+      <ContainerImageIcon image={image} size={15} />
+    </span>
+  );
+}
