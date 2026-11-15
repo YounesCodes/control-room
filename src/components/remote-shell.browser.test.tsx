@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
-import axe from "axe-core";
+import { runAxe } from "../test/axe";
 import { RemoteShellDialog } from "./RemoteShellDialog";
 import { HostOsIcon } from "./HostOsIcon";
 import type { SavedConnection } from "../types";
@@ -74,7 +74,7 @@ describe("Windows remote shell picker", () => {
     expect(onSelect).toHaveBeenCalledWith({ id: "wsl:Ubuntu", label: "WSL: Ubuntu" });
     const dialog = host.querySelector('[role="dialog"]')!;
     expect(dialog.getBoundingClientRect().width).toBeLessThanOrEqual(530);
-    const accessibility = await axe.run(host, { rules: { region: { enabled: false } } });
+    const accessibility = await runAxe(host, { rules: { region: { enabled: false } } });
     expect(accessibility.violations).toEqual([]);
     await page
       .getByRole("dialog")

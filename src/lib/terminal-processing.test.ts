@@ -455,6 +455,35 @@ describe("commands submitted at the shell prompt", () => {
     expect(submitted.mock.calls).toEqual([["python"]]);
   });
 
+  it.each([
+    // Bash: the tty echoes typeahead before readline draws the prompt.
+    ["e", `e${prompt}`, `e${prompt}echo READY`, prompt],
+    // cmd.exe: ConPTY holds typeahead until the prompt draws it.
+    ["", "C:\\>ec", "C:\\>echo READY", "C:\\>"],
+  ])(
+    "does not take input typed before the first prompt for the prompt (%j)",
+    (afterFirst, rendering, line, returned) => {
+      const changed = vi.fn();
+      const submitted = vi.fn();
+      const tracker = new TerminalProcessing(changed, undefined, submitted);
+      tracker.input(bytes("e"), "");
+      tracker.input(bytes("c"), afterFirst);
+      tracker.input(bytes("ho READY"), rendering);
+      tracker.input(bytes("\r"), line);
+      tracker.output(busyLine);
+      tracker.output(returned);
+      expect(submitted).not.toHaveBeenCalled();
+      expect(changed).not.toHaveBeenCalled();
+      // The shell's own prompt is known from the next line on.
+      tracker.input(bytes("node"), returned);
+      tracker.input(bytes("\r"), `${returned}node`);
+      tracker.output(busyLine);
+      expect(submitted.mock.calls).toEqual([["node"]]);
+      tracker.output(returned);
+      expect(changed.mock.calls).toEqual([[true], [false]]);
+    },
+  );
+
   it("still reports commands when shell markers own the busy state", () => {
     const { submitted, tracker } = track();
     tracker.shellMarker("A");
