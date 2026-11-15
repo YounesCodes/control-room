@@ -48,8 +48,7 @@ square.
 
 On macOS, the native traffic lights overlay one continuous app bar with no
 system titlebar, and the same leading space stays reserved in every header that
-replaces it. App shortcuts use Command so Control combinations reach terminal
-programs.
+replaces it.
 
 Compact windows reflow forms, toolbars, and navigation instead of shrinking
 type or scaling the app. Keep native window controls fixed and dialogs inside
