@@ -1,3 +1,4 @@
+import { linuxProcesses } from "./linux-processes";
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -10,6 +11,8 @@ interface DriverProcess {
 }
 
 function drivers(): DriverProcess[] {
+  if (process.platform === "linux")
+    return linuxProcesses().filter((row) => ["tauri-driver", "WebKitWebDriver"].includes(row.name));
   try {
     const output = execFileSync(
       "powershell.exe",
@@ -30,10 +33,11 @@ function drivers(): DriverProcess[] {
 }
 
 export function recordDrivers(directory: string, runnerPid: number) {
+  if (process.platform === "darwin") return;
   const snapshot = drivers();
   const roots = snapshot.filter(
     (driver) =>
-      driver.name === "tauri-driver.exe" &&
+      ["tauri-driver.exe", "tauri-driver"].includes(driver.name) &&
       (driver.parent === runnerPid ||
         snapshot.some(
           (bridge) =>
@@ -49,6 +53,7 @@ export function recordDrivers(directory: string, runnerPid: number) {
 }
 
 export async function stopOwnedDrivers(directory: string) {
+  if (process.platform === "darwin") return;
   const file = join(directory, "driver-pids.jsonl");
   if (!existsSync(file)) return;
   const owned: DriverProcess[] = readFileSync(file, "utf8")
@@ -70,10 +75,19 @@ export async function stopOwnedDrivers(directory: string) {
   const deadline = Date.now() + 20_000;
   for (const driver of remaining) {
     while (true) {
-      try {
-        process.kill(driver.id, 0);
-      } catch {
-        break;
+      if (process.platform === "linux") {
+        if (
+          !linuxProcesses().some(
+            (current) => current.id === driver.id && current.created === driver.created,
+          )
+        )
+          break;
+      } else {
+        try {
+          process.kill(driver.id, 0);
+        } catch {
+          break;
+        }
       }
       if (Date.now() > deadline) throw new Error(`Owned driver ${driver.id} did not exit`);
       await new Promise((resolve) => setTimeout(resolve, 100));

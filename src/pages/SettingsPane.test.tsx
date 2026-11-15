@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
   saveSettings: vi.fn(),
+  openReleases: vi.fn(),
   listCatalogFonts: vi.fn(),
   previewCatalogFont: vi.fn(),
   installCatalogFont: vi.fn(),
@@ -89,6 +90,29 @@ function renderPane(overrides: Partial<Parameters<typeof SettingsPane>[0]> = {})
 const saveButton = () => screen.getByRole("button", { name: /Save settings/ }) as HTMLButtonElement;
 
 describe("Settings actions", () => {
+  it("uses installed fonts and links to package updates on Linux", async () => {
+    const user = userEvent.setup();
+    const props = renderPane({
+      environment: {
+        ...environment,
+        desktopOs: "linux",
+        inAppUpdates: false,
+        sshPath: "/usr/bin/ssh",
+      },
+      localShells: [{ id: "bash", label: "Bash", kind: "bash", elevated: false }],
+    });
+    await user.click(screen.getByRole("textbox", { name: "Font family" }));
+    expect(api.listCatalogFonts).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "App & Diagnostics" }));
+    expect(screen.queryByRole("button", { name: "Check for updates" })).toBeNull();
+    api.openReleases.mockRejectedValueOnce(new Error("Could not start xdg-open"));
+    await user.click(screen.getByRole("button", { name: "Open releases" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Could not start xdg-open");
+    expect(props.onCheckForUpdates).not.toHaveBeenCalled();
+    expect(screen.getByText("/usr/bin/ssh")).toBeTruthy();
+  });
+
   afterEach(cleanup);
   afterEach(() => vi.unstubAllGlobals());
 

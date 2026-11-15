@@ -18,6 +18,9 @@ afterEach(async function () {
   try {
     await cleanRuntime();
   } catch (error) {
+    await captureFailure(`${this.currentTest?.fullTitle() ?? "Unknown test"} cleanup`).catch(
+      () => undefined,
+    );
     if (setupComplete && this.currentTest?.state !== "failed") throw error;
     console.error("Cleanup failed after an earlier test/setup failure.");
   }

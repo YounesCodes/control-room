@@ -1,9 +1,10 @@
+import { localShellLabel } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { openSplitMenu, openLocal, runtime, terminalCommand } from "./helpers";
 
-describe("Focus Mode live layout in WebView2", () => {
+describe("Focus Mode live layout in the native WebView", () => {
   it("interpolates both directions and keeps split sessions alive through rapid toggles", async () => {
     await openLocal();
     await terminalCommand("echo FOCUS_LIVE", "FOCUS_LIVE");
@@ -80,7 +81,7 @@ describe("Focus Mode live layout in WebView2", () => {
       browser.execute(() => !document.documentElement.dataset.focusTransition),
     );
     await openSplitMenu();
-    await $(".new-terminal-menu").$("aria/New local terminal: Command Prompt").click();
+    await $(".new-terminal-menu").$(`aria/New local terminal: ${localShellLabel}`).click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
     const splitSessions = (await runtime()).sessionIds;
     await browser.execute(() => {

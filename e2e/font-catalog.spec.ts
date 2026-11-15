@@ -1,3 +1,6 @@
+import { savedSettings } from "./helpers";
+import { homedir } from "node:os";
+import { isMac, isLinux } from "./platform";
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
 import { existsSync, readFileSync } from "node:fs";
@@ -5,13 +8,18 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 
 // Explicit local check only. Normal desktop tests need no public font service.
-const liveFonts = process.env.CONTROL_ROOM_LIVE_FONTS === "1" ? describe : describe.skip;
+const liveFonts = isLinux || process.env.CONTROL_ROOM_LIVE_FONTS === "1" ? describe : describe.skip;
 
-liveFonts("public font catalog in WebView2", () => {
-  it("renders a downloaded preview without installing or changing the current font", async () => {
+liveFonts("public font catalog in the native WebView", () => {
+  it("renders a font preview without installing or changing the saved font", async () => {
     const localData = process.env.LOCALAPPDATA;
-    if (!localData) throw new Error("LOCALAPPDATA is required to inspect user-installed fonts.");
-    const folder = join(localData, "Microsoft", "Windows", "Fonts");
+    if (!isMac && !isLinux && !localData)
+      throw new Error("LOCALAPPDATA is required to inspect user-installed fonts.");
+    const folder = isMac
+      ? join(homedir(), "Library", "Fonts")
+      : isLinux
+        ? join(process.env.XDG_DATA_HOME || join(homedir(), ".local", "share"), "fonts")
+        : join(localData!, "Microsoft", "Windows", "Fonts");
     const paths = [400, 700].map((weight) =>
       join(folder, `ControlRoom-jetbrains-mono-${weight}.ttf`),
     );
@@ -22,10 +30,30 @@ liveFonts("public font catalog in WebView2", () => {
     const before = snapshot();
     await $("aria/Open Settings").click();
     await $(".settings-navigation").$("button=Terminal").click();
+    if (isLinux) {
+      // Linux offers installed desktop fonts rather than the online font catalog.
+      const settings = await savedSettings();
+      const current = $('input[aria-describedby="linux-font-help"]');
+      const family = settings.terminalFontFamily === "monospace" ? "serif" : "monospace";
+      await current.setValue(family);
+      await browser.waitUntil(() =>
+        browser.execute(
+          (expected) =>
+            document.querySelector<HTMLElement>(".ansi-preview")?.style.fontFamily === expected,
+          family,
+        ),
+      );
+      expect((await savedSettings()).terminalFontFamily).toBe(settings.terminalFontFamily);
+      expect(snapshot()).toEqual(before);
+      await $("aria/Close Settings").click();
+      await $("button=Discard").click();
+      return;
+    }
     const current = $("[role=combobox][aria-controls=font-suggestions]");
     const original = await current.getValue();
     await current.click();
-    await browser.keys("JetBrains Mono");
+    if (isMac) await current.setValue("JetBrains Mono");
+    else await browser.keys("JetBrains Mono");
     await expect(current).toHaveValue("JetBrains Mono");
     try {
       await $("#font-option-jetbrains-mono").waitForDisplayed({ timeout: 30_000 });
@@ -58,6 +86,6 @@ liveFonts("public font catalog in WebView2", () => {
     await expect(current).toHaveValue(original);
     await expect($("#font-suggestions")).not.toBeDisplayed();
     expect(snapshot()).toEqual(before);
-    await $("aria/Close Settings").click();
+    await $("button[aria-label='Close Settings']").click();
   });
 });

@@ -8,6 +8,8 @@ export function extractPngIcon(icon) {
     throw new Error("Invalid ICO header");
   const count = icon.readUInt16LE(4);
   if (icon.length < 6 + count * 16) throw new Error("Truncated ICO directory");
+  let largest = null;
+  let pixels = 0;
   for (let index = 0; index < count; index++) {
     const entry = 6 + index * 16;
     const size = icon.readUInt32LE(entry + 8);
@@ -15,8 +17,13 @@ export function extractPngIcon(icon) {
     if (offset < 6 + count * 16 || offset + size > icon.length)
       throw new Error("Invalid ICO image bounds");
     const png = icon.subarray(offset, offset + size);
-    if (png.subarray(0, 8).equals(signature)) return png;
+    const area = (icon[entry] || 256) * (icon[entry + 1] || 256);
+    if (area > pixels && png.subarray(0, 8).equals(signature)) {
+      largest = png;
+      pixels = area;
+    }
   }
+  if (largest) return largest;
   throw new Error("ICO contains no embedded PNG image");
 }
 

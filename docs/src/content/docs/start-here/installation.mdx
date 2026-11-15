@@ -1,20 +1,36 @@
 ---
 title: Install and update
-description: Install Control Room on Windows and keep it up to date.
+description: Install Control Room on Windows or Linux and keep it up to date.
 ---
 
-Control Room runs on Windows 11 x64. You need the Windows OpenSSH Client for SSH connections. [Requirements](/control-room/start-here/requirements/) lists the tools needed for each host view.
+Download a package from the [latest GitHub release](https://github.com/YounesCodes/control-room/releases/latest). You can compare it with the SHA-256 checksum attached to the release.
+
+## Windows
+
+Control Room runs on Windows 11 x64 and uses the Windows OpenSSH Client.
 
 1. Download the `.exe` installer from the [latest GitHub release](https://github.com/YounesCodes/control-room/releases/latest).
-2. If you want to verify the download, compare it with the release's SHA-256 checksum.
-3. Run the installer, then open Control Room from the Start menu.
+2. Run the installer, then open Control Room from the Start menu.
 
 The installer runs for your Windows user and does not need administrator access. The release is unsigned, so Windows may show an unrecognized-publisher warning.
 
+## Linux
+
+Ubuntu 24.04 LTS x86_64 is the initial Linux desktop target.
+
+- **Debian package.** From your downloads folder, run `sudo apt install ./<filename>.deb` with the name of the downloaded package. Open Control Room from the applications menu.
+- **AppImage.** Install `libfuse2t64`, `openssh-client`, and `xdg-utils` if needed. Run `chmod +x <filename>.AppImage`, then `./<filename>.AppImage`. Keep the AppImage in a folder your user can write to if you want in-app updates.
+
+On Linux the database is at `$XDG_DATA_HOME/app.controlroom.desktop/control-room.db`. If `XDG_DATA_HOME` is unset, the data directory defaults to `~/.local/share`. Both package formats use the same data directory.
+
+If your window manager does not support dragging the undecorated window from its edges, use its system move or resize shortcut. The automated desktop check runs under X11 with Openbox.
+
 ## Updates
 
-Control Room checks GitHub Releases while the app is open. When an update is available, select the download icon in the title bar to see the version and changes. Its tooltip says **Update available**. The download starts when you ask for it. A ring shows download progress. Control Room verifies the update's signature before installation.
+The Windows installer and Linux AppImage check GitHub Releases while the app is open. When an update is available, select the download icon in the title bar to see the version and changes. Its tooltip says **Update available**. The download starts when you ask for it. A ring shows download progress. Control Room verifies the update's signature before installation.
 
 **Restart to update** asks for confirmation because it ends active terminals and log streams. Your saved connections and tabs remain. After the restart, the tabs open fresh terminal sessions. You can also check manually in Settings, even if automatic checks are off.
+
+For the Debian package, open **Settings > App & Diagnostics > Open releases** and install the newer `.deb` the same way. The package update preserves your local data.
 
 Next, [add your first connection](/control-room/start-here/quick-start/).

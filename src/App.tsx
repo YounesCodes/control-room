@@ -72,7 +72,7 @@ import { PromptDialog } from "./components/PromptDialog";
 import { HostOsIcon } from "./components/HostOsIcon";
 import { ContainerTerminalMark } from "./components/ContainerImageIcon";
 import { LocalShellIcon } from "./components/LocalShellIcon";
-import { WindowControls } from "./components/WindowControls";
+import { WindowControls, WindowResizeHandles } from "./components/WindowControls";
 import { TerminalScratchpad } from "./components/TerminalScratchpad";
 import { WorkspaceTabScroller, type TabDragOut } from "./components/WorkspaceTabScroller";
 import { TerminalLayoutControls } from "./components/TerminalLayoutControls";
@@ -123,6 +123,7 @@ import {
   offeredLocalShells,
 } from "./lib/offered-local-shells";
 import { restoreWorkspaceState } from "./lib/workspace-persistence";
+import { useRoundedWindowCorners } from "./lib/window-corners";
 import {
   removeConnectionWorkspaces,
   updateWorkspaceConnectionSnapshots,
@@ -189,6 +190,8 @@ function administratorTerminalNote(status: AdministratorTerminalStatus): string 
       return "Requires Windows 11 version 24H2 or later.";
     case "available":
       return "No supported administrator shell is installed.";
+    case "unsupportedPlatform":
+      return "";
   }
 }
 
@@ -233,6 +236,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
   settings,
   visible,
   active,
+  nativeClipboard,
   findRequest,
   handlers,
 }: {
@@ -240,6 +244,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
   settings: AppSettings;
   visible: boolean;
   active: boolean;
+  nativeClipboard: boolean;
   findRequest: number;
   handlers: TerminalHandlers;
 }) {
@@ -257,6 +262,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
       settings={settings}
       visible={visible}
       active={active}
+      nativeClipboard={nativeClipboard}
       onActivate={() => handlers.activate(workspace)}
       onSession={(sessionId) => handlers.session(workspace, sessionId)}
       onState={(state, reason) => handlers.state(workspace, state, reason)}
@@ -514,6 +520,7 @@ export function App() {
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [settingsContract, setSettingsContract] = useState<SettingsContract | null>(null);
   const [environment, setEnvironment] = useState<EnvironmentInfo | null>(null);
+  useRoundedWindowCorners();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -599,7 +606,11 @@ export function App() {
   // One update lifecycle for the whole application: one timer, one in-flight
   // check, no matter how many Workspaces are open. Defaults to on while
   // Settings is still loading so a slow first read never skips the first check.
-  const updater = useAppUpdater(settingsContract?.current.automaticUpdateChecks ?? true);
+  const updater = useAppUpdater(
+    environment !== null &&
+      environment.inAppUpdates !== false &&
+      (settingsContract?.current.automaticUpdateChecks ?? true),
+  );
   const [confirmState, setConfirmState] = useState<{
     title: string;
     message: string;
@@ -1534,7 +1545,7 @@ export function App() {
     setActiveWorkspaceId(workspace.id);
   }
 
-  /// Opens a local Windows shell as its own Workspace. Each launch is a new
+  /// Opens a local shell as its own Workspace. Each launch is a new
   /// shell, so there is nothing to reuse, and no Saved Connection is involved.
   function openLocalShell(shell: LocalShellProfile) {
     closeSettings(() => openWorkspace(createLocalWorkspace(shell)));
@@ -2562,6 +2573,7 @@ export function App() {
           : undefined
       }
     >
+      {environment?.desktopOs === "linux" && <WindowResizeHandles />}
       <header className="app-bar" data-tauri-drag-region>
         {!terminalFocusMode && !settingsOpen && (
           <button
@@ -3179,6 +3191,7 @@ export function App() {
                           active={terminalVisible && workspace.id === activeWorkspace.id}
                           findRequest={terminalFindRequests[workspace.id] ?? 0}
                           handlers={terminalHandlers}
+                          nativeClipboard={environment?.desktopOs === "linux"}
                         />
                       </div>
                     );
@@ -3348,7 +3361,9 @@ export function App() {
             </div>
             {environment && !environment.sshPath && (
               <p className="inline-warning">
-                Windows OpenSSH was not detected. Install the OpenSSH Client optional feature first.
+                {environment.desktopOs === "linux"
+                  ? "OpenSSH was not detected. Install the openssh-client package."
+                  : "Windows OpenSSH was not detected. Install the OpenSSH Client optional feature first."}
               </p>
             )}
           </section>

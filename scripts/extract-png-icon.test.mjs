@@ -7,8 +7,9 @@ describe("Linux build icon", () => {
     const png = extractPngIcon(readFileSync("src-tauri/icons/icon.ico"));
     expect(png.subarray(12, 16).toString()).toBe("IHDR");
     expect(png[25]).toBe(6); // PNG RGBA, as required by Tauri.
-    expect(png.readUInt32BE(16)).toBeGreaterThan(0);
-    expect(png.readUInt32BE(20)).toBeGreaterThan(0);
+    expect(png.readUInt32BE(16)).toBe(256);
+    expect(png.readUInt32BE(20)).toBe(256);
+    expect(png.equals(readFileSync("src-tauri/icons/icon.png"))).toBe(true);
   });
   it("rejects truncated directories and out-of-bounds entries", () => {
     const icon = readFileSync("src-tauri/icons/icon.ico");

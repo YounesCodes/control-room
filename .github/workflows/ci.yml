@@ -58,7 +58,6 @@ jobs:
           grep -q '^https://archive.ubuntu.com/ubuntu/' /etc/apt/apt-mirrors.txt
           sudo --preserve-env=DEBIAN_FRONTEND,NEEDRESTART_MODE apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 update
           sudo --preserve-env=DEBIAN_FRONTEND,NEEDRESTART_MODE apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 install -y --no-install-recommends libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf openssh-server
-          node scripts/extract-png-icon.mjs src-tauri/icons/icon.ico src-tauri/icons/icon.png
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2.9.3
         with:
@@ -66,6 +65,58 @@ jobs:
           cache-bin: false
       - name: Run live SSH tests against this disposable runner
         run: bash scripts/test-hosted-ssh.sh
+
+  linux-desktop:
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.software == 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Install Linux desktop and test dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo sed -i '/azure\.archive\.ubuntu\.com/d' /etc/apt/apt-mirrors.txt
+          sudo apt-get -o Acquire::Retries=2 update
+          sudo apt-get -o Acquire::Retries=2 install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf \
+            file openssh-client xdg-utils xvfb xauth openbox xdotool xclip webkit2gtk-driver
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-bin: false
+          shared-key: tauri-linux-build
+          cache-on-failure: true
+      - run: npm ci
+      - run: npm run check:rust
+      - run: npm run tauri build
+      - name: Install and exercise the Linux desktop app under X11
+        run: |
+          sudo apt-get install -y ./src-tauri/target/release/bundle/deb/*.deb
+          xvfb-run -a -s "-screen 0 1440x900x24" dbus-run-session -- node scripts/test-linux-desktop.mjs
+      - name: Check the AppImage bundle
+        run: |
+          appimage=(src-tauri/target/release/bundle/appimage/*.AppImage)
+          test "${#appimage[@]}" -eq 1
+          "${appimage[0]}" --appimage-extract usr/bin/control-room
+          test -x squashfs-root/usr/bin/control-room
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: control-room-linux-x64
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            test-results/linux-desktop/
+          if-no-files-found: error
 
   frontend:
     needs: changes
@@ -97,6 +148,8 @@ jobs:
       - name: Capture synthetic React UI evidence
         run: |
           npm run ui:capture -- --scenario settings
+          npm run ui:capture -- --scenario settings --state linux-package
+          npm run ui:capture -- --scenario settings --state linux-font
           npm run ui:capture -- --scenario systemd --state populated
           npm run ui:motion -- --scenario settings
       - uses: actions/upload-artifact@v7

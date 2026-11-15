@@ -1,3 +1,4 @@
+import { isMac, isWindows, localShellLabel } from "./platform";
 import "./isolation";
 import { $, $$, browser, expect } from "@wdio/globals";
 import {
@@ -9,8 +10,26 @@ import {
   runtime,
   terminalCommand,
   terminalContains,
+  typeTerminalText,
+  focusElement,
+  pressBoundaryKey,
+  activateFocusedButton,
+  pointerClick,
+  expectNativeText,
 } from "./helpers";
 import type { PersistedWorkspaceState } from "../src/types";
+
+async function revealTabAction(action: WebdriverIO.Element) {
+  if (isMac) {
+    // The embedded driver does not update CSS hover through native pointer
+    // movement. Keyboard focus reveals an inactive tab's controls without
+    // selecting its terminal.
+    await browser.execute((node: HTMLElement) => node.focus(), action);
+  } else {
+    await action.$("..").moveTo();
+    await action.waitForClickable();
+  }
+}
 
 async function renameActive(name: string) {
   // Focus keeps tab actions revealed if native hover changes during reflow.
@@ -23,16 +42,22 @@ async function renameActive(name: string) {
   await $("button=Rename").click();
 }
 
-// Group tools reveal on the active group tab's hover, like Workspace tab tools.
+// Group tools reveal on the active group tab's hover or focus, like Workspace tab tools.
 async function groupTool(selector: string) {
-  await $(".session-tab-group.active .session-tab-group-main").moveTo();
   const tool = $(".session-tab-group.active").$(selector);
-  await tool.moveTo();
-  await tool.waitForClickable();
+  if (isMac) {
+    // The embedded driver does not update CSS hover through native pointer
+    // movement. Keyboard focus reveals the same tools.
+    await browser.execute((node: HTMLElement) => node.focus(), await tool);
+  } else {
+    await $(".session-tab-group.active .session-tab-group-main").moveTo();
+    await tool.moveTo();
+    await tool.waitForClickable();
+  }
   await tool.click();
 }
 
-describe("ConPTY and Workspace lifecycle", () => {
+describe("Native PTY and Workspace lifecycle", () => {
   it("selects hidden terminals from overflow without clipping tabs or restarting sessions", async () => {
     for (let index = 1; index <= 8; index++) {
       await openLocal();
@@ -42,17 +67,17 @@ describe("ConPTY and Workspace lifecycle", () => {
     const sessions = (await runtime()).sessionIds;
     await $('button[aria-label="All terminals"]').click();
     await $("[role=menu]").$("button*=Shell 1").click();
-    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 1");
+    await expectNativeText(await $(".session-tab-wrap.active .session-tab-label"), "Shell 1");
     await terminalCommand("echo OVERFLOW_FIRST", "OVERFLOW_FIRST");
     await $("[aria-label='Scroll terminals right']").click();
     await $('button[aria-label="All terminals"]').click();
-    await browser.keys("Home");
-    await browser.keys("Enter");
-    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 1");
+    await pressBoundaryKey("Home");
+    await activateFocusedButton();
+    await expectNativeText(await $(".session-tab-wrap.active .session-tab-label"), "Shell 1");
     await $('button[aria-label="All terminals"]').click();
-    await browser.keys("End");
-    await browser.keys("Enter");
-    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 8");
+    await pressBoundaryKey("End");
+    await activateFocusedButton();
+    await expectNativeText(await $(".session-tab-wrap.active .session-tab-label"), "Shell 8");
     await terminalCommand("echo OVERFLOW_LAST", "OVERFLOW_LAST");
     const clipped = await browser.execute(() =>
       Array.from(document.querySelectorAll<HTMLElement>(".session-tab-list")).flatMap((list) => {
@@ -70,7 +95,7 @@ describe("ConPTY and Workspace lifecycle", () => {
     expect(clipped).toEqual([]);
     expect((await runtime()).sessionIds).toEqual(sessions);
     await closeWorkspace("Shell 8");
-    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Shell 7");
+    await expectNativeText(await $(".session-tab-wrap.active .session-tab-label"), "Shell 7");
     expect((await runtime()).sessionIds).toHaveLength(7);
   });
 
@@ -80,37 +105,36 @@ describe("ConPTY and Workspace lifecycle", () => {
     await $("aria/Focus terminal").click();
     for (const name of ["Logs pane", "Build pane"]) {
       await openSplitMenu();
-      await $(".new-terminal-menu").$("aria/New local terminal: Command Prompt").click();
+      await $(".new-terminal-menu").$(`aria/New local terminal: ${localShellLabel}`).click();
       await renameActive(name);
     }
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 3);
     const sessions = (await runtime()).sessionIds;
     const renameLogs = $("[aria-label='Rename Logs pane Workspace']");
-    await renameLogs.$("..").moveTo();
-    await renameLogs.waitForClickable();
+    await revealTabAction(await renameLogs);
     await renameLogs.click();
     await $("[role=dialog] input").setValue("Renamed logs");
     await $("button=Rename").click();
     await expect($("[aria-label='Close Renamed logs Workspace']")).toExist();
-    await expect($(".session-pane-tabs .session-tab-wrap.active .session-tab-main")).toHaveText(
+    await expectNativeText(
+      await $(".session-pane-tabs .session-tab-wrap.active .session-tab-label"),
       "Build pane",
     );
     await groupTool("[aria-label^='Ungroup ']");
     await $("button=Cancel").click();
     expect((await runtime()).sessionIds).toEqual(sessions);
     const closeLogs = $("[aria-label='Close Renamed logs Workspace']");
-    await closeLogs.$("..").moveTo();
-    await closeLogs.waitForClickable();
+    await revealTabAction(await closeLogs);
     await closeLogs.click();
     await $("button=Cancel").click();
     expect((await runtime()).sessionIds).toEqual(sessions);
-    await closeLogs.$("..").moveTo();
-    await closeLogs.waitForClickable();
+    await revealTabAction(await closeLogs);
     await closeLogs.click();
     await $("button=Stop & close").click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
-    await expect($(".session-tab-group-main small")).toHaveText("2");
-    await expect($(".session-pane-tabs .session-tab-wrap.active .session-tab-main")).toHaveText(
+    await expectNativeText(await $(".session-tab-group-main small"), "2");
+    await expectNativeText(
+      await $(".session-pane-tabs .session-tab-wrap.active .session-tab-label"),
       "Build pane",
     );
     await terminalCommand("echo BUILD_SURVIVES", "BUILD_SURVIVES");
@@ -127,7 +151,7 @@ describe("ConPTY and Workspace lifecycle", () => {
     await expect($("[aria-label='Close Build pane Workspace']")).toExist();
     await closeWorkspace("Build pane");
     await expect($(".session-pane-tabs")).not.toExist();
-    await expect($(".session-tab-wrap.active .session-tab-main")).toHaveText("Original pane");
+    await expectNativeText(await $(".session-tab-wrap.active .session-tab-label"), "Original pane");
     await terminalCommand("echo ORIGINAL_SURVIVES", "ORIGINAL_SURVIVES");
     await closeWorkspace("Original pane");
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 0);
@@ -182,7 +206,15 @@ describe("ConPTY and Workspace lifecycle", () => {
     try {
       await $(".session-tab-wrap.active .session-tab-main").click();
       expect(await calls()).toEqual([]);
-      await $(".session-window-drag-region").click();
+      if (isMac)
+        await browser.execute(() =>
+          document
+            .querySelector(".session-window-drag-region")!
+            .dispatchEvent(
+              new MouseEvent("mousedown", { bubbles: true, button: 0, buttons: 1, detail: 1 }),
+            ),
+        );
+      else await $(".session-window-drag-region").click();
       await browser.waitUntil(async () => (await calls())[0]?.complete === true);
       expect(await calls()).toEqual([{ complete: true, error: null }]);
     } finally {
@@ -202,7 +234,7 @@ describe("ConPTY and Workspace lifecycle", () => {
     for (const name of ["First group", "Second group"]) {
       if (name === "Second group") await openLocal();
       await openSplitMenu();
-      await $(".new-terminal-menu").$("aria/New local terminal: Command Prompt").click();
+      await $(".new-terminal-menu").$(`aria/New local terminal: ${localShellLabel}`).click();
       await groupTool("button[title='Rename terminal group']");
       await $("[role=dialog] input").setValue(name);
       await $("button=Rename").click();
@@ -223,7 +255,11 @@ describe("ConPTY and Workspace lifecycle", () => {
     await renameActive("Background shell");
     const initialSession = (await runtime()).sessionIds[0];
     await $(".terminal-workspace-pane.active .xterm-screen").click();
-    await browser.keys("ping 127.0.0.1 -n 3 >nul & echo BACKGROUND_FINISHED");
+    await typeTerminalText(
+      !isWindows
+        ? "sleep 2; echo BACKGROUND_FINISHED"
+        : "ping 127.0.0.1 -n 3 >nul & echo BACKGROUND_FINISHED",
+    );
     await browser.keys("Enter");
     await openLocal();
     await renameActive("Unicode shell");
@@ -245,10 +281,10 @@ describe("ConPTY and Workspace lifecycle", () => {
     await openLocal();
     await terminalCommand("echo CONTROL_ROOM_E2E_OK", "CONTROL_ROOM_E2E_OK");
     await $(".session-tab-wrap.active .session-tab-main").moveTo();
-    await $("aria/Close Command Prompt Workspace").click();
+    await $(`aria/Close ${localShellLabel} Workspace`).click();
     await $("button=Cancel").click();
     await terminalCommand("echo AFTER_CANCEL_OK", "AFTER_CANCEL_OK");
-    await closeWorkspace("Command Prompt");
+    await closeWorkspace(localShellLabel);
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 0);
     await expect($(".xterm-screen")).not.toExist();
   });
@@ -257,7 +293,7 @@ describe("ConPTY and Workspace lifecycle", () => {
     await openLocal();
     const initial = (await runtime()).sessionIds[0];
     await $(".terminal-workspace-pane.active .xterm-screen").click();
-    await browser.keys("exit");
+    await typeTerminalText("exit");
     await browser.keys("Enter");
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 0);
     await expect($(".session-tab-wrap.active")).toBeDisplayed();
@@ -269,13 +305,21 @@ describe("ConPTY and Workspace lifecycle", () => {
   it("routes input to independent Workspaces and closes only the selected session", async () => {
     await openLocal();
     await renameActive("First shell");
-    await terminalCommand('set "CONTROL_ROOM_VALUE=FIRST" & echo FIRST_READY', "FIRST_READY");
+    await terminalCommand(
+      !isWindows
+        ? "export CONTROL_ROOM_VALUE=FIRST; echo FIRST_READY"
+        : 'set "CONTROL_ROOM_VALUE=FIRST" & echo FIRST_READY',
+      "FIRST_READY",
+    );
     await openLocal();
     await renameActive("Second shell");
     await terminalCommand("echo SECOND_READY", "SECOND_READY");
     expect((await runtime()).sessionIds).toHaveLength(2);
     await $(".session-tab-main=First shell").click();
-    await terminalCommand("echo %CONTROL_ROOM_VALUE%", "FIRST");
+    await terminalCommand(
+      !isWindows ? "echo $CONTROL_ROOM_VALUE" : "echo %CONTROL_ROOM_VALUE%",
+      "FIRST",
+    );
     await closeWorkspace("First shell");
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 1);
     await terminalCommand("echo SURVIVOR_OK", "SURVIVOR_OK");
@@ -317,7 +361,7 @@ describe("ConPTY and Workspace lifecycle", () => {
       await openLocal();
       await $("aria/Focus terminal").click();
       await openSplitMenu(direction);
-      await $(".new-terminal-menu").$("aria/New local terminal: Command Prompt").click();
+      await $(".new-terminal-menu").$(`aria/New local terminal: ${localShellLabel}`).click();
       await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
       const panes = await browser.execute(() =>
         Array.from(document.querySelectorAll(".terminal-workspace-pane-visible"), (pane) => {
@@ -331,17 +375,17 @@ describe("ConPTY and Workspace lifecycle", () => {
       const divider = $("aria/Resize terminal split 1");
       const beforeResize = Number(await divider.getAttribute("aria-valuenow"));
       const sessionIds = (await runtime()).sessionIds;
-      await divider.click();
-      await browser.keys(["Shift", direction === "vertically" ? "ArrowRight" : "ArrowDown"]);
+      await focusElement(await divider);
+      await pressBoundaryKey(direction === "vertically" ? "ArrowRight" : "ArrowDown", true);
       await browser.waitUntil(
         async () => Number(await divider.getAttribute("aria-valuenow")) > beforeResize + 40,
       );
       expect((await runtime()).sessionIds).toEqual(sessionIds);
       await terminalCommand("echo ACTIVE_PANE_OK", "ACTIVE_PANE_OK");
       const terminals = await $$(".terminal-workspace-pane-visible .xterm-screen");
-      await terminals[0].click();
+      await pointerClick(await terminals[0]);
       await terminalCommand("echo FIRST_PANE_ONLY", "FIRST_PANE_ONLY");
-      await terminals[1].click();
+      await pointerClick(await terminals[1]);
       await terminalCommand("echo SECOND_PANE_ONLY", "SECOND_PANE_ONLY");
       const printed = await browser.execute(() =>
         Array.from(
@@ -375,7 +419,7 @@ describe("ConPTY and Workspace lifecycle", () => {
           () => document.querySelectorAll(".terminal-workspace-pane-visible").length,
         ),
       ).toBe(2);
-      await closeWorkspace("Command Prompt");
+      await closeWorkspace(localShellLabel);
       await browser.waitUntil(async () => (await runtime()).sessionIds.length === 1);
       await expect($(".session-tab-group")).not.toExist();
       await browser.waitUntil(

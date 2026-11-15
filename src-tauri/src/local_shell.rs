@@ -106,6 +106,7 @@ fn fixed_arguments(kind: LocalShellKind) -> &'static [&'static str] {
         // Git Bash is `bash.exe` itself, as a login shell so the user's profile
         // scripts run, and interactive so it behaves like a terminal shell.
         LocalShellKind::GitBash => &["--login", "-i"],
+        _ => unreachable!("only Windows shells are resolved here"),
     }
 }
 
@@ -194,6 +195,7 @@ fn candidate_programs(kind: LocalShellKind, environment: &ShellEnvironment) -> V
                 }
             }
         }
+        _ => {}
     }
     candidates
 }
@@ -229,7 +231,7 @@ pub fn discover(
     environment: &ShellEnvironment,
     exists: &dyn Fn(&Path) -> bool,
 ) -> Vec<LocalShellProfile> {
-    LocalShellKind::ALL
+    LocalShellKind::WINDOWS
         .iter()
         .filter(|kind| resolve(**kind, environment, exists).is_some())
         .map(|kind| LocalShellProfile {
@@ -736,7 +738,7 @@ mod tests {
 
     #[test]
     fn profile_ids_match_their_serialized_form() {
-        for kind in LocalShellKind::ALL {
+        for kind in LocalShellKind::WINDOWS {
             let serialized = serde_json::to_string(&kind).unwrap();
             assert_eq!(serialized, format!("\"{}\"", kind.id()));
             assert_eq!(LocalShellKind::from_id(kind.id()), Some(kind));

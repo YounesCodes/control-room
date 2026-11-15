@@ -17,4 +17,4 @@ description: Fix common SSH, inspection, Docker, and local shell problems.
 
 **The window shows an error.** Read the message and select **Reload**. This restarts the app session; saved connections, settings, and notes stay on disk.
 
-**OpenSSH is missing.** Install or enable the Windows OpenSSH Client, then restart Control Room.
+**OpenSSH is missing.** Install or enable the OpenSSH Client optional feature on Windows. On Ubuntu, install the openssh-client package. Restart Control Room after installation.

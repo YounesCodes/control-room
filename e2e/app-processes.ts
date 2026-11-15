@@ -1,3 +1,4 @@
+import { linuxProcesses } from "./linux-processes";
 import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -9,6 +10,8 @@ interface ApplicationProcess {
 }
 
 function applications(): ApplicationProcess[] {
+  if (process.platform === "linux")
+    return linuxProcesses().filter((row) => row.executable.endsWith("/control-room"));
   const output = execFileSync(
     "powershell.exe",
     [
@@ -40,18 +43,23 @@ function applications(): ApplicationProcess[] {
   return rows;
 }
 
+function samePath(left: string, right: string) {
+  return process.platform === "win32"
+    ? resolve(left).toLowerCase() === resolve(right).toLowerCase()
+    : resolve(left) === resolve(right);
+}
+
 function sameApplication(left: ApplicationProcess, right: ApplicationProcess) {
   return (
     left.id === right.id &&
     left.created === right.created &&
-    resolve(left.executable).toLowerCase() === resolve(right.executable).toLowerCase()
+    samePath(left.executable, right.executable)
   );
 }
 
 export function recordApplication(directory: string, pid: number, executable: string) {
   const application = applications().find(
-    (row) =>
-      row.id === pid && resolve(row.executable).toLowerCase() === resolve(executable).toLowerCase(),
+    (row) => row.id === pid && samePath(row.executable, executable),
   );
   if (!application) throw new Error(`Could not verify E2E application ${pid}`);
   appendFileSync(join(directory, "app-processes.jsonl"), `${JSON.stringify(application)}\n`);

@@ -44,8 +44,8 @@
     "active": true,
     "targets": ["nsis"],
     "icon": ["icons/icon.ico"],
-    "shortDescription": "Manage Linux hosts over SSH",
-    "longDescription": "A local Windows desktop control room for Linux hosts over SSH.",
+    "shortDescription": "Inspect Linux and Windows hosts over SSH",
+    "longDescription": "A desktop SSH client with local terminals and read-only Linux and Windows host inspection.",
     "windows": {
       "nsis": {
         "installMode": "currentUser",

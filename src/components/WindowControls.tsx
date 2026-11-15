@@ -45,3 +45,36 @@ export function WindowControls({ windowActions }: WindowControlsProps) {
     </div>
   );
 }
+
+// GTK undecorated windows lack a native resize border. Keep the existing
+// titlebar and let the window manager handle drags from the outside edges.
+const resizeEdges = [
+  "North",
+  "South",
+  "East",
+  "West",
+  "NorthEast",
+  "NorthWest",
+  "SouthEast",
+  "SouthWest",
+] as const;
+
+export function WindowResizeHandles() {
+  const appWindow = getCurrentWindow();
+  return (
+    <div className="window-resize-handles" aria-hidden="true">
+      {resizeEdges.map((edge) => (
+        <div
+          key={edge}
+          className="window-resize-handle"
+          data-edge={edge}
+          onMouseDown={(event) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            void appWindow.startResizeDragging(edge).catch(() => {});
+          }}
+        />
+      ))}
+    </div>
+  );
+}

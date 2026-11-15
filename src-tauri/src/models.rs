@@ -400,7 +400,12 @@ impl Default for AppSettings {
                 HeaderMetric::Uptime,
             ],
             host_metrics_interval_seconds: 5,
-            terminal_font_family: "Cascadia Mono, Consolas, monospace".into(),
+            terminal_font_family: if cfg!(target_os = "linux") {
+                "monospace"
+            } else {
+                "Cascadia Mono, Consolas, monospace"
+            }
+            .into(),
             terminal_font_size: 14,
             terminal_scrollback: 10_000,
             terminal_foreground: "#dddddd".into(),
@@ -441,10 +446,16 @@ pub enum LocalShellKind {
     CommandPrompt,
     #[serde(rename = "git-bash")]
     GitBash,
+    Bash,
+    Zsh,
+    Fish,
+    Sh,
+    LoginShell,
 }
 
 impl LocalShellKind {
-    pub const ALL: [LocalShellKind; 4] = [
+    #[cfg(not(target_os = "linux"))]
+    pub const WINDOWS: [LocalShellKind; 4] = [
         LocalShellKind::PowerShell7,
         LocalShellKind::WindowsPowerShell,
         LocalShellKind::CommandPrompt,
@@ -457,6 +468,11 @@ impl LocalShellKind {
             LocalShellKind::WindowsPowerShell => "windows-powershell",
             LocalShellKind::CommandPrompt => "command-prompt",
             LocalShellKind::GitBash => "git-bash",
+            LocalShellKind::Bash => "bash",
+            LocalShellKind::Zsh => "zsh",
+            LocalShellKind::Fish => "fish",
+            LocalShellKind::Sh => "sh",
+            LocalShellKind::LoginShell => "login-shell",
         }
     }
 
@@ -466,11 +482,28 @@ impl LocalShellKind {
             LocalShellKind::WindowsPowerShell => "Windows PowerShell",
             LocalShellKind::CommandPrompt => "Command Prompt",
             LocalShellKind::GitBash => "Git Bash",
+            LocalShellKind::Bash => "Bash",
+            LocalShellKind::Zsh => "Zsh",
+            LocalShellKind::Fish => "Fish",
+            LocalShellKind::Sh => "POSIX shell",
+            LocalShellKind::LoginShell => "Login shell",
         }
     }
 
     pub fn from_id(id: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|kind| kind.id() == id)
+        [
+            Self::PowerShell7,
+            Self::WindowsPowerShell,
+            Self::CommandPrompt,
+            Self::GitBash,
+            Self::Bash,
+            Self::Zsh,
+            Self::Fish,
+            Self::Sh,
+            Self::LoginShell,
+        ]
+        .into_iter()
+        .find(|kind| kind.id() == id)
     }
 
     pub fn administrator_id(self) -> Option<&'static str> {
@@ -478,7 +511,7 @@ impl LocalShellKind {
             LocalShellKind::PowerShell7 => Some("powershell-7-administrator"),
             LocalShellKind::WindowsPowerShell => Some("windows-powershell-administrator"),
             LocalShellKind::CommandPrompt => Some("command-prompt-administrator"),
-            LocalShellKind::GitBash => None,
+            _ => None,
         }
     }
 
@@ -486,9 +519,13 @@ impl LocalShellKind {
         if let Some(kind) = Self::from_id(id) {
             return Some((kind, false));
         }
-        Self::ALL
-            .into_iter()
-            .find_map(|kind| (kind.administrator_id() == Some(id)).then_some((kind, true)))
+        [
+            Self::PowerShell7,
+            Self::WindowsPowerShell,
+            Self::CommandPrompt,
+        ]
+        .into_iter()
+        .find_map(|kind| (kind.administrator_id() == Some(id)).then_some((kind, true)))
     }
 }
 
@@ -510,6 +547,7 @@ pub enum AdministratorTerminalStatus {
     Disabled,
     UnsupportedMode,
     UnsupportedWindows,
+    UnsupportedPlatform,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -565,6 +603,8 @@ pub struct EnvironmentInfo {
     pub ssh_config_path: String,
     pub ssh_agent_available: bool,
     pub platform_supported: bool,
+    pub desktop_os: &'static str,
+    pub in_app_updates: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]

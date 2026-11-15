@@ -10,13 +10,18 @@ const run = {
   status: "completed",
   conclusion: "success",
 };
-const jobs = ["frontend", "validate", "installer", "desktop / desktop", "hosted-ssh"].map(
-  (name) => ({
-    name,
-    status: "completed",
-    conclusion: "success",
-  }),
-);
+const jobs = [
+  "frontend",
+  "validate",
+  "installer",
+  "desktop / desktop",
+  "hosted-ssh",
+  "linux-desktop",
+].map((name) => ({
+  name,
+  status: "completed",
+  conclusion: "success",
+}));
 
 describe("release CI verification", () => {
   it("accepts a successful main run with all required jobs", () => {
