@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { ChevronDown } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
+import { Skeleton } from "./PanelState";
 import type { CatalogFont, FontCatalog, FontProgress } from "../types";
 
 export function FontCatalogPicker({
@@ -317,12 +318,17 @@ export function FontCatalogPicker({
             </li>
           ))}
         </ul>
+        {open && loading && !results.length && (
+          <div className="font-suggestions">
+            <Skeleton label="Loading font catalog…" variant="lines" count={5} />
+          </div>
+        )}
       </div>
       <small id="font-catalog-help">
         Search free fonts or enter installed font names and fallbacks. Previews do not install
         fonts.
       </small>
-      {loading && <p role="status">Loading font catalog…</p>}
+      {loading && (!open || !!results.length) && <p role="status">Loading font catalog…</p>}
       {catalog?.stale && <p role="status">Catalog unavailable. Showing fonts from this session.</p>}
       {catalogError && (
         <div className="inline-warning">

@@ -69,6 +69,26 @@ afterEach(() => {
 });
 
 describe("catalog font lifecycle", () => {
+  it("sketches suggestions under the field while the catalog loads", async () => {
+    let finish: (value: unknown) => void = () => {};
+    api.listCatalogFonts.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+    const user = userEvent.setup();
+    render(
+      <FontCatalogPicker
+        value="Consolas, monospace"
+        onChange={vi.fn()}
+        onUse={vi.fn(async () => {})}
+        onPreview={vi.fn()}
+        onBusyChange={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("combobox"));
+    expect(screen.getByRole("status").textContent).toBe("Loading font catalog…");
+    await act(async () => finish({ fonts, stale: false }));
+    expect(await screen.findByRole("option", { name: /Fira Mono/ })).toBeTruthy();
+    expect(screen.queryByText("Loading font catalog…")).toBeNull();
+  });
+
   it("accepts an installed font and fallback list while the catalog is offline", async () => {
     api.listCatalogFonts.mockRejectedValueOnce("Offline");
     const props = mount();

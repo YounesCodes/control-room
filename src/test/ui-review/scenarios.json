@@ -379,8 +379,18 @@
       "states": ["docker", "logs", "history", "history-restart", "container-terminal"],
       "ready": ".app-shell",
       "prepare": {
-        "container-terminal": [{ "selector": ".compact-navigation-toggle", "optional": true }],
-        "history-restart": [{ "role": "button", "name": "Enable Enhanced History" }]
+        "container-terminal": [
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          }
+        ],
+        "history-restart": [
+          {
+            "role": "button",
+            "name": "Enable Enhanced History"
+          }
+        ]
       },
       "settled": {
         "container-terminal": ".host-child-row.active[data-session-state='connected']",
@@ -428,7 +438,7 @@
         "populated": ".systemd-memory-value > [aria-hidden]",
         "stale": ".systemd-page .inline-warning",
         "overflow": ".systemd-memory-value > [aria-hidden]",
-        "loading": ".connection-section .panel-state[aria-live]",
+        "loading": ".systemd-page .skeleton",
         "empty": ".systemd-inventory .panel-state",
         "error": ".connection-section .panel-state-error"
       }
@@ -484,6 +494,98 @@
         "errors": ".log-level-filter [data-level='error'][aria-pressed='true']",
         "search": ".logs-page .log-match-count",
         "restricted": ".logs-page .inline-warning[role='status']"
+      }
+    },
+    "loading": {
+      "states": [
+        "systemd-inspector",
+        "windows-services",
+        "shell-picker",
+        "history",
+        "logs",
+        "docker",
+        "docker-inspector",
+        "ports",
+        "ports-discovering",
+        "font-suggestions",
+        "ssh-diagnostics"
+      ],
+      "ready": ".app-shell",
+      "prepare": {
+        "systemd-inspector": [
+          {
+            "selector": ".systemd-inventory .dense-row",
+            "last": true
+          }
+        ],
+        "shell-picker": [
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          },
+          {
+            "selector": ".host-main"
+          }
+        ],
+        "docker-inspector": [
+          {
+            "selector": ".arch-chip",
+            "wait": true
+          },
+          {
+            "selector": ".arch-chip",
+            "last": true
+          }
+        ],
+        "font-suggestions": [
+          {
+            "role": "button",
+            "name": "Open Settings"
+          },
+          {
+            "role": "searchbox",
+            "name": "Search settings",
+            "fill": "Font family"
+          },
+          {
+            "role": "combobox",
+            "name": "Font family"
+          }
+        ],
+        "ssh-diagnostics": [
+          {
+            "role": "button",
+            "name": "Open Settings"
+          },
+          {
+            "role": "button",
+            "name": "App & Diagnostics",
+            "optional": true
+          },
+          {
+            "role": "combobox",
+            "name": "Settings category",
+            "option": "app",
+            "optional": true
+          },
+          {
+            "selector": "#settings-ssh",
+            "scroll": true
+          }
+        ]
+      },
+      "settled": {
+        "systemd-inspector": ".systemd-inspector .skeleton",
+        "windows-services": ".windows-services-page .list-panel .skeleton",
+        "shell-picker": "[role='dialog'] .skeleton",
+        "history": ".history-list .skeleton",
+        "logs": ".log-controls .skeleton",
+        "docker": ".arch-viewport .skeleton",
+        "docker-inspector": ".arch-detail .skeleton",
+        "ports": ".arch-viewport .skeleton",
+        "ports-discovering": ".arch-loading-status",
+        "font-suggestions": ".font-suggestions .skeleton",
+        "ssh-diagnostics": "#settings-ssh .skeleton"
       }
     }
   }

@@ -956,3 +956,38 @@ describe("LogsPane restricted journal access", () => {
     expect(await screen.findByText(warning)).toBeTruthy();
   });
 });
+
+describe("LogsPane source discovery", () => {
+  afterEach(cleanup);
+
+  it("keeps the pane in place and holds the picker's spot while finding sources", () => {
+    api.listServices.mockReset().mockReturnValue(new Promise(() => {}));
+    const props = {
+      connection,
+      settings,
+      logTailOptions: [200],
+      containersCache: { items: [], fetchedAt: null, loading: false, error: null },
+      selectedSource: null,
+      onServicesCacheChange: vi.fn(),
+      onContainersCacheChange: vi.fn(),
+      onSourceChange: vi.fn(),
+    };
+    const view = render(
+      <LogsPane
+        {...props}
+        servicesCache={{ items: [], fetchedAt: null, loading: true, error: null }}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Logs" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Search loaded lines" })).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Unit" })).toBeNull();
+    expect(screen.getAllByRole("status").map((status) => status.textContent)).toContain(
+      "Finding available log sources…",
+    );
+
+    // A refresh with sources already known keeps the picker usable.
+    view.rerender(<LogsPane {...props} servicesCache={{ ...servicesCache, loading: true }} />);
+    expect(screen.getByRole("combobox", { name: "Unit" })).toBeTruthy();
+    expect(screen.queryByText("Finding available log sources…")).toBeNull();
+  });
+});

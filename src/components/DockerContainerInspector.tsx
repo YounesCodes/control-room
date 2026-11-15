@@ -1,7 +1,7 @@
 import { InspectorDisclosure } from "./InspectorDisclosure";
 import type { PublishedPortSelection } from "../lib/port-inspector";
 import { FileClock, RefreshCw, SquareTerminal } from "lucide-react";
-import { ErrorState, LoadingState } from "./PanelState";
+import { ErrorState, Skeleton } from "./PanelState";
 import { ContainerImageIcon } from "./ContainerImageIcon";
 import type { CachedValue, DockerContainer, DockerContainerDetails } from "../types";
 
@@ -246,7 +246,7 @@ export function DockerContainerInspector({
             }
           />
         ) : !details ? (
-          <LoadingState label="Inspecting container…" />
+          <Skeleton label="Inspecting container…" variant="fields" count={6} />
         ) : (
           <>
             {cache?.error && (

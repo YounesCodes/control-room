@@ -98,6 +98,27 @@ describe("HistoryPane", () => {
     api.historyIntegrationStatus.mockRejectedValue(new Error("Host is offline"));
   });
 
+  it("sketches the list under the toolbar while reading and keeps commands during a refresh", async () => {
+    const user = userEvent.setup();
+    let finish: (value: unknown) => void = () => {};
+    api.history.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+    render(<HistoryPane {...props()} />);
+    expect(screen.getByRole("heading", { name: "Command History" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Search commands" })).toBeTruthy();
+    expect(screen.getAllByRole("status").map((status) => status.textContent)).toContain(
+      "Reading Command History…",
+    );
+    await act(async () => finish([{ ...historyEntry }]));
+    await screen.findByText("docker ps");
+    expect(screen.queryByText("Reading Command History…")).toBeNull();
+
+    api.history.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+    await user.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(screen.getByText("docker ps")).toBeTruthy();
+    expect(screen.queryByText("Reading Command History…")).toBeNull();
+    await act(async () => finish([{ ...historyEntry }]));
+  });
+
   it("refreshes the active search when this connection saves a command", async () => {
     const user = userEvent.setup();
     render(<HistoryPane {...props()} />);

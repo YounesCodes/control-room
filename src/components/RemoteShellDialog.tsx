@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import { HostOsIcon } from "./HostOsIcon";
 import { Modal } from "./Modal";
+import { Skeleton } from "./PanelState";
 
 export function shellDescription(id: string): string {
   if (id.startsWith("wsl:")) return "Linux distribution";
@@ -115,14 +116,15 @@ export function RemoteShellDialog({
             </button>
           )}
         </div>
-        {loading && (
-          <div className="remote-shell-loading" role="status">
-            <LoaderCircle size={18} className="spinning" />
-            <span>
-              {catalog ? "Refreshing available shells..." : "Finding available shells..."}
-            </span>
-          </div>
-        )}
+        {loading &&
+          (catalog ? (
+            <div className="remote-shell-loading" role="status">
+              <LoaderCircle size={18} className="spinning" />
+              <span>Refreshing available shells…</span>
+            </div>
+          ) : (
+            <Skeleton label="Finding available shells…" count={3} />
+          ))}
         {error && (
           <div className="remote-shell-error" role="alert">
             <AlertCircle size={17} />

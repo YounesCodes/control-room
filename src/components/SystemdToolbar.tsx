@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { GitBranch, List, RefreshCw, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { SystemdPresence } from "./SystemdPresence";
 import { Search } from "./MagnifierIcon";
+import { SkeletonText } from "./PanelState";
 import type { SystemdExplorerState } from "../types";
 import { SYSTEMD_INITIAL_VISIBLE } from "../lib/systemd-units";
 
@@ -161,7 +162,11 @@ export function SystemdToolbar({
           Systemd
         </h2>
         <span className="systemd-unit-count" data-count-width={total + " / " + total + " units"}>
-          <span>{visible !== total ? visible + " / " + total + " units" : total + " units"}</span>
+          {loading && !total ? (
+            <SkeletonText />
+          ) : (
+            <span>{visible !== total ? visible + " / " + total + " units" : total + " units"}</span>
+          )}
         </span>
         {failed > 0 && (
           <button

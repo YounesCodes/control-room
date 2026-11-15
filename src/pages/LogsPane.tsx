@@ -13,7 +13,7 @@ import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ArrowDown, Eraser, FileClock, Pause, Play, Square, WrapText, X } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
-import { ErrorState, LoadingState } from "../components/PanelState";
+import { ErrorState, Skeleton } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import { BoundedLogBuffer, logRenderDelay } from "../lib/log-buffer";
 import {
@@ -653,8 +653,9 @@ export function LogsPane({
 
   const sourceCache = sourceType === "systemd" ? servicesCache : containersCache;
   const sourceOptions = sourceCache.items;
-  if (sourceCache.loading && !sourceCache.items.length && !explicitSystemdSource)
-    return <LoadingState label="Finding available log sources…" />;
+  // Discovery keeps the pane in place and holds the picker's spot until the
+  // first list of units or containers arrives.
+  const discovering = sourceCache.loading && !sourceCache.items.length && !explicitSystemdSource;
   if (sourceCache.error && !sourceCache.items.length && !explicitSystemdSource) {
     const dockerPermissionError =
       !windowsHost &&
@@ -730,21 +731,25 @@ export function LogsPane({
         </label>
         <label className="source-select">
           <span>{sourceType === "systemd" ? "Unit" : "Container"}</span>
-          <select
-            value={sourceId}
-            onChange={(event) => selectSource(event.target.value)}
-            disabled={!sourceId}
-          >
-            {!sourceId && <option value="">No {sourceNoun}s found</option>}
-            {explicitSystemdSource && !sourceOptions.some((source) => source.id === sourceId) && (
-              <option value={sourceId}>{sourceId}</option>
-            )}
-            {sourceOptions.map((source) => (
-              <option value={source.id} key={source.id}>
-                {"name" in source ? source.name : source.id}
-              </option>
-            ))}
-          </select>
+          {discovering ? (
+            <Skeleton label="Finding available log sources…" variant="control" />
+          ) : (
+            <select
+              value={sourceId}
+              onChange={(event) => selectSource(event.target.value)}
+              disabled={!sourceId}
+            >
+              {!sourceId && <option value="">No {sourceNoun}s found</option>}
+              {explicitSystemdSource && !sourceOptions.some((source) => source.id === sourceId) && (
+                <option value={sourceId}>{sourceId}</option>
+              )}
+              {sourceOptions.map((source) => (
+                <option value={source.id} key={source.id}>
+                  {"name" in source ? source.name : source.id}
+                </option>
+              ))}
+            </select>
+          )}
         </label>
         <label>
           <span>Lines</span>

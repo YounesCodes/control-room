@@ -751,7 +751,12 @@ describe("App Workspace behavior", () => {
     expect(screen.queryByText(/OpenSSH was not detected/)).toBeNull();
     await user.click(screen.getByRole("button", { name: "Open Settings" }));
     await user.click(screen.getByRole("button", { name: "App & Diagnostics" }));
-    expect(screen.getAllByText("Checking…")).toHaveLength(3);
+    // The SSH section holds its place and says it is still reading.
+    expect(
+      screen
+        .getAllByRole("status")
+        .some((status) => status.textContent === "Checking SSH environment…"),
+    ).toBe(true);
 
     answer({
       sshPath: null,
@@ -760,7 +765,7 @@ describe("App Workspace behavior", () => {
       platformSupported: true,
     });
     expect(await screen.findByText("Not detected")).toBeTruthy();
-    expect(screen.queryByText("Checking…")).toBeNull();
+    expect(screen.queryByText("Checking SSH environment…")).toBeNull();
   });
 
   it("reorders a dragged Workspace tab and keeps the active terminal live", async () => {

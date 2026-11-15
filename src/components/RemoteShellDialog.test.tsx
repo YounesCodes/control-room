@@ -34,6 +34,18 @@ describe("remote shell selection", () => {
     expect(onSelect).toHaveBeenCalledWith(shells[1]);
     expect(screen.getByRole("group", { name: "WSL distributions" })).toBeTruthy();
   });
+  it("sketches shell rows while finding shells and keeps them during a refresh", async () => {
+    render(<RemoteShellDialog connection={connection} onClose={vi.fn()} onSelect={vi.fn()} />);
+    expect(screen.getByRole("dialog", { name: "Connect to Windows test host" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Finding available shells…");
+    await screen.findByRole("radio", { name: "Windows PowerShell" });
+    expect(screen.queryByRole("status")).toBeNull();
+
+    discoverRemoteShells.mockReturnValueOnce(new Promise(() => {}));
+    await userEvent.click(screen.getByRole("button", { name: "Refresh available shells" }));
+    expect(screen.getByRole("status").textContent).toBe("Refreshing available shells…");
+    expect(screen.getByRole("radio", { name: "Windows PowerShell" })).toBeTruthy();
+  });
   it("opens Linux without offering Windows shells", async () => {
     discoverRemoteShells.mockResolvedValue({ platform: "linux", shells: [] });
     const onSelect = vi.fn();

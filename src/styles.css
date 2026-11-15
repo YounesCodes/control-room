@@ -5805,6 +5805,155 @@ dd {
   }
 }
 
+/* Skeletons: static placeholders shaped like the content that is loading.
+   They stand where that content will appear, so neighbors never move when it
+   arrives. Only the entrance fades; the bars stay still. */
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  animation: overlay-in var(--motion-slow) var(--ease) both;
+}
+
+.skeleton-shape,
+.skeleton-items {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.skeleton-bar {
+  display: block;
+  width: var(--skeleton-width, 100%);
+  height: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--fill-active);
+}
+
+.skeleton-inline {
+  display: inline-block;
+  width: 7ch;
+  height: 0.8em;
+  vertical-align: middle;
+}
+
+.skeleton-mark {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fill-active);
+}
+
+.skeleton[data-variant="rows"] .skeleton-item {
+  display: grid;
+  grid-template-columns: var(--identity-size) minmax(0, 480px);
+  grid-template-rows: auto auto;
+  align-content: center;
+  gap: 6px 11px;
+  height: 44px;
+  padding: 5px 9px;
+}
+
+.skeleton[data-variant="rows"] .skeleton-mark {
+  grid-row: span 2;
+  align-self: center;
+  justify-self: center;
+}
+
+.skeleton[data-variant="rows"] .skeleton-bar {
+  height: 9px;
+}
+
+.skeleton[data-variant="rows"] .skeleton-bar-detail {
+  grid-column: 2;
+  width: calc(var(--skeleton-width) * 0.6);
+  height: 7px;
+}
+
+.skeleton[data-variant="fields"] .skeleton-item {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 360px);
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 15px 0;
+}
+
+.skeleton .skeleton-bar-label {
+  width: 72px;
+}
+
+.skeleton[data-variant="lines"] .skeleton-items {
+  gap: 10px;
+  padding: 10px 9px;
+}
+
+.skeleton[data-variant="control"] .skeleton-item {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.skeleton[data-variant="control"] .skeleton-bar {
+  max-width: 220px;
+}
+
+/* The canvas variant sketches a host beside one column of nodes, the layout
+   every graph opens with, and states what it is reading in visible text. */
+/* Centered like a fitted graph, clear of the floating graph toolbars. */
+.skeleton[data-variant="canvas"] {
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  gap: 16px;
+}
+
+.skeleton[data-variant="canvas"] .skeleton-label {
+  order: 1;
+}
+
+.skeleton[data-variant="canvas"] .skeleton-shape {
+  flex-direction: row;
+  align-items: center;
+  gap: 40px;
+}
+
+.skeleton-block {
+  display: block;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--fill-control);
+}
+
+.skeleton-host {
+  flex: none;
+  width: 168px;
+  height: 52px;
+}
+
+.skeleton[data-variant="canvas"] .skeleton-items {
+  width: 248px;
+  gap: 12px;
+  padding: 14px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.skeleton-label {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
 /* ==========================================================================
    Logs
    ========================================================================== */
@@ -8800,6 +8949,21 @@ kbd {
 
 .arch-viewport > .panel-state {
   height: 100%;
+}
+
+/* Nodes already on the canvas stay put while more are discovered. */
+.arch-loading-status {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  pointer-events: none;
 }
 
 .graph-toolbar {

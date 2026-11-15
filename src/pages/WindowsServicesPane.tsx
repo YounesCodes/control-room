@@ -2,7 +2,7 @@ import { Search } from "../components/MagnifierIcon";
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
-import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
+import { EmptyState, ErrorState, Skeleton, SkeletonText } from "../components/PanelState";
 import { ResizableSplit } from "../components/ResizablePanels";
 import type { SavedConnection, WindowsService } from "../types";
 
@@ -54,7 +54,8 @@ export function WindowsServicesPane({ connection }: { connection: SavedConnectio
     setSearch("");
     setState("all");
   };
-  if (loading && !services.length) return <LoadingState label="Reading Windows services..." />;
+  // The first read keeps the page in place and sketches the list it will fill.
+  const firstLoad = loading && !services.length;
   if (error && !services.length)
     return (
       <ErrorState
@@ -69,8 +70,14 @@ export function WindowsServicesPane({ connection }: { connection: SavedConnectio
           <div>
             <h2>Services</h2>
             <p>
-              {services.filter((service) => service.state === "running").length} running /{" "}
-              {services.length} total
+              {firstLoad ? (
+                <SkeletonText />
+              ) : (
+                <>
+                  {services.filter((service) => service.state === "running").length} running /{" "}
+                  {services.length} total
+                </>
+              )}
             </p>
           </div>
           <button
@@ -125,13 +132,19 @@ export function WindowsServicesPane({ connection }: { connection: SavedConnectio
               <span className="row-state">{service.state}</span>
             </button>
           ))}
-          {!filtered.length && (
-            <EmptyState title={services.length ? "No matching services" : "No services found"} />
+          {firstLoad ? (
+            <Skeleton label="Reading Windows services…" count={8} />
+          ) : (
+            !filtered.length && (
+              <EmptyState title={services.length ? "No matching services" : "No services found"} />
+            )
           )}
         </div>
       </div>
       <aside className="detail-panel" tabIndex={0} aria-label="Windows service details">
-        {selected && filtered.some((service) => service.id === selected.id) ? (
+        {firstLoad ? (
+          <Skeleton label="Reading service details…" variant="fields" count={4} />
+        ) : selected && filtered.some((service) => service.id === selected.id) ? (
           <>
             <header>
               <h2>{selected.displayName}</h2>

@@ -3,6 +3,7 @@ import { FileClock, Network, RefreshCw } from "lucide-react";
 import { InspectorDisclosure } from "./InspectorDisclosure";
 import { SystemdCode } from "./SystemdCode";
 import { AnimatedNumber } from "./AnimatedNumber";
+import { Skeleton } from "./PanelState";
 import { useSystemdReads } from "../lib/systemd-inspection";
 import { systemdValue, systemdStateLabel } from "../lib/systemd-units";
 import type { CachedValue, LogSourceSelection, SystemdInspection, SystemdUnit } from "../types";
@@ -62,6 +63,24 @@ function Fields({ rows }: { rows: [string, string | undefined][] }) {
   );
 }
 
+/** Holds a section's field rows in place until the unit's details arrive, so a
+ *  pending value never reads as "Unavailable". */
+function PendingFields({
+  pending,
+  count,
+  rows,
+}: {
+  pending: boolean;
+  count: number;
+  rows: [string, string | undefined][];
+}) {
+  return pending ? (
+    <Skeleton label="Reading unit details…" variant="fields" count={count} />
+  ) : (
+    <Fields rows={rows} />
+  );
+}
+
 function duration(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return "Unavailable";
   if (seconds >= 86400)
@@ -97,7 +116,12 @@ function Evidence({
   const content = section === "configuration" ? "unit files" : "effective properties";
   return (
     <>
-      {result?.loading && <p role="status">Reading {content}…</p>}
+      {result?.loading &&
+        (result.value ? (
+          <p role="status">Reading {content}…</p>
+        ) : (
+          <Skeleton label={`Reading ${content}…`} variant="lines" count={6} />
+        ))}
       {result?.error && (
         <p className="inline-warning" role="status">
           {result.value ? "Saved evidence. " : ""}
@@ -220,6 +244,8 @@ export function SystemdUnitInspector({
     };
   }, []);
   const p = result?.value?.properties ?? {};
+  // Nothing read yet: show where the fields will be rather than "Unavailable".
+  const pending = !result?.value && !result?.error;
   const type = unitId.split(".").at(-1);
   const active = p.ActiveState ?? summary?.activeState;
   const sub = p.SubState ?? summary?.subState;
@@ -316,9 +342,9 @@ export function SystemdUnitInspector({
         </span>
       </header>
       <div ref={bodyRef} className="port-inspector-body systemd-unit-reveal">
-        {result?.loading && (
+        {result?.loading && result.value && (
           <p className="systemd-read-status" role="status">
-            {result.value ? "Refreshing saved details…" : "Reading unit details…"}
+            Refreshing saved details…
           </p>
         )}
         {result?.error && (
@@ -351,11 +377,17 @@ export function SystemdUnitInspector({
             />
           </section>
         )}
-        {!!essentials.length && <Fields rows={essentials} />}
+        {pending ? (
+          <Skeleton label="Reading unit details…" variant="fields" count={3} />
+        ) : (
+          !!essentials.length && <Fields rows={essentials} />
+        )}
         <InspectorDisclosure title="Configuration" open={configuration} onToggle={setConfiguration}>
           {configuration && (
             <>
-              <Fields
+              <PendingFields
+                pending={pending}
+                count={4}
                 rows={[
                   ["Unit file", p.FragmentPath],
                   ["Source file", p.SourcePath],
@@ -390,7 +422,9 @@ export function SystemdUnitInspector({
         >
           {advanced && (
             <>
-              <Fields
+              <PendingFields
+                pending={pending}
+                count={6}
                 rows={[
                   ["Substate", sub],
                   ["Load state", p.LoadState ?? summary?.loadState],

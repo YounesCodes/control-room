@@ -6,6 +6,7 @@ import {
   failedService,
   service,
   settings,
+  socket,
 } from "../app-fixtures";
 import { systemdInspection } from "../systemd-fixtures";
 import type { PersistedWorkspaceState } from "../../types";
@@ -15,6 +16,11 @@ const params = new URLSearchParams(location.search);
 const scenario = params.get("scenario") ?? "settings";
 const state = params.get("state") ?? "populated";
 const linux = scenario === "settings" && state.startsWith("linux-");
+// Loading states hold one area's first read open so its placeholder stays on
+// screen; every other read answers as usual.
+const loading = scenario === "loading" ? state : null;
+const pending = <T>() => new Promise<T>(() => {});
+const windowsHost = loading === "windows-services" || loading === "shell-picker";
 if (
   !Object.hasOwn(registry.scenarios, scenario) ||
   !registry.scenarios[scenario as keyof typeof registry.scenarios].states.includes(state)
@@ -25,7 +31,7 @@ const host = {
   ...connection(),
   displayName: "Example host",
   // History needs capture on for its populated list.
-  historyEnabled: scenario === "pages" && state === "history",
+  historyEnabled: (scenario === "pages" && state === "history") || loading === "history",
 };
 const units = [
   { ...service, id: "worker.service", description: "Example queue worker" },
@@ -49,6 +55,16 @@ const workspaceView = {
   logs: "logs",
   pages:
     state === "container-terminal" ? "docker" : state === "history-restart" ? "history" : state,
+  loading: {
+    "systemd-inspector": "services",
+    "windows-services": "services",
+    history: "history",
+    logs: "logs",
+    docker: "docker",
+    "docker-inspector": "docker",
+    ports: "ports",
+    "ports-discovering": "ports",
+  }[state],
 }[scenario] as "services" | "terminal" | "ports" | "docker" | "logs" | "history" | undefined;
 // Pages show the Docker, Logs, and History screens with ordinary readings.
 const containers = [
@@ -201,6 +217,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
   let result: unknown;
   switch (command) {
     case "get_environment_info":
+      if (loading === "ssh-diagnostics") return pending();
       result = {
         sshPath: linux ? "/usr/bin/ssh" : "C:\\Windows\\System32\\OpenSSH\\ssh.exe",
         sshConfigPath: linux ? "/home/example/.ssh/config" : "C:\\Users\\example\\.ssh\\config",
@@ -225,12 +242,14 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       result = tags;
       break;
     case "list_containers":
-      if (scenario === "pages") {
+      if (loading === "docker" || loading?.startsWith("ports")) return pending();
+      if (scenario === "pages" || loading) {
         result = containers;
         break;
       }
       throw new Error(portsTimeout);
     case "inspect_container":
+      if (loading === "docker-inspector") return pending();
       result = { ...containerDetails, id: args.container ?? containerDetails.id };
       break;
     case "start_docker_log_stream":
@@ -257,12 +276,22 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       result = { ...host, tags, historyEnabled: args.enableCapture };
       break;
     case "get_history":
+      if (loading === "history") return pending();
       result = historyEntries;
       break;
     case "list_ports":
+      if (loading === "ports") return pending();
+      if (loading === "ports-discovering") {
+        result = [
+          socket,
+          { ...socket, id: "tcp:0.0.0.0:22:0", port: 22, processName: "sshd", processId: 812 },
+        ];
+        break;
+      }
       throw new Error(portsTimeout);
     case "inspect_connections":
     case "inspect_firewall":
+      if (loading) return pending();
       throw new Error(portsQueueBusy);
     case "sample_header_metrics":
       // GPU stays unreported so the unavailable reading is reviewed too.
@@ -319,8 +348,15 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       break;
     case "get_cached_capabilities":
     case "refresh_capabilities":
-      result = capabilities(host.id);
+      result = windowsHost
+        ? { ...capabilities(host.id), osId: "windows", osName: "Windows Server 2022" }
+        : capabilities(host.id);
       break;
+    case "list_windows_services":
+    case "discover_remote_shells":
+    case "list_catalog_fonts":
+      if (loading) return pending();
+      throw new Error(`Missing UI review native fixture for ${command}`);
     case "start_session": {
       // Each container shell is its own session; the host shell keeps the
       // single session ID the other scenarios use.
@@ -397,7 +433,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       break;
     case "list_services":
       serviceReads++;
-      if (state === "loading") return new Promise<T>(() => {});
+      if (state === "loading" || loading === "logs") return pending();
       if (state === "error" || (state === "stale" && serviceReads > 1))
         throw new Error("Synthetic read failure. Try again.");
       result = state === "empty" ? [] : units;
@@ -417,6 +453,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       }, 20);
       break;
     case "inspect_systemd_unit": {
+      if (loading === "systemd-inspector") return pending();
       const unit = units.find((unit) => unit.id === args.unit);
       result = systemdInspection(
         args.unit,

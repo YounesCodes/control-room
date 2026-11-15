@@ -128,3 +128,19 @@ it("shows Docker, Logs, and History with ordinary readings on Pages", async () =
     "Connection timed out",
   );
 });
+
+it("holds only the reviewed area's first read open in loading states", async () => {
+  const settled = (promise: Promise<unknown>) =>
+    Promise.race([
+      promise.then(() => true),
+      new Promise((resolve) => setTimeout(resolve, 20, false)),
+    ]);
+  const history = await fixture("history", "loading");
+  expect(await settled(history.invoke("get_history"))).toBe(false);
+  expect(await settled(history.invoke("get_environment_info"))).toBe(true);
+  const ports = await fixture("ports-discovering", "loading");
+  expect(await ports.invoke("list_ports")).toHaveLength(2);
+  expect(await settled(ports.invoke("list_containers"))).toBe(false);
+  const windows = await fixture("windows-services", "loading");
+  expect(await windows.invoke("get_cached_capabilities")).toMatchObject({ osId: "windows" });
+});

@@ -145,6 +145,13 @@ seen gets a subtle cue that clears when they return, never a gray unread badge.
 
 ### Feedback and errors
 
+When a first read has a known shape, show a static skeleton where the content
+will appear: rows for lists, label and value pairs for fields, lines for text,
+and a host with its nodes for a graph canvas. The surrounding pane, toolbar, or
+dialog stays in place, and the skeleton carries a status naming what is being
+read. A refresh keeps the existing data visible instead. Work whose result has
+no known shape keeps the rotating ring.
+
 When cached data is visible, mark it stale. Give errors a recovery action when
 one exists and keep the specific cause when it helps the user recover. Inline
 errors use an alert icon and the message on a faint red tint, without a

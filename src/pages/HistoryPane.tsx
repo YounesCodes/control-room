@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
-import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
+import { EmptyState, ErrorState, Skeleton } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import { notifyHistoryChanged, onHistoryChanged } from "../lib/history-events";
 import type { HistoryEntry, HistoryIntegrationStatus, SavedConnection } from "../types";
@@ -578,8 +578,6 @@ export function HistoryPane({
     }
   }
 
-  if (loading && !hasLoaded) return <LoadingState label="Reading Command History…" />;
-
   return (
     <section className="feature-page history-page">
       <header className="page-heading compact-heading">
@@ -810,6 +808,7 @@ export function HistoryPane({
         </div>
       )}
       <div className="history-list" data-loading={loading ? "" : undefined}>
+        {loading && !hasLoaded && !error && <Skeleton label="Reading Command History…" count={8} />}
         {search && hasLoaded && !loading && !error && !grouped.length && (
           <EmptyState title="No matching commands">
             <p>

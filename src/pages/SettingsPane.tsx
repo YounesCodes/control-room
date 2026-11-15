@@ -8,6 +8,7 @@ import {
 } from "react";
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { FontCatalogPicker } from "../components/FontCatalogPicker";
+import { Skeleton } from "../components/PanelState";
 import { LocalShellIcon } from "../components/LocalShellIcon";
 import { StepSlider } from "../components/StepSlider";
 import { api, errorMessage } from "../lib/api";
@@ -916,53 +917,47 @@ export function SettingsPane({
                 )}
               </SettingsSection>
               <SettingsSection id="ssh" {...sectionProps}>
-                <dl className="detail-list settings-ssh">
-                  <div>
-                    <dt>{linux ? "ssh" : "ssh.exe"}</dt>
-                    {!environment ? (
-                      <dd>Checking…</dd>
-                    ) : environment.sshPath ? (
-                      <dd className="technical">{environment.sshPath}</dd>
-                    ) : (
+                {!environment ? (
+                  <Skeleton label="Checking SSH environment…" variant="fields" count={3} />
+                ) : (
+                  <dl className="detail-list settings-ssh">
+                    <div>
+                      <dt>{linux ? "ssh" : "ssh.exe"}</dt>
+                      {environment.sshPath ? (
+                        <dd className="technical">{environment.sshPath}</dd>
+                      ) : (
+                        <dd>
+                          <span className="settings-ssh-state">
+                            <span className="status-dot status-error" aria-hidden="true" />
+                            Not detected
+                          </span>
+                        </dd>
+                      )}
+                    </div>
+                    <div>
+                      <dt>OpenSSH config</dt>
+                      <dd className="technical">{environment.sshConfigPath}</dd>
+                    </div>
+                    <div>
+                      <dt>ssh-agent</dt>
                       <dd>
                         <span className="settings-ssh-state">
-                          <span className="status-dot status-error" aria-hidden="true" />
-                          Not detected
+                          <span
+                            className={`status-dot${environment.sshAgentAvailable ? " status-connected" : ""}`}
+                            aria-hidden="true"
+                          />
+                          {environment.sshAgentAvailable ? "Identity loaded" : "No identity loaded"}
                         </span>
-                      </dd>
-                    )}
-                  </div>
-                  <div>
-                    <dt>OpenSSH config</dt>
-                    <dd className="technical">{environment?.sshConfigPath ?? "Checking…"}</dd>
-                  </div>
-                  <div>
-                    <dt>ssh-agent</dt>
-                    <dd>
-                      {!environment ? (
-                        "Checking…"
-                      ) : (
-                        <>
-                          <span className="settings-ssh-state">
-                            <span
-                              className={`status-dot${environment.sshAgentAvailable ? " status-connected" : ""}`}
-                              aria-hidden="true"
-                            />
-                            {environment.sshAgentAvailable
-                              ? "Identity loaded"
-                              : "No identity loaded"}
+                        {!environment.sshAgentAvailable && (
+                          <span className="settings-ssh-hint">
+                            The agent may be stopped or holding no keys. Check with{" "}
+                            <code>ssh-add -l</code> in a terminal.
                           </span>
-                          {!environment.sshAgentAvailable && (
-                            <span className="settings-ssh-hint">
-                              The agent may be stopped or holding no keys. Check with{" "}
-                              <code>ssh-add -l</code> in a terminal.
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </dd>
-                  </div>
-                </dl>
+                        )}
+                      </dd>
+                    </div>
+                  </dl>
+                )}
               </SettingsSection>
             </form>
           </div>
