@@ -852,7 +852,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const overflowLogo = git.element().querySelector<HTMLImageElement>(".local-shell-icon img")!;
     expect(overflowLogo.src).toBe(gitLogo.src);
     await expect.poll(() => getComputedStyle(overflowLogo).filter).toBe("none");
-  });
+    // Opening five terminals alone takes most of the default budget on slow WebKit runners.
+  }, 60_000);
 
   it("shows shell identities and elevation in the command palette and Settings", async () => {
     await page.viewport(1200, 800);
