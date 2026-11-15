@@ -4,6 +4,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sanitize, sanitizeDirectory } from "./sanitize-e2e-results.mjs";
 describe("desktop diagnostic redaction", () => {
+  it("redacts macOS home directories literally", () => {
+    expect(sanitize('/Users/a.b/project "/Users/a.b/Library/Fonts"', { HOME: "/Users/a.b" })).toBe(
+      '[redacted]/project "[redacted]/Library/Fonts"',
+    );
+  });
   it("redacts case variants, JSON-escaped paths, API keys, bearer tokens and private key blocks", () => {
     const path = "C:\\Users\\a.b";
     const result = sanitize(

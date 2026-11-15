@@ -328,6 +328,7 @@ describe("App Workspace behavior", () => {
       logTailOptions: [50, 100, 200, 500, 1000],
     });
     api.environment.mockResolvedValue({
+      platform: "windows",
       sshPath: "C:\\Windows\\System32\\OpenSSH\\ssh.exe",
       sshConfigPath: "C:\\Users\\test\\.ssh\\config",
       sshAgentAvailable: true,
@@ -759,6 +760,7 @@ describe("App Workspace behavior", () => {
     ).toBe(true);
 
     answer({
+      platform: "windows",
       sshPath: null,
       sshConfigPath: "example-config",
       sshAgentAvailable: false,

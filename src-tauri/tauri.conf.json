@@ -34,24 +34,12 @@
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJDMjRBMkEzQkI0NEVGMjAKUldRZzcwUzdvNklrTElVS0RaWFZGUjZxSHpjR3o4L05qeHBONWJGTlpUdlorY3hQait0a0d5cHQK",
       "endpoints": [
         "https://github.com/YounesCodes/control-room/releases/latest/download/latest.json"
-      ],
-      "windows": {
-        "installMode": "passive"
-      }
+      ]
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
-    "icon": ["icons/icon.ico"],
-    "shortDescription": "Inspect Linux and Windows hosts over SSH",
-    "longDescription": "A desktop SSH client with local terminals and read-only Linux and Windows host inspection.",
-    "windows": {
-      "nsis": {
-        "installMode": "currentUser",
-        "installerIcon": "icons/icon.ico",
-        "uninstallerIcon": "icons/icon.ico"
-      }
-    }
+    "shortDescription": "Inspect Linux, Windows, and macOS hosts over SSH",
+    "longDescription": "A desktop SSH client with local terminals and read-only Linux, Windows, and macOS host inspection."
   }
 }

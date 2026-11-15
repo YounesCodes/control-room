@@ -5,12 +5,14 @@ import { createRef } from "react";
 import { Terminal } from "@xterm/xterm";
 import type { TerminalPaneHandle } from "./TerminalPane";
 import { TerminalPane } from "./TerminalPane";
+import { api } from "../lib/api";
 import { createLocalWorkspace, createRemoteWorkspace } from "../lib/workspace-target";
 import { TERMINAL_TITLE_DELAY_MS } from "../lib/terminal-title";
 import { connection } from "../test/app-fixtures";
 import type { AppSettings } from "../types";
 import "@xterm/xterm/css/xterm.css";
 import "../styles.css";
+import { forceSelectionModifier } from "../test/keyboard";
 
 const session = vi.hoisted(() => ({
   output: null as { onmessage: ((message: ArrayBuffer) => void) | null } | null,
@@ -21,6 +23,7 @@ const session = vi.hoisted(() => ({
   resizeSession: vi.fn<(id: string, cols: number, rows: number) => Promise<void>>(() =>
     Promise.resolve(),
   ),
+  started: null as Promise<{ sessionId: string }> | null,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -44,7 +47,7 @@ vi.mock("../lib/api", () => ({
     startLocalSession: vi.fn(
       (_id: string, _cols: number, _rows: number, output: NonNullable<typeof session.output>) => {
         session.output = output;
-        return Promise.resolve({ sessionId: "browser-terminal" });
+        return session.started ?? Promise.resolve({ sessionId: "browser-terminal" });
       },
     ),
     acknowledgeSessionOutput: session.acknowledgeSessionOutput,
@@ -86,6 +89,7 @@ afterEach(() => {
   root = null;
   container = null;
   session.output = null;
+  session.started = null;
   session.acknowledgeSessionOutput.mockClear();
   session.writeSession.mockClear();
   session.readClipboard.mockReset();
@@ -113,6 +117,7 @@ it.each(["local", "remote"])(
         : createRemoteWorkspace(connection());
     root.render(
       <TerminalPane
+        platform="windows"
         workspace={{ ...workspace, state: "connected" }}
         settings={settings}
         visible
@@ -156,6 +161,71 @@ it.each(["local", "remote"])(
   },
 );
 
+it.each(["running", "starting"])(
+  "keeps zsh's end-of-line marker on the prompt row when refitting a %s session",
+  async (state) => {
+    let finishStart: (() => void) | undefined;
+    if (state === "starting") {
+      session.started = new Promise((resolve) => {
+        finishStart = () => resolve({ sessionId: "browser-terminal" });
+      });
+    }
+    container = document.createElement("div");
+    Object.assign(container.style, { position: "relative", width: "800px", height: "500px" });
+    document.body.append(container);
+    root = createRoot(container);
+    const workspace = createLocalWorkspace({
+      id: "zsh",
+      label: "zsh",
+      kind: "zsh",
+      elevated: false,
+    });
+    const renderPane = (fontSize: number) =>
+      root!.render(
+        <TerminalPane
+          platform="macos"
+          workspace={workspace}
+          settings={{ ...settings, terminalFontSize: fontSize }}
+          visible
+          active
+          onActivate={() => undefined}
+          onSession={() => undefined}
+          onState={() => undefined}
+        />,
+      );
+    renderPane(14);
+    await vi.waitFor(() => expect(session.output).not.toBeNull());
+    const [, initialCols] = vi.mocked(api.startLocalSession).mock.calls.at(-1)!;
+    session.resizeSession.mockClear();
+    renderPane(24);
+    await vi.waitFor(() =>
+      expect(getComputedStyle(container!.querySelector(".xterm-rows")!).fontSize).toBe("24px"),
+    );
+    finishStart?.();
+    await vi.waitFor(() => expect(session.resizeSession).toHaveBeenCalled());
+    // zsh fills the PTY width, then returns to column one and clears that row
+    // before writing the prompt. A stale PTY width wraps the marker onto a line
+    // that the carriage returns and erase sequence can no longer clear.
+    const cols = session.resizeSession.mock.calls.at(-1)?.[1] ?? initialCols;
+    const output = `\x1b[1m\x1b[7m%\x1b[27m\x1b[1m\x1b[0m${" ".repeat(cols - 1)}\r \r\r\x1b[0m\x1b[27m\x1b[24m\x1b[Jtest@mac ~ % \x1b[K`;
+    session.output!.onmessage!(new TextEncoder().encode(output).buffer);
+    await expect.element(page.getByText("test@mac ~ %", { exact: true })).toBeVisible();
+    const lines = Array.from(container!.querySelectorAll(".xterm-rows > div"), (row) =>
+      row.textContent?.trim(),
+    );
+    expect(lines).not.toContain("%");
+    expect(session.resizeSession).toHaveBeenCalledWith(
+      "browser-terminal",
+      expect.any(Number),
+      expect.any(Number),
+    );
+    expect(session.resizeSession.mock.calls.at(-1)![1]).toBeLessThan(initialCols);
+    // Keep zsh's legitimate marker when command output has no final newline.
+    session.output!.onmessage!(new TextEncoder().encode(`\r\npartial${output}`).buffer);
+    await expect.element(page.getByText("partial%", { exact: true })).toBeVisible();
+  },
+);
+
 it("tracks agent progress through real xterm parsing on both screens", async () => {
   container = document.createElement("div");
   Object.assign(container.style, { width: "900px", height: "500px" });
@@ -164,6 +234,7 @@ it("tracks agent progress through real xterm parsing on both screens", async () 
   const onProcessing = vi.fn();
   root.render(
     <TerminalPane
+      platform="windows"
       workspace={{
         ...createLocalWorkspace({
           id: "test-shell",
@@ -234,6 +305,7 @@ it("refits terminal columns and rows and resizes the same session when its pane 
   root = createRoot(container);
   root.render(
     <TerminalPane
+      platform="windows"
       workspace={createLocalWorkspace({
         id: "test-shell",
         label: "Test shell",
@@ -248,15 +320,15 @@ it("refits terminal columns and rows and resizes the same session when its pane 
       onState={() => undefined}
     />,
   );
-  await vi.waitFor(() => expect(session.resizeSession).toHaveBeenCalled());
-  const initial = session.resizeSession.mock.calls.at(-1)!;
+  await vi.waitFor(() => expect(session.output).not.toBeNull());
+  const [, cols, rows] = vi.mocked(api.startLocalSession).mock.calls.at(-1)!;
   container.style.width = "450px";
   container.style.height = "250px";
   await vi.waitFor(() => {
     const resized = session.resizeSession.mock.calls.at(-1)!;
-    expect(resized[0]).toBe(initial[0]);
-    expect(resized[1]).toBeLessThan(initial[1]);
-    expect(resized[2]).toBeLessThan(initial[2]);
+    expect(resized[0]).toBe("browser-terminal");
+    expect(resized[1]).toBeLessThan(cols);
+    expect(resized[2]).toBeLessThan(rows);
     expect(resized[1]).toBeGreaterThan(0);
     expect(resized[2]).toBeGreaterThan(0);
   });
@@ -277,6 +349,7 @@ it("does not repaint a hidden terminal while it prints, then shows the output", 
   });
   const pane = (visible: boolean) => (
     <TerminalPane
+      platform="windows"
       workspace={workspace}
       settings={settings}
       visible={visible}
@@ -328,6 +401,7 @@ it("pastes Unicode and multiple lines once and copies the actual terminal select
   const handle = createRef<TerminalPaneHandle>();
   root.render(
     <TerminalPane
+      platform="windows"
       ref={handle}
       workspace={createLocalWorkspace({
         id: "test-shell",
@@ -385,6 +459,7 @@ it("pastes and copies through the GTK clipboard with Ctrl+Shift+V and Ctrl+Shift
   const handle = createRef<TerminalPaneHandle>();
   root.render(
     <TerminalPane
+      platform="windows"
       ref={handle}
       workspace={createLocalWorkspace({
         id: "test-shell",
@@ -419,6 +494,42 @@ it("pastes and copies through the GTK clipboard with Ctrl+Shift+V and Ctrl+Shift
   await vi.waitFor(() => expect(session.writeClipboard).toHaveBeenCalledWith("COPY_NEEDLE"));
 });
 
+it("copies a selection with Cmd+C on macOS and leaves Ctrl+C to the shell", async () => {
+  session.writeClipboard.mockResolvedValue();
+  container = document.createElement("div");
+  container.style.height = "400px";
+  document.body.append(container);
+  root = createRoot(container);
+  const handle = createRef<TerminalPaneHandle>();
+  root.render(
+    <TerminalPane
+      platform="macos"
+      ref={handle}
+      workspace={createLocalWorkspace({ id: "zsh", label: "zsh", kind: "zsh", elevated: false })}
+      settings={settings}
+      visible
+      active
+      nativeClipboard
+      onActivate={() => undefined}
+      onSession={() => undefined}
+      onState={() => undefined}
+    />,
+  );
+  await vi.waitFor(() => expect(session.output).not.toBeNull());
+  session.output!.onmessage!(new TextEncoder().encode("COPY_NEEDLE\r\n").buffer);
+  await expect.element(page.getByText("COPY_NEEDLE", { exact: true })).toBeVisible();
+  await userEvent.dblClick(container.querySelector(".xterm-screen")!, {
+    position: { x: 15, y: 5 },
+  });
+  await userEvent.keyboard("{Meta>}c{/Meta}");
+  await vi.waitFor(() => expect(session.writeClipboard).toHaveBeenCalledWith("COPY_NEEDLE"));
+  session.writeSession.mockClear();
+  await userEvent.keyboard("{Control>}c{/Control}");
+  await vi.waitFor(() => expect(session.writeSession).toHaveBeenCalledTimes(1));
+  expect(new TextDecoder().decode(session.writeSession.mock.calls[0][1])).toBe("\x03");
+  expect(session.writeClipboard).toHaveBeenCalledTimes(1);
+});
+
 it("keeps a mouse-tracking program's selection when moving to Copy", async () => {
   const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
   container = document.createElement("div");
@@ -429,6 +540,7 @@ it("keeps a mouse-tracking program's selection when moving to Copy", async () =>
   const onSelectionChange = vi.fn();
   root.render(
     <TerminalPane
+      platform="windows"
       ref={handle}
       workspace={createRemoteWorkspace(connection())}
       settings={settings}
@@ -454,7 +566,10 @@ it("keeps a mouse-tracking program's selection when moving to Copy", async () =>
   expect(
     session.writeSession.mock.calls.map(([, data]) => new TextDecoder().decode(data)).join(""),
   ).toContain("\x1b[<32;");
-  await userEvent.dblClick(screen, { modifiers: ["Shift"], position: { x: 15, y: 5 } });
+  await userEvent.dblClick(screen, {
+    modifiers: [forceSelectionModifier],
+    position: { x: 15, y: 5 },
+  });
   expect(onSelectionChange).toHaveBeenLastCalledWith(true);
   session.writeSession.mockClear();
 
@@ -505,6 +620,7 @@ it("selects and pastes in Codex while preserving left clicks and wheel input", a
   const onSelectionChange = vi.fn();
   root.render(
     <TerminalPane
+      platform="windows"
       ref={handle}
       workspace={createRemoteWorkspace(connection())}
       settings={settings}
@@ -592,6 +708,7 @@ it("keeps the terminal edge empty until search has matches", async () => {
   const renderPane = (findRequest: number) =>
     root!.render(
       <TerminalPane
+        platform="windows"
         workspace={workspace}
         settings={settings}
         visible
@@ -657,6 +774,7 @@ it("keeps every terminal on the saved palette through search and tab changes", a
       <>
         {workspaces.map((workspace, index) => (
           <TerminalPane
+            platform="windows"
             key={workspace.id}
             workspace={workspace}
             settings={palette}
@@ -718,6 +836,7 @@ it("puts the reconnect action on the ended-session notice", async () => {
   const onReconnect = vi.fn();
   root.render(
     <TerminalPane
+      platform="windows"
       workspace={{
         ...createRemoteWorkspace(connection()),
         state: "error",
@@ -772,6 +891,7 @@ it("labels the notice action Restart for an ended local shell", async () => {
   root = createRoot(container);
   root.render(
     <TerminalPane
+      platform="windows"
       workspace={{
         ...createLocalWorkspace({
           id: "test-shell",
@@ -802,6 +922,7 @@ it("keeps the notice action off live sessions", async () => {
   root = createRoot(container);
   root.render(
     <TerminalPane
+      platform="windows"
       workspace={{
         ...createRemoteWorkspace(connection()),
         state: "connected",

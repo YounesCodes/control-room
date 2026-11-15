@@ -198,6 +198,7 @@ export function DockerContainerInspector({
   onOpenTerminal,
   windowsHost = false,
   onOpenPort,
+  macosHost = false,
 }: {
   onOpenPort?: (port: PublishedPortSelection) => void;
   onOpenTerminal?: () => void;
@@ -207,8 +208,10 @@ export function DockerContainerInspector({
   onRetryWithSudo: () => void;
   onViewLogs: () => void;
   windowsHost?: boolean;
+  macosHost?: boolean;
 }) {
-  const permissionError = !windowsHost && cache?.error?.toLowerCase().includes("permission denied");
+  const permissionError =
+    !windowsHost && !macosHost && cache?.error?.toLowerCase().includes("permission denied");
   const collectedAt = cache?.fetchedAt
     ? new Date(cache.fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     : null;

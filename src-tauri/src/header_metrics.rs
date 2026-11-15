@@ -75,6 +75,9 @@ pub fn collect_remote(
     if metrics.is_empty() {
         return Ok(empty_sample());
     }
+    if crate::macos_remote::is_host(connection)? {
+        return crate::macos_remote::metrics(connection, metrics);
+    }
     let text =
         RemoteCommandExecutor::execute(connection, "header_metrics", &remote_command(metrics))?
             .success_text()?;
@@ -521,9 +524,17 @@ pub fn collect_local(metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> 
     ))
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[path = "platform/macos_metrics.rs"]
+pub(crate) mod macos;
+
+#[cfg(target_os = "macos")]
+pub fn collect_local(metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> {
+    macos::collect(metrics)
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 pub fn collect_local(_metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> {
-    Err("Local host metrics require Windows".into())
+    Err("Local host metrics require Windows or macOS".into())
 }
 
 #[cfg(test)]

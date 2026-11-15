@@ -199,10 +199,12 @@ it("anchors rate labels, neighboring values, and percent signs across animated u
       const pending = [...frames.values()];
       frames.clear();
       pending.forEach((callback) => callback(now));
-      // Glyph kerning may move the percent sign's ink by a fraction of a pixel;
-      // the actual layout boxes must stay fixed.
+      // Glyph kerning may move the percent sign's ink by under a pixel (macOS
+      // fonts move it most); the actual layout boxes must stay fixed.
       positions().forEach((position, index) =>
-        expect(position).toBeCloseTo(before[index], index === before.length - 1 ? 0 : 1),
+        index === before.length - 1
+          ? expect(Math.abs(position - before[index])).toBeLessThan(1)
+          : expect(position).toBeCloseTo(before[index], 1),
       );
     }
   }

@@ -46,6 +46,10 @@ header or status rail.
 Restored windows have rounded corners and maximized or fullscreen windows are
 square.
 
+On macOS, the native traffic lights overlay one continuous app bar with no
+system titlebar, and the same leading space stays reserved in every header that
+replaces it.
+
 Compact windows reflow forms, toolbars, and navigation instead of shrinking
 type or scaling the app. Keep native window controls fixed and dialogs inside
 the viewport. Content stays usable at the supported minimum window size. Stack
