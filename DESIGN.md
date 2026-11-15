@@ -255,8 +255,10 @@ ones. Reserve built-in hues for status, and pair each with a shape, label, or
 other cue. Do not add a new accent color for an individual screen or action.
 
 Use borders and restrained fills to separate controls and surfaces. Selected
-rows get an outline around the whole box, never only a left edge. Avoid heavy
-shadows and reserve stronger elevation for menus and dialogs.
+rows get an outline around the whole box, never only a left edge. The current
+host, container terminal, and capability in the sidebar share one quiet
+selection: a faintly warm fill with a hairline border, never the bright accent.
+Avoid heavy shadows and reserve stronger elevation for menus and dialogs.
 
 Connection tags use user-selected colors and never imply connection state.
 Terminal ANSI colors are user-editable, belong to terminal output, and apply to
