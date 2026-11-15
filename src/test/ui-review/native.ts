@@ -47,7 +47,8 @@ const workspaceView = {
   terminal: "terminal",
   ports: "ports",
   logs: "logs",
-  pages: state === "container-terminal" ? "docker" : state,
+  pages:
+    state === "container-terminal" ? "docker" : state === "history-restart" ? "history" : state,
 }[scenario] as "services" | "terminal" | "ports" | "docker" | "logs" | "history" | undefined;
 // Pages show the Docker, Logs, and History screens with ordinary readings.
 const containers = [
@@ -248,7 +249,12 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
     case "stop_log_stream":
       break;
     case "get_history_integration_status":
-      result = "installed";
+      // History restart starts before the integration, and its prepare step
+      // enables it while the host terminal is already running.
+      result = state === "history-restart" ? "not-installed" : "installed";
+      break;
+    case "install_history_integration":
+      result = { ...host, tags, historyEnabled: args.enableCapture };
       break;
     case "get_history":
       result = historyEntries;

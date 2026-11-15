@@ -10,6 +10,7 @@ import {
   Play,
   Power,
   RefreshCw,
+  RotateCw,
   TerminalSquare,
   Trash2,
   X,
@@ -178,6 +179,7 @@ export function HistoryPane({
   onPausedChange,
   onConnectionChanged,
   onPaste,
+  onRestartTerminal,
   canPaste,
 }: {
   connection: SavedConnection;
@@ -186,6 +188,9 @@ export function HistoryPane({
   onPausedChange: (paused: boolean) => void;
   onConnectionChanged: (connection: SavedConnection) => void;
   onPaste: (command: string) => void;
+  /// Restarts this workspace's terminal so its new shell loads the integration.
+  onRestartTerminal: () => void;
+  /// The workspace's terminal has a live session.
   canPaste: boolean;
 }) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
@@ -201,6 +206,11 @@ export function HistoryPane({
   const [readError, setReadError] = useState<string | null>(null);
   const error = actionError ?? readError;
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // Set when capture turns on while this workspace's terminal is already
+  // running: that shell started without the integration, so it records
+  // nothing until it restarts.
+  const [restartOffered, setRestartOffered] = useState(false);
+  const restartButtonRef = useRef<HTMLButtonElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [confirmState, setConfirmState] = useState<{
@@ -230,6 +240,7 @@ export function HistoryPane({
     setReadError(null);
     setConfirmState(null);
     setCopiedId(null);
+    setRestartOffered(false);
     setMenuOpen(false);
     setMenuPosition(null);
     if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
@@ -311,6 +322,16 @@ export function HistoryPane({
       integrationRequestRef.current += 1;
     };
   }, [connection.id]);
+
+  useEffect(() => {
+    // The control that turned capture on is gone (the opt-in card) or closed
+    // (the More menu returns focus to its trigger). Only take focus that the
+    // removed card would otherwise drop on the page body.
+    if (!restartOffered) return;
+    if (document.activeElement === document.body || document.activeElement === null) {
+      restartButtonRef.current?.focus();
+    }
+  }, [restartOffered]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -408,6 +429,7 @@ export function HistoryPane({
       setIntegrationError(null);
       setIntegration("installed");
       onConnectionChanged(updated);
+      offerRestartIfCaptureStarted(updated);
     } catch (caught) {
       if (generation === mutationGeneration.current) setError(errorMessage(caught));
     } finally {
@@ -446,6 +468,15 @@ export function HistoryPane({
     }
   }
 
+  function offerRestartIfCaptureStarted(updated: SavedConnection) {
+    if (updated.historyEnabled && globalEnabled && canPaste) setRestartOffered(true);
+  }
+
+  function restartTerminal() {
+    setRestartOffered(false);
+    onRestartTerminal();
+  }
+
   async function toggleCapture() {
     const generation = mutationGeneration.current;
     setWorking(true);
@@ -457,6 +488,8 @@ export function HistoryPane({
       );
       if (generation !== mutationGeneration.current) return;
       onConnectionChanged(updated);
+      if (updated.historyEnabled) offerRestartIfCaptureStarted(updated);
+      else setRestartOffered(false);
     } catch (caught) {
       if (generation === mutationGeneration.current) setError(errorMessage(caught));
     } finally {
@@ -693,6 +726,32 @@ export function HistoryPane({
           >
             {working ? "Updating…" : "Update Bash integration"}
           </button>
+        </section>
+      )}
+      {restartOffered && canPaste && (
+        <section className="history-opt-in history-restart" aria-label="Restart terminal">
+          <p>
+            Recording starts in new terminals. Restart the open terminal to record its commands;
+            anything running in it will stop.
+          </p>
+          <div className="history-opt-in-actions">
+            <button
+              ref={restartButtonRef}
+              className="primary-button"
+              type="button"
+              onClick={restartTerminal}
+            >
+              <RotateCw size={14} aria-hidden="true" />
+              Restart terminal
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => setRestartOffered(false)}
+            >
+              Not now
+            </button>
+          </div>
         </section>
       )}
       {integration === "not-installed" && !integrationError && (
