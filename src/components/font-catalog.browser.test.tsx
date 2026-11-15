@@ -71,13 +71,18 @@ it("renders temporary faces, supports keyboard selection, and passes accessibili
   expect(fieldInput.selectionEnd).toBe(fieldInput.value.length);
   await expect.element(page.getByRole("option", { name: /Fira Mono/ })).toBeVisible();
   expect(container.querySelector(".ansi-preview")!.getBoundingClientRect().top).toBe(previewTop);
+  // Opening loads the suggestion faces but keeps the live preview on the
+  // current font until a suggestion is highlighted.
+  await vi.waitFor(() =>
+    expect(document.fonts.check('14px "ControlRoomPreview-fira-mono"')).toBe(true),
+  );
+  expect(document.querySelector(".ansi-preview")?.getAttribute("style")).toContain("Consolas");
+  await userEvent.keyboard("{ArrowDown}");
   await vi.waitFor(() =>
     expect(document.querySelector(".ansi-preview")?.getAttribute("style")).toContain(
       "ControlRoomPreview-fira-mono",
     ),
   );
-  expect(document.fonts.check('14px "ControlRoomPreview-fira-mono"')).toBe(true);
-  await userEvent.keyboard("{ArrowDown}");
   await userEvent.keyboard("{ArrowDown}");
   await expect
     .element(page.getByRole("option", { name: /JetBrains Mono/ }))

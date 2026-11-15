@@ -44,7 +44,14 @@ export function FontCatalogPicker({
     .filter((font) => font.family.toLowerCase().includes((query ?? "").trim().toLowerCase()))
     .slice(0, 8);
   const results = open ? matching : [];
-  const active = picked ?? results.find((font) => font.id === selected) ?? results[0];
+  // The list is on screen: suggestions, or their skeleton while the catalog loads.
+  const showingSuggestions = open && (results.length > 0 || loading);
+  // Opening the list previews nothing until a font is highlighted or a search
+  // is typed; the top match stands in only for a typed search.
+  const active =
+    picked ??
+    results.find((font) => font.id === selected) ??
+    (query !== null && query.trim() ? results[0] : undefined);
   const resultIds = results.map((font) => font.id).join(",");
 
   function cancelPreview() {
@@ -215,11 +222,12 @@ export function FontCatalogPicker({
     >
       <div className="font-family-control">
         <label>
-          <span>Font family</span>
+          <span id="font-family-label">Font family</span>
           <div className="font-family-input">
             <input
               ref={input}
               role="combobox"
+              aria-labelledby="font-family-label"
               aria-autocomplete="list"
               aria-expanded={open && results.length > 0}
               aria-controls="font-suggestions"
@@ -289,7 +297,29 @@ export function FontCatalogPicker({
                 }
               }}
             />
-            <ChevronDown size={13} strokeWidth={2.5} aria-hidden="true" />
+            <button
+              type="button"
+              className="font-family-toggle"
+              tabIndex={-1}
+              aria-label={showingSuggestions ? "Hide font suggestions" : "Show font suggestions"}
+              aria-expanded={showingSuggestions}
+              aria-controls="font-suggestions"
+              disabled={disabled || busy}
+              // Keep focus in the field so closing the list never blurs it.
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                if (showingSuggestions) {
+                  setOpen(false);
+                  setSelected(null);
+                  return;
+                }
+                input.current?.focus();
+                setOpen(true);
+                if (!catalog && !loading) void loadCatalog();
+              }}
+            >
+              <ChevronDown size={13} strokeWidth={2.5} aria-hidden="true" />
+            </button>
           </div>
         </label>
         <ul

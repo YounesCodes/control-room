@@ -9435,13 +9435,38 @@ details[open] > .inspector-disclosure-body {
   padding-right: 34px;
 }
 
-.font-family-input svg {
+/* The chevron opens and closes the list, and turns to face up while it shows. */
+.font-family-toggle {
   position: absolute;
-  right: 10px;
   top: 50%;
-  transform: translateY(-50%);
+  right: 4px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--text-muted);
-  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.font-family-toggle:hover:not(:disabled) {
+  background: var(--fill-hover);
+  color: var(--text-strong);
+}
+
+.font-family-toggle > svg {
+  transition: transform var(--motion-med) var(--ease);
+}
+
+.font-family-toggle[aria-expanded="true"] > svg {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .font-family-toggle > svg {
+    transition: none;
+  }
 }
 
 .font-suggestions {
