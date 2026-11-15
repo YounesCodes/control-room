@@ -78,3 +78,31 @@ it("interpolates memory, retargets from its displayed reading, and cancels on re
   view.unmount();
   expect(frames.size).toBe(0);
 });
+
+it("lets property values and command code be selected for copying", () => {
+  const unitId = "worker.service";
+  render(
+    <SystemdUnitInspector
+      connectionId="selection-test"
+      unitId={unitId}
+      summary={null}
+      revision={0}
+      result={{
+        value: systemdInspection(unitId, {
+          Restart: "on-failure",
+          ExecStart: "{ path=/usr/bin/worker ; argv[]=/usr/bin/worker --serve }",
+        }),
+        fetchedAt: Date.now(),
+        loading: false,
+        error: null,
+      }}
+      initialViewState={{ configuration: false, advanced: true, effective: false, scroll: {} }}
+      onRefresh={vi.fn()}
+      onViewLogs={vi.fn()}
+    />,
+  );
+  const label = screen.getByText("Restart policy");
+  expect(getComputedStyle(label).userSelect).toBe("none");
+  expect(getComputedStyle(label.nextElementSibling!).userSelect).toBe("text");
+  expect(getComputedStyle(screen.getByLabelText("ExecStart")).userSelect).toBe("text");
+});
