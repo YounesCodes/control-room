@@ -3128,7 +3128,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     // The host card gains a leaf; the leaf, not the card, is selected, and a
     // container terminal is terminal-only.
     const leaves = page.getByRole("list", { name: "Container terminals on Fixture Alpha" });
-    const leaf = leaves.getByRole("button", { name: "fixture-web terminal", exact: true });
+    const leaf = leaves.getByRole("button", { name: "fixture-web", exact: true });
     await expect.element(leaf).toHaveAttribute("aria-current", "page");
     expect(element.querySelector(".host-row.active")).toBeNull();
     await expect

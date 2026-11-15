@@ -2074,7 +2074,6 @@ export function App() {
           <span className="target-mark">{workspaceMark(workspace)}</span>
           <span className="host-child-label">
             <strong>{label}</strong>
-            <small>terminal</small>
           </span>
           <span className="host-session-status">
             <span

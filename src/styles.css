@@ -1849,35 +1849,20 @@ code,
   padding-right: 32px;
 }
 
-/* The container name keeps its room. When "terminal" no longer fits beside
-   it, the word wraps to a second line the fixed height hides, so it shows
-   whole or not at all. */
 .host-child-label {
   display: flex;
-  height: 16px;
   min-width: 0;
   flex: 1;
-  flex-wrap: wrap;
-  align-items: baseline;
-  column-gap: 6px;
-  overflow: hidden;
   line-height: 16px;
   white-space: nowrap;
 }
 
 .host-child-label strong {
   min-width: 0;
-  flex: 0 1 auto;
   overflow: hidden;
   font-size: 12px;
   font-weight: 600;
   text-overflow: ellipsis;
-}
-
-.host-child-label small {
-  flex: none;
-  color: var(--text-faint);
-  font-size: 11px;
 }
 
 /* An ended container shell stays listed, quieter, until its tab is closed. */
