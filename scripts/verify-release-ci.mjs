@@ -13,6 +13,7 @@ export function verifyReleaseCI(sha, runs, jobs) {
     "validate",
     "installer",
     "desktop / desktop",
+    "desktop / linux",
     "hosted-ssh",
     "linux-desktop",
   ]) {
