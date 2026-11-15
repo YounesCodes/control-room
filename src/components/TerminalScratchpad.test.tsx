@@ -153,6 +153,27 @@ describe("Terminal Scratchpad popover", () => {
     expect(api.saveScratchpadNote.mock.calls.some((call) => call[0].scope === "local")).toBe(false);
   });
 
+  it("opens on the terminal note when a reopen cancels the closing transition", async () => {
+    const props = {
+      terminalScope: "local" as const,
+      ownerId: workspaceId,
+      ownerLabel: "PowerShell 7",
+      canPaste: true,
+      onPaste: () => undefined,
+      onClose: () => undefined,
+    };
+    const view = render(<TerminalScratchpad {...props} />);
+    await screen.findByLabelText("Terminal note");
+    fireEvent.click(screen.getByRole("button", { name: "Global note for all connections" }));
+    await screen.findByLabelText("Global note");
+    view.rerender(<TerminalScratchpad {...props} closing />);
+    view.rerender(<TerminalScratchpad {...props} closing={false} />);
+    const editor = screen.getByLabelText("Terminal note");
+    expect(editor.closest("[hidden]")).toBeNull();
+    expect(screen.getByLabelText("Global note").closest("[hidden]")).not.toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+  });
+
   it("uses the connection note for a remote terminal", async () => {
     const user = userEvent.setup();
     mount({

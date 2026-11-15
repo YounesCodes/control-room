@@ -42,6 +42,14 @@ export function TerminalScratchpad({
 }) {
   const [selection, setSelection] = useState<NoteSelection>("terminal");
   const [texts, setTexts] = useState<Record<NoteSelection, string>>({ terminal: "", global: "" });
+  // A quick reopen cancels the closing transition, so the popover stays
+  // mounted with its last selection. Every open starts on the terminal's
+  // note, as a fresh mount does.
+  const [wasClosing, setWasClosing] = useState(Boolean(closing));
+  if (wasClosing !== Boolean(closing)) {
+    setWasClosing(Boolean(closing));
+    if (!closing) setSelection("terminal");
+  }
   const text = texts[selection];
   const rootRef = useRef<HTMLDivElement>(null);
   const notesRef = useRef<Record<NoteSelection, HTMLDivElement | null>>({
