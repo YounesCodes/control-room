@@ -3570,6 +3570,10 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("textbox", { name: "Search ports" }).fill("443");
     const searchField = element.querySelector<HTMLElement>(".ports-search-field")!;
     const searchPanel = element.querySelector<HTMLElement>("#ports-tools")!;
+    // The panel enters scaled down. Bounding boxes include that transform,
+    // so compare the panel with its field once the entrance has finished.
+    await settleMotion(searchPanel);
+    expect(getComputedStyle(searchPanel).opacity).toBe("1");
     expect(searchPanel.querySelectorAll("button")).toHaveLength(1);
     expect(searchPanel.getBoundingClientRect().width).toBeCloseTo(
       searchField.getBoundingClientRect().width,
@@ -3580,7 +3584,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     );
     expect(searchField.querySelector("button[aria-label='Clear search']")).toBeTruthy();
     expect(searchField.scrollWidth).toBeLessThanOrEqual(searchField.clientWidth + 1);
-    await expect.poll(() => getComputedStyle(searchPanel).opacity).toBe("1");
     expect((await runAxe(searchPanel)).violations).toEqual([]);
     await page.screenshot({ path: "../test-results/ports-search-controls.png" });
     await page.getByRole("button", { name: "Clear search", exact: true }).click();
