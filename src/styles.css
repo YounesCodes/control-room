@@ -6228,6 +6228,16 @@ dd {
   font-weight: 650;
 }
 
+.history-opt-in-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.history-restart p {
+  margin: 0 0 14px;
+}
+
 /* Page title with one compact state beside it, as Logs and History show
    their stream and capture state: a dot and a short label. */
 .page-heading-title {

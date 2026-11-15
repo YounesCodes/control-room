@@ -376,16 +376,18 @@
       }
     },
     "pages": {
-      "states": ["docker", "logs", "history", "container-terminal"],
+      "states": ["docker", "logs", "history", "history-restart", "container-terminal"],
       "ready": ".app-shell",
       "prepare": {
-        "container-terminal": [{ "selector": ".compact-navigation-toggle", "optional": true }]
+        "container-terminal": [{ "selector": ".compact-navigation-toggle", "optional": true }],
+        "history-restart": [{ "role": "button", "name": "Enable Enhanced History" }]
       },
       "settled": {
         "container-terminal": ".host-child-row.active[data-session-state='connected']",
         "docker": ".docker-page",
         "logs": ".log-output",
-        "history": ".history-list"
+        "history": ".history-list",
+        "history-restart": ".history-restart"
       }
     },
     "ports": {

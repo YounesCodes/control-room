@@ -294,6 +294,7 @@ type InspectionHandlers = {
   openContainerTerminal: (workspace: RemoteWorkspace, container: DockerContainer) => void;
   connectionChanged: (workspace: RemoteWorkspace, saved: SavedConnection) => void;
   paste: (command: string) => void;
+  restartTerminal: (workspace: RemoteWorkspace) => void;
 };
 
 /// The active remote Workspace's inspection view. It renders again when that
@@ -404,6 +405,7 @@ const WorkspaceInspection = memo(function WorkspaceInspection({
           onPausedChange={(historyPaused) => handlers.patch(id, { historyPaused })}
           onConnectionChanged={(saved) => handlers.connectionChanged(workspace, saved)}
           onPaste={handlers.paste}
+          onRestartTerminal={() => handlers.restartTerminal(workspace)}
           canPaste={Boolean(workspace.sessionId)}
         />
       )}
@@ -2517,6 +2519,16 @@ export function App() {
       });
     },
     paste: pasteIntoTerminal,
+    // A new shell loads the Bash integration the old one started without.
+    // Show the terminal, as History's paste does, so the restart is visible.
+    restartTerminal(workspace) {
+      updateWorkspace(workspace.id, {
+        connectRequested: true,
+        restored: false,
+        reconnectToken: workspace.reconnectToken + 1,
+        view: "terminal",
+      });
+    },
   });
 
   if (loading) return <LoadingState label="Starting Control Room…" />;
