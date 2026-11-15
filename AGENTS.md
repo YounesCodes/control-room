@@ -19,7 +19,7 @@ Find nearby tests and existing implementation before changing a feature contract
 
 - Inspect the current diff and preserve existing user changes. Avoid unrelated redesign or cleanup.
 - Add or update focused tests for behavior changes, including parser, argument construction, persistence, and lifecycle regressions where relevant.
-- Keep `DESIGN.md` and `docs/` accurate when behavior or project boundaries change.
+- Keep `docs/` accurate when behavior or project boundaries change. Update `DESIGN.md` only when the app-wide design language changes, such as the palette, surfaces, type, motion, or a pattern several screens share. Feature-specific behavior belongs in code, tests, and `docs/`, never in `DESIGN.md`.
 - Avoid adding or upgrading dependencies unless required by the task.
 - Do not modify `AGENTS.md` files unless explicitly asked to.
 - Do not create additional `.md` file unless explicitly asked to.
@@ -32,7 +32,7 @@ Find nearby tests and existing implementation before changing a feature contract
 
 ## UI/UX quality gates
 
-- Inspect the existing implementation and rendered UI before changing a screen. Understand the user task and usability problem. Keep `DESIGN.md` as the source of design decisions and `src/styles.css` as the source of exact tokens.
+- Inspect the existing implementation and rendered UI before changing a screen. Understand the user task and usability problem. Keep `DESIGN.md` as the source of the app-wide design language and `src/styles.css` as the source of exact tokens.
 - Prefer the simplest coherent information hierarchy. Remove clutter and duplication before adding controls, cards, explanations, or animations. Reuse existing components, tokens, and interaction patterns; avoid one-off styling and unnecessary abstractions.
 - Treat clarity, readability, alignment, keyboard access, accessibility, discoverability, stable layouts, and performance as acceptance criteria.
 - For user-visible React UI changes, run a relevant focused headless scenario, such as `npm run ui:capture -- --scenario settings` or `npm run ui:capture -- --scenario systemd --state populated`. Use `--list` for scenarios/states. Presets are `normal` 1440×900, `narrow` 960×640, and `compact` 520×480; all run by default, or select one with `--viewport <preset>`. Find PNGs through `test-results/ui-review/<scenario>/<state>/<viewport>/capture/manifest.json`, then inspect readability, hierarchy, alignment, clipping, and consistency. See `docs/testing.md` for usage and limitations.
