@@ -213,11 +213,52 @@ export async function openNativeShell() {
   });
   await focusNativeApp();
 }
+/** Native shell programs started from cmd.exe, to tell a program that never
+ * started from one that is running but silent. */
+function windowsShellPrograms() {
+  try {
+    return execFileSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        "$all = Get-CimInstance Win32_Process; $cmd = $all | Where-Object Name -eq 'cmd.exe' | ForEach-Object ProcessId; $all | Where-Object { $cmd -contains $_.ParentProcessId } | ForEach-Object { '{0} pid={1} started={2:HH:mm:ss.fff} cpu={3}ms' -f $_.Name, $_.ProcessId, $_.CreationDate, [math]::Round(($_.UserModeTime + $_.KernelModeTime) / 10000) }",
+      ],
+      { encoding: "utf8", windowsHide: true, timeout: 20000 },
+    ).trim();
+  } catch (error) {
+    return `unavailable: ${String(error)}`;
+  }
+}
 export async function typeNativeCommand(command: string, marker: string, timeout?: number) {
+  // Typing before the shell reads input leaves the echo to shell startup timing.
+  await browser.waitUntil(
+    () =>
+      browser.execute(() =>
+        Boolean(
+          document
+            .querySelector(".terminal-workspace-pane.active .xterm-rows .xterm-cursor")
+            ?.closest(".xterm-rows > div")
+            ?.textContent?.trim(),
+        ),
+      ),
+    { timeout: 15_000, timeoutMsg: "The shell did not show its prompt" },
+  );
   await $(".terminal-workspace-pane.active .xterm-screen").click();
   await $(".terminal-workspace-pane.active .xterm-helper-textarea").addValue(command);
   await nativeKey("enter");
-  await terminalContains(marker, undefined, timeout);
+  const now = new Date();
+  // Local time, as Win32_Process reports CreationDate.
+  const typed = `${now.toTimeString().slice(0, 8)}.${String(now.getMilliseconds()).padStart(3, "0")}`;
+  try {
+    await terminalContains(marker, undefined, timeout);
+  } catch (error) {
+    if (windows)
+      (error as Error).message +=
+        ` (Enter sent ${typed}; shell children: ${windowsShellPrograms() || "none"})`;
+    throw error;
+  }
 }
 export async function selectTerminalWord(word: string) {
   const point = await browser.execute((expected) => {
