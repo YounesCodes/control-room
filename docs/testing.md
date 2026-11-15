@@ -12,7 +12,7 @@ Control Room uses Rust and Vitest component tests for contracts and failure path
 | Linux desktop E2E          | `bash scripts/test-linux-wdio.sh` | Yes, Ubuntu 24.04 with Xvfb/Openbox |
 | Windows and macOS desktop  | `npm run test:desktop`            | Yes, on Windows and macOS runners   |
 | Debian SSH fixture         | `npm run test:live-ssh`           | Manual live fixture workflow        |
-| Hosted Ubuntu SSH fixture  | `bash scripts/test-hosted-ssh.sh` | Yes, on a disposable Linux runner   |
+| Hosted Ubuntu SSH fixture  | `bash scripts/test-hosted-ssh.sh` | Yes, unless only `src/` changed     |
 
 Start with `npm ci`. The normal Windows CI still runs Prettier, ESLint, TypeScript and Vite builds, `cargo audit`, and the NSIS installer build. `src/ui-hierarchy.test.ts` keeps architecture and permission contracts; browser and desktop tests check user behavior. Neither normal test command needs an SSH host.
 
@@ -191,7 +191,7 @@ Run `npm run test:local-gate` explicitly for the ordinary checks, Chromium tests
 
 Run `npm run install:dev-hooks` to install the fast pre-commit check. It checks whitespace and formatting of the staged content, including partially staged files, without rewriting files. The installer backs up the old managed Control Room hooks and removes their duplicate pre-push gate. It refuses to replace unrelated hooks or a custom `core.hooksPath`. The old `install:local-lab-hooks` command now installs the same fast hooks. Hooks remain in this checkout across branch switches.
 
-Run focused tests while implementing changes. Required PR checks run the full frontend, Rust, Chromium, Windows and Linux desktop, hosted SSH, and installer checks on GitHub. The release workflow requires the same jobs on the tagged commit's main-branch run. It attaches the Windows and Linux packages to the existing draft, verifies the signed NSIS and AppImage assets against the updater feed, and then publishes it. An incomplete or failed validation leaves the release unpublished.
+Run focused tests while implementing changes. Required PR checks run the full frontend, Rust, Chromium, Windows and Linux desktop, hosted SSH, and installer checks on GitHub. Pull requests that change only documentation skip them all. Pull requests that change only files under `src/`, optionally with documentation, skip the hosted SSH and installer jobs and still run the frontend, Rust, and both desktop suites. Any other path, including `src-tauri/`, package files, `e2e/`, `scripts/`, and workflows, runs everything. Pushes to `main` always run every job. The release workflow requires the same jobs on the tagged commit's main-branch run. It attaches the Windows and Linux packages to the existing draft, verifies the signed NSIS and AppImage assets against the updater feed, and then publishes it. An incomplete or failed validation leaves the release unpublished.
 
 This fixture proves behavior against this one Ubuntu VM at the time it runs. It cannot prove that every Linux distribution, permission state, network failure, or production desktop environment behaves the same way. Existing deterministic tests cover those branches; add a disposable fixture when a new host-specific behavior needs live proof.
 
