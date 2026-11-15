@@ -38,7 +38,7 @@ The first Windows baseline (September 2026) is 70.15% frontend statements, 64.37
 
 ## Chromium components
 
-Run `npx playwright install chromium` once, then `npm run test:browser`. Vitest Browser Mode uses Playwright Chromium; these tests use real keyboard, focus, layout, and axe checks without Tauri or network access. Layout checks cover long-dialog scrolling and wide Settings alignment rather than source or CSS syntax. The main `npm test` command still runs the existing jsdom suites. Browser screenshots on failure go to `.vitest/`.
+Run `npx playwright install chromium` once, then `npm run test:browser`. Vitest Browser Mode uses Playwright Chromium; these tests use real keyboard, focus, layout, and axe checks without Tauri or network access. Layout checks cover long-dialog scrolling and wide Settings alignment rather than source or CSS syntax. The main `npm test` command still runs the existing jsdom suites. Browser screenshots on failure go to `.vitest/`. Call axe through `runAxe` from `src/test/axe.ts`, which waits for running animations and transitions to finish first; otherwise axe can measure colors mid-fade and report false contrast failures.
 
 ## Headless UI review
 

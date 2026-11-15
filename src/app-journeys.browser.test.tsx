@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
-import axe from "axe-core";
+import { runAxe } from "./test/axe";
 import * as fixtures from "./test/app-fixtures";
 import type { AppSettings, HistoryEntry, PersistedWorkspaceState } from "./types";
 import "@xterm/xterm/css/xterm.css";
@@ -635,7 +635,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
             ?.closest("button"),
         ).toBe(control.element());
       }
-      expect((await axe.run(element)).violations).toEqual([]);
+      expect((await runAxe(element)).violations).toEqual([]);
     },
   );
   it.each([960, 1180])(
@@ -1851,7 +1851,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .toBeVisible();
       expect(position()).toEqual(normalBounds);
       expect(element.scrollWidth).toBeLessThanOrEqual(width);
-      expect((await axe.run(actions)).violations).toEqual([]);
+      expect((await runAxe(actions)).violations).toEqual([]);
       await exit.click();
       await expect.element(button).toHaveAttribute("aria-pressed", "false");
       expect(button.element()).toBe(original);
@@ -2019,7 +2019,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(tab.querySelector(".sr-only")?.textContent).toBe("Terminal connected");
     await page.screenshot({ element: host, path: "../test-results/host-status-placement.png" });
     await page.screenshot({ element: tab, path: "../test-results/tab-status-placement.png" });
-    expect((await axe.run(element.querySelector(".sidebar")!)).violations).toEqual([]);
+    expect((await runAxe(element.querySelector(".sidebar")!)).violations).toEqual([]);
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
     await expect.poll(() => !!tab.querySelector(".presence-connected")).toBe(true);
     const focusMark = tab.querySelector<HTMLElement>(".target-mark")!;
@@ -2196,7 +2196,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(docs.right).toBeLessThanOrEqual(settings.left);
       expect(settings.right).toBeLessThanOrEqual(width);
       expect(element.scrollWidth).toBeLessThanOrEqual(width);
-      const result = await axe.run(element.querySelector(".app-bar")!);
+      const result = await runAxe(element.querySelector(".app-bar")!);
       expect(result.violations).toEqual([]);
       await page.screenshot({
         element: element.querySelector(".app-bar")!,
@@ -2269,7 +2269,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         expect(controlBounds.bottom).toBeLessThanOrEqual(640);
       }
       const toolbar = mode === "focus" ? ".session-tab-actions" : ".app-bar";
-      const result = await axe.run(element.querySelector(toolbar)!, {
+      const result = await runAxe(element.querySelector(toolbar)!, {
         runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
       });
       expect(result.violations.map(({ id }) => id)).toEqual([]);
@@ -2874,7 +2874,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect
       .poll(() => element.querySelector(".terminal-workspace-pane.active .xterm-rows")?.textContent)
       .toContain("fixture$");
-    expect((await axe.run(popup.element())).violations).toEqual([]);
+    expect((await runAxe(popup.element())).violations).toEqual([]);
     await page.screenshot({ path: "../test-results/scratchpad-popup.png" });
     await popup.getByRole("button", { name: "Delete note", exact: true }).click();
     const confirmation = page.getByRole("dialog", { name: "Delete connection note" });
@@ -2955,7 +2955,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         ).toHaveLength(0),
       );
       expect(
-        (await axe.run(element.querySelector<HTMLElement>(".systemd-page")!)).violations,
+        (await runAxe(element.querySelector<HTMLElement>(".systemd-page")!)).violations,
       ).toEqual([]);
       await page.screenshot({ path: `../test-results/linux-service-list-${width}.png` });
     },
@@ -3365,7 +3365,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(element.querySelector("#ports-tools")).toBeNull();
 
     const graph = element.querySelector(".ports-page")!;
-    expect((await axe.run(graph)).violations).toEqual([]);
+    expect((await runAxe(graph)).violations).toEqual([]);
     await page.screenshot({ path: "../test-results/ports-graph-full.png" });
     await page.getByRole("button", { name: "Find ports", exact: true }).click();
     await page.getByRole("textbox", { name: "Search ports" }).fill("443");
@@ -3381,7 +3381,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(searchField.querySelector("button[aria-label='Clear search']")).toBeTruthy();
     expect(searchField.scrollWidth).toBeLessThanOrEqual(searchField.clientWidth + 1);
     await expect.poll(() => getComputedStyle(searchPanel).opacity).toBe("1");
-    expect((await axe.run(searchPanel)).violations).toEqual([]);
+    expect((await runAxe(searchPanel)).violations).toEqual([]);
     await page.screenshot({ path: "../test-results/ports-search-controls.png" });
     await page.getByRole("button", { name: "Clear search", exact: true }).click();
     await page.getByRole("button", { name: "Filter ports", exact: true }).click();
@@ -3423,7 +3423,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(actions.getBoundingClientRect().bottom).toBeLessThanOrEqual(
         inspector.getBoundingClientRect().bottom,
       );
-      expect((await axe.run(inspector)).violations).toEqual([]);
+      expect((await runAxe(inspector)).violations).toEqual([]);
     }
     await page.viewport(960, 640);
     await checkInspectorLayout();
@@ -3513,7 +3513,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect
       .element(page.getByRole("heading", { name: "Settings", exact: true }))
       .toBeVisible();
-    const result = await axe.run(element, {
+    const result = await runAxe(element, {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
     });
     expect(result.violations.map((violation) => violation.id)).toEqual([]);
@@ -3663,7 +3663,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await Promise.all(
       panel.getAnimations({ subtree: true }).map((animation) => animation.finished.catch(() => {})),
     );
-    const audit = await axe.run(panel);
+    const audit = await runAxe(panel);
     expect(
       audit.violations.map(({ id, nodes }) => ({
         id,

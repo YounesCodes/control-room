@@ -11,7 +11,7 @@ import type {
   SavedConnection,
 } from "../types";
 import { api } from "../lib/api";
-import axe from "axe-core";
+import { runAxe } from "../test/axe";
 import { PortsPane } from "./PortsPane";
 
 vi.mock("../lib/api", () => ({
@@ -593,7 +593,7 @@ it("consolidates dual-stack Docker listeners and makes secondary peers and scope
       filtersRegion.getAnimations({ subtree: true }).some((a) => a.playState === "running"),
     ).toBe(false),
   );
-  expect((await axe.run(filtersRegion)).violations).toEqual([]);
+  expect((await runAxe(filtersRegion)).violations).toEqual([]);
   await page.getByRole("button", { name: "Reset filters" }).click();
   await page.getByRole("button", { name: "Close port tools" }).click();
   await page.getByRole("button", { name: /443.*Listening/ }).click();
@@ -611,7 +611,7 @@ it("consolidates dual-stack Docker listeners and makes secondary peers and scope
       false,
     ),
   );
-  expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
+  expect((await runAxe(document.querySelector(".ports-page")!)).violations).toEqual([]);
   await page.screenshot({ path: "../../test-results/ports-consolidated.png" });
 });
 
@@ -683,7 +683,7 @@ it("keeps sshd worker connections immediately below the related SSH listener", a
   expect(within(inspector).getByText("Related to ssh.service")).toBeTruthy();
   expect(within(inspector).getByText("200")).toBeTruthy();
   expect(within(inspector).queryByRole("button", { name: "Open unit" })).toBeNull();
-  expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
+  expect((await runAxe(document.querySelector(".ports-page")!)).violations).toEqual([]);
 });
 
 it("commits the selection when pressing a chip beside the inspector panel", async () => {

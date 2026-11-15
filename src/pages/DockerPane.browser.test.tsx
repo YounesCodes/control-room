@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { page, userEvent } from "vitest/browser";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import axe from "axe-core";
+import { runAxe } from "../test/axe";
 import { ConnectionSection, PanelLayoutContext } from "../components/ResizablePanels";
 import { DockerPane } from "./DockerPane";
 import type {
@@ -245,7 +245,7 @@ it("fills the workspace despite saved list widths, fits on resize and resets zoo
     await page.viewport(width, 760);
     await waitFor(expectEntireGraph);
   }
-  expect((await axe.run(document.querySelector(".docker-page")!)).violations).toEqual([]);
+  expect((await runAxe(document.querySelector(".docker-page")!)).violations).toEqual([]);
 });
 
 it("centers selection, keeps it open during pan, dismisses on empty canvas and restores focus", async () => {
@@ -305,7 +305,7 @@ it("filters projects and states, clears hidden selection, and restores the group
       filtersRegion.getAnimations({ subtree: true }).some((a) => a.playState === "running"),
     ).toBe(false),
   );
-  expect((await axe.run(filtersRegion)).violations).toEqual([]);
+  expect((await runAxe(filtersRegion)).violations).toEqual([]);
   await page.getByRole("button", { name: "Reset filters" }).click();
   expect(document.querySelectorAll(".arch-chip")).toHaveLength(12);
   expect(document.querySelectorAll(".arch-group")).toHaveLength(4);
@@ -347,7 +347,7 @@ it("frames a container opened from Ports and keeps details and logs usable at mi
       false,
     ),
   );
-  expect((await axe.run(document.querySelector(".docker-page")!)).violations).toEqual([]);
+  expect((await runAxe(document.querySelector(".docker-page")!)).violations).toEqual([]);
   await page.getByRole("button", { name: "View logs" }).click();
   expect(onViewLogs).toHaveBeenCalledWith({ type: "docker", id: containers[0].id });
   await page.viewport(1600, 900);

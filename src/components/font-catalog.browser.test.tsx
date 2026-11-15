@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import { useState } from "react";
-import axe from "axe-core";
+import { runAxe } from "../test/axe";
 import { FontCatalogPicker } from "./FontCatalogPicker";
 import previewUrl from "../assets/fonts/space-grotesk-latin.woff2?url";
 import "../styles.css";
@@ -87,7 +87,7 @@ it("renders temporary faces, supports keyboard selection, and passes accessibili
       "ControlRoomPreview-jetbrains-mono",
     ),
   );
-  const result = await axe.run(container, {
+  const result = await runAxe(container, {
     runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
   });
   expect(
