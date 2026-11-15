@@ -586,6 +586,7 @@ export function TerminalPane({
             terminal.rows,
             output,
             workspace.remoteShell?.id ?? null,
+            workspace.container?.id ?? null,
           );
     });
 
