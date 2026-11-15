@@ -74,7 +74,8 @@ export const config: WebdriverIO.Config = {
   capabilities: [tauriCapabilities],
   framework: "mocha",
   mochaOpts: { ui: "bdd", timeout: 90_000 },
-  specFileRetries: 0,
+  // Hosted macOS runners stall unpredictably; their workflow reruns a failed spec file once.
+  specFileRetries: Number(process.env.CONTROL_ROOM_E2E_SPEC_RETRIES ?? 0),
   reporters: ["spec"],
   logLevel: "warn",
   waitforTimeout: 10_000,

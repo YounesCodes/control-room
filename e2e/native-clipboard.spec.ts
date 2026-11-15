@@ -40,8 +40,11 @@ describe("Native OS clipboard and shell control keys", () => {
       await openNativeShell();
       const before = (await runtime()).sessionIds;
       const program =
-        "process.stdin.setRawMode(true);process.stdout.write(String.fromCharCode(27)+'[?2004h\\r\\nPASTE_READY\\r\\n');let data=Buffer.alloc(0);process.stdin.on('data',function(chunk){data=Buffer.concat([data,chunk]);if(data.includes(Buffer.from([27,91,50,48,49,126]))){process.stdout.write(String.fromCharCode(27)+'[?2004l\\r\\nNATIVE_BYTES_'+data.toString('base64')+'\\r\\n');process.stdin.setRawMode(false);process.exit(0)}})";
-      await typeNativeCommand(`node -e "${program}"`, "PASTE_READY");
+        "process.stdout.write('NODE_STARTED\\r\\n');process.stdin.setRawMode(true);process.stdout.write(String.fromCharCode(27)+'[?2004h\\r\\nPASTE_READY\\r\\n');let data=Buffer.alloc(0);process.stdin.on('data',function(chunk){data=Buffer.concat([data,chunk]);if(data.includes(Buffer.from([27,91,50,48,49,126]))){process.stdout.write(String.fromCharCode(27)+'[?2004l\\r\\nNATIVE_BYTES_'+data.toString('base64')+'\\r\\n');process.stdin.setRawMode(false);process.exit(0)}})";
+      // A cold Node start on hosted Windows runners can exceed the usual wait.
+      // NODE_STARTED in a failure snapshot separates a slow start from a stall
+      // in raw mode.
+      await typeNativeCommand(`node -e "${program}"`, "PASTE_READY", 45_000);
       const payload = "first èé\nsecond 日本語";
       writeClipboard(payload);
       expect(readClipboard()).toBe(payload);

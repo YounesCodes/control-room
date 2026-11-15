@@ -13,6 +13,8 @@ import type {
 import { api } from "../lib/api";
 import axe from "axe-core";
 import { PortsPane } from "./PortsPane";
+import { tabKey, shiftTabKey } from "../test/keyboard";
+import { settleMotion } from "../test/motion";
 
 vi.mock("../lib/api", () => ({
   api: {
@@ -195,7 +197,7 @@ it("selects the requested container binding without confusing the same port on a
   const inspector = await screen.findByRole("complementary");
   inspector.focus();
   expect(getComputedStyle(inspector).outlineStyle).toBe("none");
-  await userEvent.keyboard("{Tab}");
+  await userEvent.keyboard(tabKey);
   const close = within(inspector).getByRole("button", { name: "Close details" });
   expect(document.activeElement).toBe(close);
   expect(getComputedStyle(close).outlineStyle).toBe("solid");
@@ -588,11 +590,7 @@ it("consolidates dual-stack Docker listeners and makes secondary peers and scope
   expect(chips()).toHaveLength(2);
   expect(screen.queryByRole("button", { name: /6379/ })).toBeNull();
   const filtersRegion = screen.getByRole("region", { name: "Port filters" });
-  await waitFor(() =>
-    expect(
-      filtersRegion.getAnimations({ subtree: true }).some((a) => a.playState === "running"),
-    ).toBe(false),
-  );
+  await settleMotion(filtersRegion);
   expect((await axe.run(filtersRegion)).violations).toEqual([]);
   await page.getByRole("button", { name: "Reset filters" }).click();
   await page.getByRole("button", { name: "Close port tools" }).click();
@@ -606,11 +604,7 @@ it("consolidates dual-stack Docker listeners and makes secondary peers and scope
   expect(diagnostic.closest("details")?.open).toBe(false);
   await page.getByText("Host firewall policy", { exact: true }).click();
   expect(within(inspector).getByText(/Host policy is not a reachability test/)).toBeTruthy();
-  await waitFor(() =>
-    expect(inspector.getAnimations({ subtree: true }).some((a) => a.playState === "running")).toBe(
-      false,
-    ),
-  );
+  await settleMotion(inspector);
   expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
   await page.screenshot({ path: "../../test-results/ports-consolidated.png" });
 });
@@ -746,7 +740,7 @@ it("reveals chips for keyboard focus without selecting them", async () => {
 
   let focusedChips = 0;
   for (let step = 0; step < 9; step += 1) {
-    await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
+    await userEvent.keyboard(shiftTabKey);
     const focused = document.activeElement;
     if (!(focused instanceof HTMLElement) || !focused.classList.contains("arch-chip")) break;
     focusedChips += 1;

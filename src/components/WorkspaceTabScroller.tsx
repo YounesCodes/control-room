@@ -33,6 +33,8 @@ interface WorkspaceTabScrollerProps {
   /// Moves tab `id` to `targetIndex`, expressed in whole-strip positions.
   /// Absent rejects reordering: group rows and the pane strip pass none.
   onReorder?: (id: string, targetIndex: number) => void;
+  /// The application modifier for keyboard reordering: Cmd on macOS, Ctrl elsewhere.
+  reorderModifier?: "control" | "meta";
   /// Carrying a lifted tab below the strip hands it here instead of reordering, so
   /// the terminal view can take it (a Focus Mode split). `accepts` says which tabs may
   /// leave; `move` and `drop` get pointer positions; `cancel` ends a carry.
@@ -106,6 +108,7 @@ export function WorkspaceTabScroller({
   arrangementKey,
   menuLabel = "All terminals",
   onReorder,
+  reorderModifier = "control",
   onDragOut,
 }: WorkspaceTabScrollerProps) {
   const dragOutRef = useRef(onDragOut);
@@ -134,6 +137,7 @@ export function WorkspaceTabScroller({
   const activeIndex = items.findIndex((item) => item.active);
   const pendingDragRef = useRef<PendingDrag | null>(null);
   const activeDragRef = useRef<ActiveDrag | null>(null);
+  const grabbedHandleRef = useRef<HTMLElement | null>(null);
   const [dragging, setDragging] = useState<ActiveDrag | null>(null);
   const frameRef = useRef<number | null>(null);
   const pointerXRef = useRef<number | null>(null);
@@ -384,6 +388,9 @@ export function WorkspaceTabScroller({
     const fromIndex = visibleStart + hit.index;
     const id = items[fromIndex]?.id;
     if (!id) return;
+    grabbedHandleRef.current = (event.target as Element).closest<HTMLElement>(
+      ".session-tab-main, .session-tab-group-main",
+    );
     // Capture is taken when the drag activates, not here: a pointerdown
     // capture would retarget the plain click that selects a tab.
     followPendingPress(event.pointerId);
@@ -456,6 +463,15 @@ export function WorkspaceTabScroller({
     if (!active || active.pointerId !== event.pointerId) return;
     const out = carriedOut(active, event.clientY);
     finishDrag();
+    // macOS WebKit never focuses a pressed button, and a drag produces no
+    // click for the app shell to focus. Hand focus to the grabbed tab once the
+    // reorder renders, as Chromium already does on press.
+    const handle = grabbedHandleRef.current;
+    grabbedHandleRef.current = null;
+    if (!out)
+      requestAnimationFrame(() => {
+        if (handle?.isConnected) handle.focus({ preventScroll: true });
+      });
     if (out) {
       dragOutRef.current?.drop(active.id, event.clientX, event.clientY);
       return;
@@ -474,11 +490,12 @@ export function WorkspaceTabScroller({
     if (target !== active.fromIndex) onReorder(active.id, target);
   }
 
-  /// Ctrl+Shift with an arrow key moves the focused tab one slot, the keyboard
+  /// The application modifier plus Shift with an arrow key moves the focused tab one slot, the keyboard
   /// path to the same reorder a drag performs.
   function reorderWithKeyboard(event: ReactKeyboardEvent<HTMLDivElement>) {
     if (!onReorder || count < 2 || activeDragRef.current) return;
-    if (!event.ctrlKey || !event.shiftKey) return;
+    const modifier = reorderModifier === "meta" ? event.metaKey : event.ctrlKey;
+    if (!modifier || !event.shiftKey) return;
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     const hit = tabFromEvent(event.target);
     if (!hit) return;

@@ -182,15 +182,124 @@ jobs:
           generateReleaseNotes: false
           args: --config src-tauri/tauri.release.conf.json
 
+  macos:
+    name: Sign and notarize ${{ matrix.target }}
+    # Runs after Linux so each tauri-action merges into the feed the previous one wrote.
+    needs: [windows, linux]
+    if: vars.MACOS_RELEASES == 'true'
+    strategy:
+      fail-fast: false
+      # Each tauri-action merges latest.json. Serialize the uploads to avoid
+      # one architecture overwriting the other's updater entry.
+      max-parallel: 1
+      matrix:
+        include:
+          - os: macos-15
+            target: aarch64-apple-darwin
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 50
+    env:
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Require Developer ID signing and notarization credentials
+        run: |
+          node --input-type=module <<'NODE'
+          const required = ['APPLE_CERTIFICATE', 'APPLE_CERTIFICATE_PASSWORD', 'APPLE_SIGNING_IDENTITY', 'APPLE_ID', 'APPLE_PASSWORD', 'APPLE_TEAM_ID'];
+          const missing = required.filter(key => !process.env[key]?.trim());
+          if (missing.length || process.env.APPLE_SIGNING_IDENTITY === '-') {
+            throw new Error(`macOS releases require Developer ID signing and notarization. Missing: ${missing.join(', ')}`);
+          }
+          NODE
+      - uses: Swatinem/rust-cache@v2.9.3
+        with:
+          workspaces: "./src-tauri -> target"
+          cache-bin: false
+      - run: npm ci
+      - name: Build signed and notarized app, DMG, and updater archive
+        uses: tauri-apps/tauri-action@v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          releaseId: ${{ needs.windows.outputs.release-id }}
+          generateReleaseNotes: false
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
+      - name: Verify the signature and notarization, then attach a checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          root="src-tauri/target/$TARGET/release/bundle"
+          codesign --verify --deep --strict "$root/macos/Control Room.app"
+          spctl --assess --type execute --verbose "$root/macos/Control Room.app"
+          xcrun stapler validate "$root/macos/Control Room.app"
+          dmg=$(find "$root/dmg" -maxdepth 1 -name '*.dmg' -print -quit)
+          test -n "$dmg"
+          gh release view "$GITHUB_REF_NAME" --json assets > release-assets.json
+          name=$(LOCAL_DMG="$dmg" node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          import { basename } from 'node:path';
+          const normalize = name => name.replace(/[^a-z0-9]/gi, '').toLowerCase();
+          const assets = JSON.parse(readFileSync('release-assets.json', 'utf8')).assets;
+          const matches = assets.filter(asset => normalize(asset.name) === normalize(basename(process.env.LOCAL_DMG)));
+          if (matches.length !== 1) throw new Error('Could not identify the published DMG');
+          console.log(matches[0].name);
+          NODE
+          )
+          checksum=$(shasum -a 256 "$dmg" | cut -d ' ' -f 1)
+          printf '%s  %s\n' "$checksum" "$name" > "$name.sha256"
+          gh release upload "$GITHUB_REF_NAME" "$name.sha256" --clobber
+
+  publish:
+    name: Verify all enabled platforms and publish
+    needs: [windows, linux, macos]
+    if: >-
+      always() && needs.windows.result == 'success' && needs.linux.result == 'success' &&
+      (needs.macos.result == 'success' || (needs.macos.result == 'skipped' && vars.MACOS_RELEASES != 'true'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
       - name: Verify and publish the draft
         env:
           GH_TOKEN: ${{ github.token }}
+          INCLUDE_MACOS: ${{ vars.MACOS_RELEASES }}
         run: |
           node scripts/verify-release-assets.mjs
           node scripts/generate-release-notes.mjs --sync-feed latest.json
+          if [[ $INCLUDE_MACOS == true ]]; then
+            for arch in aarch64 x86_64; do
+              ARCH=$arch node -e 'const feed = JSON.parse(require("fs").readFileSync("latest.json", "utf8")); if (!feed.platforms["darwin-" + process.env.ARCH]) { console.error("Missing darwin-" + process.env.ARCH + " updater entry"); process.exit(1); }'
+            done
+            mkdir macos-artifacts
+            gh release download "$GITHUB_REF_NAME" --pattern '*.app.tar.gz' --pattern '*.app.tar.gz.sig' --dir macos-artifacts
+            archives=(macos-artifacts/*.app.tar.gz)
+            test "${#archives[@]}" -eq 2
+            for archive in "${archives[@]}"; do
+              node scripts/verify-updater-signature.mjs "$archive" "$archive.sig"
+            done
+            test "$(gh release view "$GITHUB_REF_NAME" --json assets --jq '[.assets[].name | select(test("[.]dmg$"))] | length')" -eq 2
+            test "$(gh release view "$GITHUB_REF_NAME" --json assets --jq '[.assets[].name | select(test("[.]dmg[.]sha256$"))] | length')" -eq 2
+          fi
           gh release upload "$GITHUB_REF_NAME" latest.json --clobber
           gh release download "$GITHUB_REF_NAME" --pattern latest.json --dir verified-feed
           node scripts/generate-release-notes.mjs --validate-feed verified-feed/latest.json
           cmp latest.json verified-feed/latest.json
           gh release edit "$GITHUB_REF_NAME" --draft=false
-          node scripts/generate-release-notes.mjs --validate-feed verified-feed/latest.json
