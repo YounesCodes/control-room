@@ -1,7 +1,15 @@
 import { ResizableSplit } from "../components/ResizablePanels";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FileClock, RefreshCw, Search } from "lucide-react";
-import { EmptyState, ErrorState, Skeleton, SkeletonText } from "../components/PanelState";
+import {
+  Bone,
+  EmptyState,
+  ErrorState,
+  Skeleton,
+  SkeletonDetail,
+  SkeletonRows,
+  SkeletonText,
+} from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import { countSystemdUnits, filterSystemdUnits } from "../lib/systemd-units";
 import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
@@ -88,8 +96,33 @@ export function LaunchdServicesPane({
     setTypeFilter("all");
   }
 
-  // The first read keeps the page in place and sketches the list it will fill.
-  const firstLoad = cache.loading && !cache.items.length;
+  if (cache.loading && !cache.items.length)
+    return (
+      <ResizableSplit name="Services" className="feature-page split-page services-page">
+        <div className="list-panel">
+          <header className="page-heading compact-heading">
+            <div>
+              <h2>Services</h2>
+              <p>
+                <SkeletonText />
+              </p>
+            </div>
+            <Bone shape="icon" />
+          </header>
+          <div className="systemd-list-controls">
+            <Bone shape="control" />
+            <Bone shape="control" width="104px" />
+            <Bone shape="control" width="104px" />
+          </div>
+          <Skeleton label="Reading launchd services…" className="dense-list">
+            <SkeletonRows count={14} lead />
+          </Skeleton>
+        </div>
+        <aside className="detail-panel">
+          <SkeletonDetail fields={4} />
+        </aside>
+      </ResizableSplit>
+    );
   if (cache.error && !cache.items.length) {
     return (
       <ErrorState
@@ -106,16 +139,8 @@ export function LaunchdServicesPane({
           <div>
             <h2>Services</h2>
             <p>
-              {firstLoad ? (
-                <SkeletonText />
-              ) : (
-                <>
-                  {counts.active} active ·{" "}
-                  <span className={counts.failed ? "failed-count" : ""}>
-                    {counts.failed} failed
-                  </span>
-                </>
-              )}
+              {counts.active} active ·{" "}
+              <span className={counts.failed ? "failed-count" : ""}>{counts.failed} failed</span>
             </p>
           </div>
           <button
@@ -179,21 +204,13 @@ export function LaunchdServicesPane({
               </span>
             </button>
           ))}
-          {firstLoad ? (
-            <Skeleton label="Reading launchd services…" count={8} />
-          ) : (
-            !filtered.length && (
-              <EmptyState
-                title={cache.items.length ? "No matching services" : "No services found"}
-              />
-            )
+          {!filtered.length && (
+            <EmptyState title={cache.items.length ? "No matching services" : "No services found"} />
           )}
         </div>
       </div>
       <aside className="detail-panel">
-        {firstLoad ? (
-          <Skeleton label="Reading service details…" variant="fields" count={3} />
-        ) : !cache.items.length ? (
+        {!cache.items.length ? (
           <EmptyState title="No services found" />
         ) : !filtered.length ? (
           <EmptyState title="No matching services">

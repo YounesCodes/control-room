@@ -2,7 +2,15 @@ import { Search } from "../components/MagnifierIcon";
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
-import { EmptyState, ErrorState, Skeleton, SkeletonText } from "../components/PanelState";
+import {
+  Bone,
+  EmptyState,
+  ErrorState,
+  Skeleton,
+  SkeletonDetail,
+  SkeletonRows,
+  SkeletonText,
+} from "../components/PanelState";
 import { ResizableSplit } from "../components/ResizablePanels";
 import type { SavedConnection, WindowsService } from "../types";
 
@@ -54,8 +62,32 @@ export function WindowsServicesPane({ connection }: { connection: SavedConnectio
     setSearch("");
     setState("all");
   };
-  // The first read keeps the page in place and sketches the list it will fill.
-  const firstLoad = loading && !services.length;
+  if (loading && !services.length)
+    return (
+      <ResizableSplit name="Services" className="feature-page split-page windows-services-page">
+        <div className="list-panel">
+          <header className="page-heading">
+            <div>
+              <h2>Services</h2>
+              <p>
+                <SkeletonText />
+              </p>
+            </div>
+            <Bone shape="button" width="93px" />
+          </header>
+          <div className="systemd-list-controls windows-service-list-controls">
+            <Bone shape="control" />
+            <Bone shape="control" width="110px" />
+          </div>
+          <Skeleton label="Reading Windows services…" className="dense-list">
+            <SkeletonRows count={14} lead />
+          </Skeleton>
+        </div>
+        <aside className="detail-panel">
+          <SkeletonDetail fields={4} />
+        </aside>
+      </ResizableSplit>
+    );
   if (error && !services.length)
     return (
       <ErrorState
@@ -70,14 +102,8 @@ export function WindowsServicesPane({ connection }: { connection: SavedConnectio
           <div>
             <h2>Services</h2>
             <p>
-              {firstLoad ? (
-                <SkeletonText />
-              ) : (
-                <>
-                  {services.filter((service) => service.state === "running").length} running /{" "}
-                  {services.length} total
-                </>
-              )}
+              {services.filter((service) => service.state === "running").length} running /{" "}
+              {services.length} total
             </p>
           </div>
           <button
@@ -132,19 +158,13 @@ export function WindowsServicesPane({ connection }: { connection: SavedConnectio
               <span className="row-state">{service.state}</span>
             </button>
           ))}
-          {firstLoad ? (
-            <Skeleton label="Reading Windows services…" count={8} />
-          ) : (
-            !filtered.length && (
-              <EmptyState title={services.length ? "No matching services" : "No services found"} />
-            )
+          {!filtered.length && (
+            <EmptyState title={services.length ? "No matching services" : "No services found"} />
           )}
         </div>
       </div>
       <aside className="detail-panel" tabIndex={0} aria-label="Windows service details">
-        {firstLoad ? (
-          <Skeleton label="Reading service details…" variant="fields" count={4} />
-        ) : selected && filtered.some((service) => service.id === selected.id) ? (
+        {selected && filtered.some((service) => service.id === selected.id) ? (
           <>
             <header>
               <h2>{selected.displayName}</h2>

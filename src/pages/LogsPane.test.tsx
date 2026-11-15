@@ -987,7 +987,7 @@ describe("LogsPane restricted journal access", () => {
 describe("LogsPane source discovery", () => {
   afterEach(cleanup);
 
-  it("keeps the pane in place and holds the picker's spot while finding sources", () => {
+  it("sketches the whole tab while finding sources and keeps the picker during a refresh", () => {
     api.listServices.mockReset().mockReturnValue(new Promise(() => {}));
     const props = {
       connection,
@@ -1006,11 +1006,9 @@ describe("LogsPane source discovery", () => {
       />,
     );
     expect(screen.getByRole("heading", { name: "Logs" })).toBeTruthy();
-    expect(screen.getByRole("textbox", { name: "Search loaded lines" })).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Search loaded lines" })).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Unit" })).toBeNull();
-    expect(screen.getAllByRole("status").map((status) => status.textContent)).toContain(
-      "Finding available log sources…",
-    );
+    expect(screen.getByRole("status").textContent).toBe("Finding available log sources…");
 
     // A refresh with sources already known keeps the picker usable.
     view.rerender(<LogsPane {...props} servicesCache={{ ...servicesCache, loading: true }} />);

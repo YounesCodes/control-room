@@ -8,7 +8,7 @@ import {
 } from "react";
 import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { FontCatalogPicker } from "../components/FontCatalogPicker";
-import { Skeleton } from "../components/PanelState";
+import { Skeleton, SkeletonFields } from "../components/PanelState";
 import { LocalShellIcon } from "../components/LocalShellIcon";
 import { StepSlider } from "../components/StepSlider";
 import { api, errorMessage } from "../lib/api";
@@ -930,7 +930,9 @@ export function SettingsPane({
               </SettingsSection>
               <SettingsSection id="ssh" {...sectionProps}>
                 {!environment ? (
-                  <Skeleton label="Checking SSH environment…" variant="fields" count={4} />
+                  <Skeleton label="Checking SSH environment…">
+                    <SkeletonFields count={4} className="detail-list settings-ssh" />
+                  </Skeleton>
                 ) : (
                   <dl className="detail-list settings-ssh">
                     <div>

@@ -9,7 +9,7 @@ import type {
 } from "../types";
 import { HostOsIcon } from "./HostOsIcon";
 import { Modal } from "./Modal";
-import { Skeleton } from "./PanelState";
+import { Bone, Skeleton, boneWidth, wave } from "./PanelState";
 
 export function shellDescription(id: string): string {
   if (id.startsWith("wsl:")) return "Linux distribution";
@@ -123,7 +123,21 @@ export function RemoteShellDialog({
               <span>Refreshing available shells…</span>
             </div>
           ) : (
-            <Skeleton label="Finding available shells…" count={3} />
+            <Skeleton label="Finding available shells…" className="remote-shell-groups">
+              <div className="remote-shell-options">
+                <Bone shape="caption" width="64px" className="skeleton-legend" />
+                {Array.from({ length: 3 }, (_, index) => (
+                  <div className="remote-shell-option skeleton-row" key={index} style={wave(index)}>
+                    <Bone shape="mark" />
+                    <span className="remote-shell-option-text">
+                      <Bone width={boneWidth(index, 160, "px")} />
+                      <Bone shape="caption" width={boneWidth(index + 3, 110, "px")} />
+                    </span>
+                    <Bone shape="dot" className="skeleton-radio" />
+                  </div>
+                ))}
+              </div>
+            </Skeleton>
           ))}
         {error && (
           <div className="remote-shell-error" role="alert">

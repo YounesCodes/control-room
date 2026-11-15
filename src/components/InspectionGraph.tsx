@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { LoaderCircle, Server, X } from "lucide-react";
-import { EmptyState, Skeleton } from "./PanelState";
+import { EmptyState, SkeletonGraph } from "./PanelState";
 import { usePanZoom } from "../lib/use-pan-zoom";
 import {
   isGraphDirection,
@@ -347,7 +347,9 @@ export function InspectionGraph({
       >
         {!groups.length ? (
           loadingLabel ? (
-            <Skeleton label={loadingLabel} variant="canvas" />
+            <div className="skeleton skeleton-graph-frame" aria-hidden="true">
+              <SkeletonGraph />
+            </div>
           ) : (
             <EmptyState title={emptyMessage} />
           )
@@ -460,7 +462,7 @@ export function InspectionGraph({
             </div>
           </div>
         )}
-        {!!groups.length && loadingLabel && (
+        {loadingLabel && (
           <p className="arch-loading-status" role="status">
             <LoaderCircle size={13} className="spinning" aria-hidden="true" />
             {loadingLabel}

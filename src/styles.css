@@ -5843,151 +5843,240 @@ dd {
   }
 }
 
-/* Skeletons: static placeholders shaped like the content that is loading.
-   They stand where that content will appear, so neighbors never move when it
-   arrives. Only the entrance fades; the bars stay still. */
+/* Skeletons sketch loading content with that content's own layout classes, so
+   neighbors never move when it arrives. Rows pulse gently in sequence, top to
+   bottom, to show the read is alive; reduced motion holds them still. The
+   pulse only changes opacity, so it never repaints the shapes. */
 .skeleton {
   display: flex;
   flex-direction: column;
-  gap: 10px;
   min-width: 0;
   animation: overlay-in var(--motion-slow) var(--ease) both;
 }
 
-.skeleton-shape,
-.skeleton-items {
+.skeleton-shape {
   display: flex;
+  flex: 1;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  pointer-events: none;
+  user-select: none;
 }
 
-.skeleton-bar {
+.skeleton-bone {
   display: block;
-  width: var(--skeleton-width, 100%);
+  flex: 0 1 auto;
+  width: var(--bone-width, 64%);
+  max-width: 100%;
   height: 8px;
   border-radius: var(--radius-sm);
-  background: var(--fill-active);
+  background: var(--skeleton-fill, var(--fill-active));
 }
 
-.skeleton-inline {
-  display: inline-block;
-  width: 7ch;
-  height: 0.8em;
-  vertical-align: middle;
+.skeleton-bone[data-shape="title"] {
+  height: 11px;
 }
 
-.skeleton-mark {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--fill-active);
+.skeleton-bone[data-shape="caption"] {
+  height: 6px;
+  margin-top: 3px;
 }
 
-.skeleton[data-variant="rows"] .skeleton-item {
-  display: grid;
-  grid-template-columns: var(--identity-size) minmax(0, 480px);
-  grid-template-rows: auto auto;
-  align-content: center;
-  gap: 6px 11px;
-  height: 44px;
-  padding: 5px 9px;
+/* A control without a set width fills its row, as a search field does. */
+.skeleton-bone[data-shape="control"]:not([style]) {
+  flex: 1 1 0;
+  width: 100%;
 }
 
-.skeleton[data-variant="rows"] .skeleton-mark {
-  grid-row: span 2;
-  align-self: center;
-  justify-self: center;
-}
-
-.skeleton[data-variant="rows"] .skeleton-bar {
-  height: 9px;
-}
-
-.skeleton[data-variant="rows"] .skeleton-bar-detail {
-  grid-column: 2;
-  width: calc(var(--skeleton-width) * 0.6);
-  height: 7px;
-}
-
-.skeleton[data-variant="fields"] .skeleton-item {
-  display: grid;
-  grid-template-columns: 130px minmax(0, 360px);
-  align-items: center;
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 15px 0;
-}
-
-.skeleton .skeleton-bar-label {
-  width: 72px;
-}
-
-.skeleton[data-variant="lines"] .skeleton-items {
-  gap: 10px;
-  padding: 10px 9px;
-}
-
-.skeleton[data-variant="control"] .skeleton-item {
-  display: flex;
-  align-items: center;
+.skeleton-bone[data-shape="control"],
+.skeleton-bone[data-shape="button"] {
   height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-}
-
-.skeleton[data-variant="control"] .skeleton-bar {
-  max-width: 220px;
-}
-
-/* The canvas variant sketches a host beside one column of nodes, the layout
-   every graph opens with, and states what it is reading in visible text. */
-/* Centered like a fitted graph, clear of the floating graph toolbars. */
-.skeleton[data-variant="canvas"] {
-  height: 100%;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  gap: 16px;
-}
-
-.skeleton[data-variant="canvas"] .skeleton-label {
-  order: 1;
-}
-
-.skeleton[data-variant="canvas"] .skeleton-shape {
-  flex-direction: row;
-  align-items: center;
-  gap: 40px;
-}
-
-.skeleton-block {
-  display: block;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--fill-control);
 }
 
-.skeleton-host {
-  flex: none;
-  width: 168px;
-  height: 52px;
+.skeleton-bone[data-shape="button"] {
+  width: var(--bone-width, 84px);
+  height: 30px;
 }
 
-.skeleton[data-variant="canvas"] .skeleton-items {
-  width: 248px;
-  gap: 12px;
-  padding: 14px 12px;
-  border: 1px solid var(--border-subtle);
+.skeleton-bone[data-shape="icon"] {
+  width: 28px;
+  height: 28px;
   border-radius: var(--radius-md);
+  background: var(--fill-control);
 }
 
-.skeleton-label {
-  color: var(--text-muted);
-  font-size: 11.5px;
+.skeleton-bone[data-shape="mark"] {
+  width: 18px;
+  height: 18px;
+}
+
+.skeleton-bone[data-shape="dot"] {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.skeleton-bone[data-shape="block"] {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.skeleton-inline {
+  display: inline-block;
+  height: 0.8em;
+  vertical-align: middle;
+}
+
+.skeleton-row,
+.skeleton-fields > div {
+  animation: skeleton-pulse 1.8s var(--ease) infinite both;
+  animation-delay: calc(var(--skeleton-row, 0) * 90ms);
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Placeholder rows sit in the real list, field, and section layouts; these only
+   align the shapes that stand in for text. */
+.skeleton .row-main {
+  gap: 5px;
+}
+
+.skeleton .row-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.skeleton-fields > div {
+  align-items: center;
+}
+
+.skeleton .skeleton-time {
+  grid-area: time;
+}
+
+.skeleton .exit-status {
+  justify-self: end;
+}
+
+.skeleton .history-command {
+  padding-block: 14px;
+}
+
+.skeleton .skeleton-legend {
+  margin-bottom: 8px;
+}
+
+.skeleton .skeleton-radio {
+  width: 14px;
+  height: 14px;
+}
+
+.skeleton-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.skeleton .port-disclosure {
+  padding-bottom: 4px;
+}
+
+.skeleton-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 10px;
+}
+
+.skeleton-lines > span {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.skeleton-lines [data-shape="caption"] {
+  margin-top: 0;
+}
+
+/* A labelled control: its caption over the control, as a form field. */
+.skeleton-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* The graph skeleton is drawn at the shared graph's own card sizes and fitted
+   like a loaded graph, clear of the canvas toolbars. */
+.skeleton-graph-frame {
+  position: absolute;
+  inset: 72px 24px 64px;
+  display: grid;
+  place-items: center;
+}
+
+.skeleton-graph {
+  width: min(100%, 702px);
+  max-height: 100%;
+}
+
+.skeleton-graph-links path {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.skeleton-graph-host {
+  fill: var(--surface-raised);
+  stroke: var(--border-strong);
+}
+
+.skeleton-graph-group {
+  fill: var(--surface-base);
+  stroke: var(--border);
+}
+
+.skeleton-graph-head {
+  fill: var(--surface-raised);
+}
+
+.skeleton-graph-chip {
+  fill: var(--fill-control);
+  stroke: var(--border-subtle);
+}
+
+.skeleton-graph-bone {
+  fill: var(--fill-active);
+}
+
+.skeleton-graph rect,
+.skeleton-graph path,
+.skeleton-graph circle {
+  vector-effect: non-scaling-stroke;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .skeleton {
+  .skeleton,
+  .skeleton-row,
+  .skeleton-fields > div {
     animation: none;
   }
 }
@@ -8990,7 +9079,8 @@ kbd {
   height: 100%;
 }
 
-/* Nodes already on the canvas stay put while more are discovered. */
+/* One status names the read, over the skeleton graph on first load and over
+   the nodes already on the canvas while more are discovered. */
 .arch-loading-status {
   position: absolute;
   bottom: 12px;
@@ -9369,6 +9459,8 @@ details[open] > .inspector-disclosure-body {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   animation: popover-in var(--motion-fast) var(--ease);
+  /* Placeholders step up with the lighter overlay surface. */
+  --skeleton-fill: var(--border);
 }
 
 .font-suggestions li:hover {

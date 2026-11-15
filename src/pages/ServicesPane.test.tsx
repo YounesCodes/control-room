@@ -590,7 +590,7 @@ describe("ServicesPane failed units view", () => {
     expect(statuses()).not.toContain("Reading systemd units…");
   });
 
-  it("holds the inspector's fields and unit files in place until they are read", async () => {
+  it("holds every inspector section in one skeleton until details are read", async () => {
     api.inspectSystemdUnit.mockReset().mockReturnValue(new Promise(() => {}));
     const user = userEvent.setup();
     render(
@@ -603,14 +603,13 @@ describe("ServicesPane failed units view", () => {
     );
     await user.click(screen.getByRole("button", { name: /a.service description/ }));
     const inspector = screen.getByRole("complementary", { name: "Unit details" });
-    const statuses = () =>
+    expect(within(inspector).getByRole("heading", { name: "a.service" })).toBeTruthy();
+    expect(
       within(inspector)
         .getAllByRole("status")
-        .map((status) => status.textContent);
-    expect(statuses()).toContain("Reading unit details…");
-    expect(within(inspector).queryByText("Unavailable")).toBeNull();
-    await user.click(within(inspector).getByText("Configuration", { selector: "summary" }));
-    expect(statuses()).toContain("Reading unit files…");
+        .map((status) => status.textContent),
+    ).toEqual(["Reading unit details…"]);
+    expect(within(inspector).queryByText("Configuration", { selector: "summary" })).toBeNull();
     expect(within(inspector).queryByText("Unavailable")).toBeNull();
   });
 

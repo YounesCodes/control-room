@@ -76,6 +76,12 @@ it.each(["worker.service", "worker.socket", "backup.timer"])(
       unitId,
       summary: null,
       revision: 0,
+      result: {
+        value: systemdInspection(unitId, {}),
+        fetchedAt: Date.now(),
+        loading: false,
+        error: null,
+      },
       onRefresh: vi.fn(),
       onViewLogs: vi.fn(),
       onRequestPorts,

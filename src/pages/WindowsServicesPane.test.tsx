@@ -44,17 +44,16 @@ describe("Windows service inventory", () => {
     expect(screen.getByText("Manual")).toBeTruthy();
     expect(screen.getByText("Not running")).toBeTruthy();
   });
-  it("sketches the list in place while reading and keeps rows during a refresh", async () => {
+  it("sketches the whole page while reading and keeps rows during a refresh", async () => {
     let finish: (value: typeof services) => void = () => {};
     listWindowsServices.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
     render(<WindowsServicesPane connection={{ id: "windows-host" } as SavedConnection} />);
     expect(screen.getByRole("heading", { name: "Services" })).toBeTruthy();
-    expect(screen.getByRole("textbox", { name: "Search Windows services" })).toBeTruthy();
-    expect(screen.getAllByRole("status").map((status) => status.textContent)).toContain(
-      "Reading Windows services…",
-    );
+    expect(screen.queryByRole("textbox", { name: "Search Windows services" })).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("Reading Windows services…");
     finish(services);
     await screen.findByText("1 running / 2 total");
+    expect(screen.getByRole("textbox", { name: "Search Windows services" })).toBeTruthy();
     expect(screen.queryByRole("status")).toBeNull();
 
     listWindowsServices.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));

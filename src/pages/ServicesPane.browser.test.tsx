@@ -2081,3 +2081,31 @@ it("keeps the inspected relationship node framed when the viewport resizes", asy
     expect(new DOMMatrix(camera()).a).toBeCloseTo(scale);
   });
 });
+
+it("sketches the whole explorer on first read, passes axe, and lands rows where it stood", async () => {
+  await page.viewport(1280, 800);
+  const pane = (loading: boolean, items: SystemdUnit[]) => (
+    <ConnectionSection section="services">
+      <ServicesPane
+        connection={host}
+        cache={{ items, fetchedAt: loading ? null : Date.now(), loading, error: null }}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+        onOpenPorts={vi.fn()}
+      />
+    </ConnectionSection>
+  );
+  const view = render(pane(true, []));
+  const status = screen.getByRole("status");
+  expect(status.textContent).toBe("Reading systemd units…");
+  expect(screen.queryByRole("group", { name: "Systemd view" })).toBeNull();
+  expect((await audit()).violations).toEqual([]);
+  const sketch = status.getBoundingClientRect();
+
+  view.rerender(pane(false, units));
+  const row = screen.getByRole("button", { name: /worker.service Queue worker/ });
+  const box = row.getBoundingClientRect();
+  expect(box.left).toBeCloseTo(sketch.left, 0);
+  expect(box.top).toBeCloseTo(sketch.top, 0);
+  expect(screen.getByRole("group", { name: "Systemd view" })).toBeTruthy();
+});

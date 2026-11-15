@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
-import { EmptyState, ErrorState, Skeleton } from "../components/PanelState";
+import { Bone, EmptyState, ErrorState, Skeleton, boneWidth, wave } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import { notifyHistoryChanged, onHistoryChanged } from "../lib/history-events";
 import type { HistoryEntry, HistoryIntegrationStatus, SavedConnection } from "../types";
@@ -579,6 +579,51 @@ export function HistoryPane({
     }
   }
 
+  // The first read sketches the whole page: its actions wait on what the read
+  // finds, and the list keeps its timeline layout.
+  if (loading && !hasLoaded && !error)
+    return (
+      <section className="feature-page history-page">
+        <header className="page-heading compact-heading">
+          <div className="page-heading-title">
+            <h2>Command History</h2>
+            <Bone shape="caption" width="64px" />
+          </div>
+          <div className="toolbar-actions">
+            <Bone shape="button" width="72px" />
+            <Bone shape="button" width="82px" />
+            <Bone shape="icon" />
+          </div>
+        </header>
+        <div className="history-search-row">
+          <Bone shape="control" className="search-field" />
+        </div>
+        <Skeleton label="Reading Command History…" className="history-list">
+          <section className="history-group">
+            <h3>
+              <Bone shape="caption" width="72px" />
+            </h3>
+            {Array.from({ length: 7 }, (_, index) => (
+              <div className="history-row skeleton-row" key={index} style={wave(index)}>
+                <div className="history-row-inner">
+                  <Bone shape="caption" width="58px" className="skeleton-time" />
+                  <Bone shape="dot" className="exit-status" />
+                  <span className="history-command">
+                    <Bone width={boneWidth(index, 300, "px")} />
+                  </span>
+                  <Bone
+                    shape="caption"
+                    width={boneWidth(index + 3, 90, "px")}
+                    className="history-cwd"
+                  />
+                </div>
+              </div>
+            ))}
+          </section>
+        </Skeleton>
+      </section>
+    );
+
   return (
     <section className="feature-page history-page">
       <header className="page-heading compact-heading">
@@ -816,7 +861,6 @@ export function HistoryPane({
         </div>
       )}
       <div className="history-list" data-loading={loading ? "" : undefined}>
-        {loading && !hasLoaded && !error && <Skeleton label="Reading Command History…" count={8} />}
         {search && hasLoaded && !loading && !error && !grouped.length && (
           <EmptyState title="No matching commands">
             <p>

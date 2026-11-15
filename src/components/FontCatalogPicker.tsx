@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { ChevronDown } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
-import { Skeleton } from "./PanelState";
+import { Bone, Skeleton, boneWidth, wave } from "./PanelState";
 import type { CatalogFont, FontCatalog, FontProgress } from "../types";
 
 export function FontCatalogPicker({
@@ -328,9 +328,16 @@ export function FontCatalogPicker({
           ))}
         </ul>
         {open && loading && !results.length && (
-          <div className="font-suggestions">
-            <Skeleton label="Loading font catalog…" variant="lines" count={5} />
-          </div>
+          <Skeleton label="Loading font catalog…" className="font-suggestions">
+            <ul className="skeleton-list">
+              {Array.from({ length: 5 }, (_, index) => (
+                <li className="skeleton-row" key={index} style={wave(index)}>
+                  <Bone width={boneWidth(index, 150, "px")} />
+                  <Bone shape="caption" width={boneWidth(index + 4, 52, "px")} />
+                </li>
+              ))}
+            </ul>
+          </Skeleton>
         )}
       </div>
       <small id="font-catalog-help">

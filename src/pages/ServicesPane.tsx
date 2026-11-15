@@ -1,6 +1,12 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { GitBranch, X } from "lucide-react";
-import { EmptyState, ErrorState, Skeleton } from "../components/PanelState";
+import {
+  EmptyState,
+  ErrorState,
+  Skeleton,
+  SkeletonGraph,
+  SkeletonRows,
+} from "../components/PanelState";
 import {
   SystemdUnitInspector,
   type SystemdInspectorViewState,
@@ -8,7 +14,7 @@ import {
 import { SystemdInventory } from "../components/SystemdInventory";
 import { SystemdGraph } from "../components/SystemdGraph";
 import { SystemdPresence } from "../components/SystemdPresence";
-import { SystemdToolbar } from "../components/SystemdToolbar";
+import { SystemdToolbar, SystemdToolbarSkeleton } from "../components/SystemdToolbar";
 import { api, errorMessage } from "../lib/api";
 import { connectionTargetKey } from "../lib/connection-validation";
 import {
@@ -441,8 +447,32 @@ export function ServicesPane({
     />
   );
 
-  // The first read keeps the explorer in place and sketches the units it will fill.
   const firstLoad = cache.loading && !cache.items.length;
+  // The first read sketches the whole explorer, toolbar included, in its own layout.
+  if (firstLoad)
+    return (
+      <section className="feature-page systemd-page">
+        <SystemdToolbarSkeleton graph={state.mode === "graph"} />
+        {state.mode === "graph" ? (
+          <div className="arch-canvas systemd-canvas">
+            <div className="arch-viewport">
+              <Skeleton label="Reading systemd units…" className="skeleton-graph-frame">
+                <SkeletonGraph />
+              </Skeleton>
+            </div>
+          </div>
+        ) : (
+          <div className="systemd-explorer-stage">
+            <div className="systemd-inventory services-page">
+              <Skeleton label="Reading systemd units…" className="dense-list">
+                <SkeletonRows count={14} state="status" />
+              </Skeleton>
+            </div>
+          </div>
+        )}
+      </section>
+    );
+
   if (cache.error && !cache.items.length)
     return (
       <ErrorState
@@ -451,16 +481,14 @@ export function ServicesPane({
       />
     );
 
-  const snapshot = firstLoad
-    ? "Reading systemd units…"
-    : [
-        cache.items.length + " units",
-        counts.active + " active",
-        counts.failed + " failed",
-        counts.inactive + " inactive",
-        "Current system scope only, not a complete host health check",
-        cache.fetchedAt ? "Collected " + new Date(cache.fetchedAt).toLocaleTimeString() : "",
-      ].join(" · ");
+  const snapshot = [
+    cache.items.length + " units",
+    counts.active + " active",
+    counts.failed + " failed",
+    counts.inactive + " inactive",
+    "Current system scope only, not a complete host health check",
+    cache.fetchedAt ? "Collected " + new Date(cache.fetchedAt).toLocaleTimeString() : "",
+  ].join(" · ");
   return (
     <section className="feature-page systemd-page">
       <SystemdToolbar
@@ -536,24 +564,20 @@ export function ServicesPane({
                 </button>
               </div>
             )}
-            {firstLoad ? (
-              <Skeleton label="Reading systemd units…" count={10} />
-            ) : (
-              <SystemdInventory
-                units={filtered}
-                scope={state.scope}
-                selectedId={selectedId}
-                onSelect={(id) => {
-                  selectionFocus.current = "inspector";
-                  selectInventoryUnit(id);
-                }}
-                onNavigate={(id) => {
-                  selectionFocus.current = "inventory";
-                  selectInventoryUnit(id, true);
-                }}
-                emptyTitle={cache.items.length ? "No matching units" : "No units found"}
-              />
-            )}
+            <SystemdInventory
+              units={filtered}
+              scope={state.scope}
+              selectedId={selectedId}
+              onSelect={(id) => {
+                selectionFocus.current = "inspector";
+                selectInventoryUnit(id);
+              }}
+              onNavigate={(id) => {
+                selectionFocus.current = "inventory";
+                selectInventoryUnit(id, true);
+              }}
+              emptyTitle={cache.items.length ? "No matching units" : "No units found"}
+            />
           </div>
           <SystemdPresence open={visibleInspector}>
             <aside
@@ -640,9 +664,7 @@ export function ServicesPane({
               )}
             </div>
           </div>
-          {firstLoad ? (
-            <Skeleton label="Reading systemd units…" variant="canvas" />
-          ) : rootId && neighborhood ? (
+          {rootId && neighborhood ? (
             <SystemdGraph
               ids={neighborhood.ids}
               edges={neighborhood.edges}
