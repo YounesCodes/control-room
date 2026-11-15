@@ -12,6 +12,10 @@ export class TerminalProcessing {
   private lineEdited = false;
   private escape = "";
   private pasted = false;
+  /** Input arrived before any prompt was on screen. The echo of that input
+   *  can sit where the prompt is drawn later, so this line's prompt is
+   *  unknown until it is submitted. */
+  private typeahead = false;
   private marked = false;
   /** A program owns the screen, so its prompt is not the shell's. */
   private program = false;
@@ -35,6 +39,7 @@ export class TerminalProcessing {
     this.lineEdited = false;
     this.escape = "";
     this.pasted = false;
+    this.typeahead = false;
     this.marked = false;
     this.program = false;
     this.agent = false;
@@ -51,7 +56,14 @@ export class TerminalProcessing {
       const byte = character.codePointAt(0)!;
       // History, completion, and cursor keys can edit the line before any
       // printable input arrives. Keep the original prompt before that edit.
-      if (!this.busy && !this.program && !this.editing && !this.pasted && byte !== 3) {
+      if (
+        !this.busy &&
+        !this.program &&
+        !this.editing &&
+        !this.pasted &&
+        !this.typeahead &&
+        byte !== 3
+      ) {
         this.prompt = prompt;
         this.editing = prompt !== null && prompt.trim() !== "";
         this.inputLine = "";
@@ -107,10 +119,12 @@ export class TerminalProcessing {
         }
         this.inputLine = "";
         this.lineEdited = false;
+        this.typeahead = false;
         if (!this.busy) this.editing = false;
         if (command) this.submitted(command);
       } else if (byte === 3 && !this.busy) {
         this.editing = false;
+        this.typeahead = false;
         this.inputLine = "";
       } else if (byte === 9) {
         this.lineEdited = true;
@@ -119,6 +133,7 @@ export class TerminalProcessing {
       } else if (byte === 8 || byte === 127) {
         this.inputLine = this.inputLine.replace(/.$/u, "");
       } else if (byte >= 32) {
+        if (!this.busy && !this.program && !this.editing) this.typeahead = true;
         this.inputLine += character;
       }
     }

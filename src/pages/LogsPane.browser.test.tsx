@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { page } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
-import axe from "axe-core";
+import { runAxe } from "../test/axe";
 import { settings, connection } from "../test/app-fixtures";
 import type { SystemdUnit } from "../types";
 import "../styles.css";
@@ -85,6 +85,6 @@ it("has no automatically detectable accessibility violations while streaming", a
   native.output?.(new TextEncoder().encode(journal(0, 40)).buffer);
   await expect.element(page.getByText(/#39$/)).toBeInTheDocument();
   await page.getByRole("button", { name: /^Errors/ }).click();
-  const results = await axe.run(container!);
+  const results = await runAxe(container!);
   expect(results.violations.map((violation) => violation.id)).toEqual([]);
 });

@@ -90,7 +90,8 @@ jobs:
           shared-key: "tauri-release-build"
 
       # tauri-action builds, signs, and uploads to the authored GitHub draft.
-      # It uploads the installer, its .sig, and latest.json. Writing
+      # It uploads the installer and latest.json, which carries the updater
+      # signature inline, so no separate .sig asset is published. Writing
       # that JSON by hand would mean reimplementing the updater's own protocol
       # and keeping it correct across plugin versions.
       #
@@ -112,28 +113,11 @@ jobs:
           generateReleaseNotes: false
           # Only NSIS is built, so this is the bundle the updater feed must name.
           updaterJsonPreferNsis: true
+          uploadUpdaterSignatures: false
           args: --config src-tauri/tauri.release.conf.json
 
-      # SHA-256 is for a person downloading the installer by hand and checking
-      # it. The updater signature is for the application verifying an automatic
-      # update. Different audiences, different purposes, so the checksum stays.
-      - name: Attach the installer checksum
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $installer = Get-ChildItem -LiteralPath "src-tauri/target/release/bundle/nsis" -Filter "*-setup.exe" | Select-Object -First 1
-          if (-not $installer) { throw "NSIS installer was not produced" }
-          $assets = (gh release view $env:GITHUB_REF_NAME --json assets | ConvertFrom-Json).assets
-          if ($LASTEXITCODE -ne 0) { throw "Could not read published release assets" }
-          $publishedInstaller = @($assets | Where-Object { $_.name -match '-setup\.exe$' })
-          if ($publishedInstaller.Count -ne 1) { throw "Expected exactly one published NSIS installer" }
-          $checksumPath = Join-Path $installer.DirectoryName ($publishedInstaller[0].name + ".sha256")
-          $checksum = (Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$checksum  $($publishedInstaller[0].name)" | Set-Content -LiteralPath $checksumPath -Encoding ascii
-          gh release upload $env:GITHUB_REF_NAME $checksumPath --clobber
-          if ($LASTEXITCODE -ne 0) { throw "Could not upload the checksum" }
-
+      # The publish job checks the signature inside latest.json too. This
+      # catches a wrong signing key before Linux and macOS spend their builds.
       - name: Verify the Windows installer signature
         shell: pwsh
         env:
@@ -180,6 +164,7 @@ jobs:
         with:
           releaseId: ${{ needs.windows.outputs.release-id }}
           generateReleaseNotes: false
+          uploadUpdaterSignatures: false
           args: --config src-tauri/tauri.release.conf.json
 
   macos:
@@ -237,32 +222,16 @@ jobs:
         with:
           releaseId: ${{ needs.windows.outputs.release-id }}
           generateReleaseNotes: false
+          uploadUpdaterSignatures: false
           args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
-      - name: Verify the signature and notarization, then attach a checksum
+      - name: Verify the signature and notarization
         env:
-          GH_TOKEN: ${{ github.token }}
           TARGET: ${{ matrix.target }}
         run: |
-          root="src-tauri/target/$TARGET/release/bundle"
-          codesign --verify --deep --strict "$root/macos/Control Room.app"
-          spctl --assess --type execute --verbose "$root/macos/Control Room.app"
-          xcrun stapler validate "$root/macos/Control Room.app"
-          dmg=$(find "$root/dmg" -maxdepth 1 -name '*.dmg' -print -quit)
-          test -n "$dmg"
-          gh release view "$GITHUB_REF_NAME" --json assets > release-assets.json
-          name=$(LOCAL_DMG="$dmg" node --input-type=module <<'NODE'
-          import { readFileSync } from 'node:fs';
-          import { basename } from 'node:path';
-          const normalize = name => name.replace(/[^a-z0-9]/gi, '').toLowerCase();
-          const assets = JSON.parse(readFileSync('release-assets.json', 'utf8')).assets;
-          const matches = assets.filter(asset => normalize(asset.name) === normalize(basename(process.env.LOCAL_DMG)));
-          if (matches.length !== 1) throw new Error('Could not identify the published DMG');
-          console.log(matches[0].name);
-          NODE
-          )
-          checksum=$(shasum -a 256 "$dmg" | cut -d ' ' -f 1)
-          printf '%s  %s\n' "$checksum" "$name" > "$name.sha256"
-          gh release upload "$GITHUB_REF_NAME" "$name.sha256" --clobber
+          app="src-tauri/target/$TARGET/release/bundle/macos/Control Room.app"
+          codesign --verify --deep --strict "$app"
+          spctl --assess --type execute --verbose "$app"
+          xcrun stapler validate "$app"
 
   publish:
     name: Verify all enabled platforms and publish
@@ -282,22 +251,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           INCLUDE_MACOS: ${{ vars.MACOS_RELEASES }}
         run: |
+          # Checks the asset list and every signature in latest.json, then
+          # writes and re-checks SHA256SUMS.txt.
           node scripts/verify-release-assets.mjs
           node scripts/generate-release-notes.mjs --sync-feed latest.json
-          if [[ $INCLUDE_MACOS == true ]]; then
-            for arch in aarch64 x86_64; do
-              ARCH=$arch node -e 'const feed = JSON.parse(require("fs").readFileSync("latest.json", "utf8")); if (!feed.platforms["darwin-" + process.env.ARCH]) { console.error("Missing darwin-" + process.env.ARCH + " updater entry"); process.exit(1); }'
-            done
-            mkdir macos-artifacts
-            gh release download "$GITHUB_REF_NAME" --pattern '*.app.tar.gz' --pattern '*.app.tar.gz.sig' --dir macos-artifacts
-            archives=(macos-artifacts/*.app.tar.gz)
-            test "${#archives[@]}" -eq 2
-            for archive in "${archives[@]}"; do
-              node scripts/verify-updater-signature.mjs "$archive" "$archive.sig"
-            done
-            test "$(gh release view "$GITHUB_REF_NAME" --json assets --jq '[.assets[].name | select(test("[.]dmg$"))] | length')" -eq 2
-            test "$(gh release view "$GITHUB_REF_NAME" --json assets --jq '[.assets[].name | select(test("[.]dmg[.]sha256$"))] | length')" -eq 2
-          fi
           gh release upload "$GITHUB_REF_NAME" latest.json --clobber
           gh release download "$GITHUB_REF_NAME" --pattern latest.json --dir verified-feed
           node scripts/generate-release-notes.mjs --validate-feed verified-feed/latest.json

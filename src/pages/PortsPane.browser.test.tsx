@@ -11,7 +11,7 @@ import type {
   SavedConnection,
 } from "../types";
 import { api } from "../lib/api";
-import axe from "axe-core";
+import { runAxe } from "../test/axe";
 import { PortsPane } from "./PortsPane";
 import { tabKey, shiftTabKey } from "../test/keyboard";
 import { settleMotion } from "../test/motion";
@@ -591,7 +591,7 @@ it("consolidates dual-stack Docker listeners and makes secondary peers and scope
   expect(screen.queryByRole("button", { name: /6379/ })).toBeNull();
   const filtersRegion = screen.getByRole("region", { name: "Port filters" });
   await settleMotion(filtersRegion);
-  expect((await axe.run(filtersRegion)).violations).toEqual([]);
+  expect((await runAxe(filtersRegion)).violations).toEqual([]);
   await page.getByRole("button", { name: "Reset filters" }).click();
   await page.getByRole("button", { name: "Close port tools" }).click();
   await page.getByRole("button", { name: /443.*Listening/ }).click();
@@ -605,7 +605,7 @@ it("consolidates dual-stack Docker listeners and makes secondary peers and scope
   await page.getByText("Host firewall policy", { exact: true }).click();
   expect(within(inspector).getByText(/Host policy is not a reachability test/)).toBeTruthy();
   await settleMotion(inspector);
-  expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
+  expect((await runAxe(document.querySelector(".ports-page")!)).violations).toEqual([]);
   await page.screenshot({ path: "../../test-results/ports-consolidated.png" });
 });
 
@@ -677,7 +677,7 @@ it("keeps sshd worker connections immediately below the related SSH listener", a
   expect(within(inspector).getByText("Related to ssh.service")).toBeTruthy();
   expect(within(inspector).getByText("200")).toBeTruthy();
   expect(within(inspector).queryByRole("button", { name: "Open unit" })).toBeNull();
-  expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
+  expect((await runAxe(document.querySelector(".ports-page")!)).violations).toEqual([]);
 });
 
 it("commits the selection when pressing a chip beside the inspector panel", async () => {

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import { useState } from "react";
-import axe from "axe-core";
+import { runAxe } from "../test/axe";
 import { Plus } from "lucide-react";
 import {
   ConnectionSection,
@@ -409,7 +409,7 @@ describe("resizable connection panels in Chromium", () => {
     await expect.element(divider).toHaveAttribute("aria-valuenow", "260");
     await userEvent.keyboard("{Enter}");
     await expect.element(divider).toHaveAttribute("aria-valuenow", "244");
-    const result = await axe.run(mountNode!, {
+    const result = await runAxe(mountNode!, {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
     });
     expect(result.violations.map(({ id }) => id)).toEqual([]);
@@ -702,7 +702,7 @@ describe("resizable connection panels in Chromium", () => {
       expect(inspector.bottom).toBeLessThanOrEqual(workspace.bottom);
     });
     assertNoHorizontalOverflow(".arch-detail");
-    expect((await axe.run(document.querySelector(".ports-page")!)).violations).toEqual([]);
+    expect((await runAxe(document.querySelector(".ports-page")!)).violations).toEqual([]);
     await page.screenshot({ path: "../../test-results/ports-minimum-window.png" });
     await userEvent.keyboard("{Escape}");
     await expect

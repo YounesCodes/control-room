@@ -3,6 +3,7 @@ import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import { useState, type ReactNode } from "react";
 import axe from "axe-core";
+import { runAxe } from "../test/axe";
 import { Plus } from "lucide-react";
 import { Modal } from "./Modal";
 import { CommandPalette } from "./CommandPalette";
@@ -26,10 +27,7 @@ function mount(content: ReactNode) {
 
 async function expectAccessibleDialog() {
   const dialog = page.getByRole("dialog").element();
-  for (const animation of dialog.parentElement?.getAnimations({ subtree: true }) ?? []) {
-    if (animation.playState === "running") animation.finish();
-  }
-  const result = await axe.run(dialog, {
+  const result = await runAxe(dialog, {
     runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
   });
   expect(
@@ -296,6 +294,25 @@ function TabNameFixture() {
 }
 
 describe("critical UI in Chromium", () => {
+  it("runs axe on settled colors, not on a fade that is still running", async () => {
+    mount(
+      <div style={{ background: "#030303", padding: 8 }}>
+        <span style={{ color: "rgb(255, 111, 125)", fontWeight: 700 }}>ANSI 1</span>
+      </div>,
+    );
+    await expect.element(page.getByText("ANSI 1")).toBeVisible();
+    const panel = container!.firstElementChild as HTMLElement;
+    const fade = panel.animate([{ opacity: 0.7 }, { opacity: 1 }], 160);
+    fade.pause();
+    // A paused fade never finishes, so the helper must not wait on it; this is
+    // the color axe sampled in the original flake.
+    expect(document.getAnimations().filter((a) => a.playState === "running")).toEqual([]);
+    expect((await axe.run(panel, { runOnly: ["color-contrast"] })).violations).not.toEqual([]);
+    fade.play();
+    expect((await runAxe(panel, { runOnly: ["color-contrast"] })).violations).toEqual([]);
+    expect(fade.playState).toBe("finished");
+  });
+
   it("keeps dialog text readable inside a parent with a dark foreground", async () => {
     mount(
       <div style={{ color: "#000" }}>
@@ -532,7 +549,7 @@ describe("critical UI in Chromium", () => {
     expect(bounds.left).toBeGreaterThanOrEqual(8);
     expect(bounds.right).toBeLessThanOrEqual(792);
     expect(bounds.bottom).toBeLessThanOrEqual(632);
-    const violations = await axe.run(menu.element(), {
+    const violations = await runAxe(menu.element(), {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
     });
     expect(violations.violations.map((violation) => violation.id)).toEqual([]);
@@ -783,7 +800,7 @@ describe("critical UI in Chromium", () => {
     expect(back.getBoundingClientRect().top).toBeGreaterThanOrEqual(0);
     expect(save.getBoundingClientRect().bottom).toBeLessThanOrEqual(640);
     expect(save).toHaveAccessibleName("Save settings");
-    const result = await axe.run(container!, {
+    const result = await runAxe(container!, {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
     });
     expect(result.violations.map(({ id, nodes }) => `${id}: ${nodes.length} nodes`)).toEqual([]);
@@ -989,7 +1006,7 @@ describe("critical UI in Chromium", () => {
         .map((animation) => animation.finished.catch(() => undefined)),
     );
     expect(
-      (await axe.run(container!, { rules: { region: { enabled: false } } })).violations,
+      (await runAxe(container!, { rules: { region: { enabled: false } } })).violations,
     ).toEqual([]);
   });
 
@@ -1197,7 +1214,7 @@ describe("critical UI in Chromium", () => {
       await search.fill("");
       await expect.element(page.getByLabelText("Font size", { exact: true })).toHaveValue(16);
       expect(container!.scrollWidth).toBeLessThanOrEqual(width);
-      const result = await axe.run(container!, {
+      const result = await runAxe(container!, {
         runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
       });
       expect(result.violations.map(({ id }) => id)).toEqual([]);
@@ -1319,6 +1336,6 @@ it("makes newly enabled Scratchpad actions fully readable without an opacity fad
     }
   }
   expect(getComputedStyle(control).opacity).toBe("1");
-  const result = await axe.run(container!, { runOnly: ["color-contrast"] });
+  const result = await runAxe(container!, { runOnly: ["color-contrast"] });
   expect(result.violations).toEqual([]);
 });
