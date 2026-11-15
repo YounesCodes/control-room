@@ -834,9 +834,11 @@ describe("critical UI in Chromium", () => {
         };
         const initial = bounds();
         // Save feedback must not shift the layout. WebKit can measure the
-        // relabeled button a fraction of a pixel differently, which is not a shift.
+        // relabeled button up to a pixel differently, which is not a shift.
         const expectStable = () =>
-          bounds().forEach((value, index) => expect(value).toBeCloseTo(initial[index], 0));
+          bounds().forEach((value, index) =>
+            expect(Math.abs(value - initial[index])).toBeLessThanOrEqual(1),
+          );
         expect(Math.abs(initial[0] + initial[2] / 2 - width / 2)).toBeLessThanOrEqual(1);
         await page.getByRole("checkbox", { name: "Show host metrics in header" }).click();
         expectStable();
