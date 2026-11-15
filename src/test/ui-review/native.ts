@@ -295,7 +295,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
                 ? {
                     sessionId: "example-session",
                     state: "disconnected",
-                    reason: "Connection to example.invalid closed by remote host.",
+                    reason: "SSH session ended.",
                   }
                 : { sessionId: "example-session", state: "connected", reason: null },
           }),

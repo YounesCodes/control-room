@@ -376,7 +376,7 @@ selection. Other mouse-tracking programs keep their own drag gestures.
 Terminal search opens as a compact overlay that does not reduce terminal
 height. It is the shared search field, with its match count, Previous, Next,
 and Close inside it. Terminal notices are inline errors or warnings in a strip
-above the output, with a dismiss cross when no recovery action applies. Keep matches distinguishable without washing out ANSI colors, and make
+above the output; a shell that ended on its own gets a neutral notice, with a dismiss cross when no recovery action applies. Keep matches distinguishable without washing out ANSI colors, and make
 the active match the most prominent.
 
 Keep the command palette searchable and keyboard-operable, and make shortcuts

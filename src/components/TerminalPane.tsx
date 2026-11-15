@@ -732,6 +732,9 @@ export function TerminalPane({
   }
 
   const terminalEnded = workspace.state === "disconnected" || workspace.state === "error";
+  // A shell that ended on its own (`exit`, Ctrl-D) is ordinary, not a failure.
+  const noticeTone =
+    localNotice?.tone ?? (workspace.state === "disconnected" ? "neutral" : "error");
   return (
     <section
       className={`terminal-pane ${visible ? "terminal-visible" : "terminal-hidden"}`}
@@ -740,8 +743,8 @@ export function TerminalPane({
       {(localNotice || workspace.reason) && (
         <div
           className="terminal-notice"
-          data-tone={localNotice?.tone ?? "error"}
-          role={localNotice?.tone === "warning" ? "status" : "alert"}
+          data-tone={noticeTone}
+          role={noticeTone === "error" ? "alert" : "status"}
         >
           <span className="terminal-notice-message">
             {localNotice?.message ?? workspace.reason}

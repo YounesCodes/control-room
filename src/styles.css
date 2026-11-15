@@ -3510,6 +3510,12 @@ code,
   color: color-mix(in srgb, var(--notice-tone) 45%, var(--text));
 }
 
+.terminal-notice[data-tone="neutral"] {
+  --notice-tone: var(--text-muted);
+  background: var(--surface-raised);
+  color: var(--text-muted);
+}
+
 .terminal-notice::before {
   content: "";
   align-self: center;
@@ -3525,6 +3531,11 @@ code,
 .terminal-notice[data-tone="warning"]::before {
   /* lucide triangle-alert */
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
+}
+
+.terminal-notice[data-tone="neutral"]::before {
+  /* lucide circle-stop */
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Crect x='9' y='9' width='6' height='6' rx='1'/%3E%3C/svg%3E");
 }
 
 .terminal-notice-message {
