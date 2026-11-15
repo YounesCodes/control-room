@@ -120,11 +120,9 @@ export function TerminalPane({
   const processingRef = useRef<TerminalProcessing | null>(null);
   if (!processingRef.current) {
     processingRef.current = new TerminalProcessing(
-      (busy) => {
-        if (busy) titleRef.current?.marker("C");
-        onProcessingRef.current(busy);
-      },
+      (busy) => onProcessingRef.current(busy),
       () => titleRef.current?.idle(),
+      (command) => titleRef.current?.command(command),
     );
   }
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
@@ -377,9 +375,6 @@ export function TerminalPane({
       processingRef.current?.shellMarker(data);
       return false;
     });
-    const titleDisposable = terminal.onTitleChange((title) => {
-      if (sessionIdRef.current) titleRef.current?.report(title);
-    });
     const progressDisposable = terminal.parser.registerOscHandler(9, (data) => {
       if (!sessionIdRef.current) return false;
       return processingRef.current?.progress(data) ?? false;
@@ -401,10 +396,8 @@ export function TerminalPane({
           return true;
         }
         processingRef.current?.command(event.kind === "start");
-        if (event.kind === "start") {
-          titleRef.current?.marker("C");
-          titleRef.current?.report(event.command);
-        } else titleRef.current?.idle();
+        if (event.kind === "start") titleRef.current?.command(event.command);
+        else titleRef.current?.idle();
         if (!connectionIdRef.current) return true;
         if (event.kind === "start") {
           pendingHistoryRef.current = {
@@ -497,7 +490,6 @@ export function TerminalPane({
       bellDisposable.dispose();
       searchDisposable.dispose();
       promptDisposable.dispose();
-      titleDisposable.dispose();
       progressDisposable.dispose();
       oscDisposable.dispose();
       processingRef.current?.reset();
@@ -677,6 +669,7 @@ export function TerminalPane({
             initialRows,
             output,
             workspace.remoteShell?.id ?? null,
+            workspace.container?.id ?? null,
           );
     })();
 
@@ -838,6 +831,9 @@ export function TerminalPane({
   }
 
   const terminalEnded = workspace.state === "disconnected" || workspace.state === "error";
+  // A shell that ended on its own (`exit`, Ctrl-D) is ordinary, not a failure.
+  const noticeTone =
+    localNotice?.tone ?? (workspace.state === "disconnected" ? "neutral" : "error");
   return (
     <section
       className={`terminal-pane ${visible ? "terminal-visible" : "terminal-hidden"}`}
@@ -846,8 +842,8 @@ export function TerminalPane({
       {(localNotice || workspace.reason) && (
         <div
           className="terminal-notice"
-          data-tone={localNotice?.tone ?? "error"}
-          role={localNotice?.tone === "warning" ? "status" : "alert"}
+          data-tone={noticeTone}
+          role={noticeTone === "error" ? "alert" : "status"}
         >
           <span className="terminal-notice-message">
             {localNotice?.message ?? workspace.reason}

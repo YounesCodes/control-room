@@ -1,6 +1,6 @@
 import { InspectorDisclosure } from "./InspectorDisclosure";
 import type { PublishedPortSelection } from "../lib/port-inspector";
-import { FileClock, RefreshCw } from "lucide-react";
+import { FileClock, RefreshCw, SquareTerminal } from "lucide-react";
 import { ErrorState, LoadingState } from "./PanelState";
 import { ContainerImageIcon } from "./ContainerImageIcon";
 import type { CachedValue, DockerContainer, DockerContainerDetails } from "../types";
@@ -195,11 +195,13 @@ export function DockerContainerInspector({
   onRefresh,
   onRetryWithSudo,
   onViewLogs,
+  onOpenTerminal,
   windowsHost = false,
   onOpenPort,
   macosHost = false,
 }: {
   onOpenPort?: (port: PublishedPortSelection) => void;
+  onOpenTerminal?: () => void;
   summary: DockerContainer;
   cache?: CachedValue<DockerContainerDetails>;
   onRefresh: () => void;
@@ -215,6 +217,8 @@ export function DockerContainerInspector({
     : null;
 
   const details = cache?.value;
+  // `docker exec` needs a running container. The freshest reading decides.
+  const running = details ? details.running : summary.state === "running";
 
   return (
     <>
@@ -268,6 +272,20 @@ export function DockerContainerInspector({
         )}
       </div>
       <div className="detail-actions">
+        {onOpenTerminal &&
+          (running ? (
+            <button className="secondary-button" type="button" onClick={onOpenTerminal}>
+              <SquareTerminal size={15} /> Open terminal
+            </button>
+          ) : (
+            // A disabled button receives no pointer events, so its reason sits
+            // on a wrapper the tooltip layer can reach.
+            <span className="detail-action-reason" title="Start the container to open a terminal">
+              <button className="secondary-button" type="button" disabled>
+                <SquareTerminal size={15} /> Open terminal
+              </button>
+            </span>
+          ))}
         <button className="secondary-button" type="button" onClick={onViewLogs}>
           <FileClock size={15} /> View logs
         </button>

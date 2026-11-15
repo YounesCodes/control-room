@@ -8,7 +8,11 @@ import {
   orientTerminalLayout,
 } from "./terminal-layout";
 import { persistWorkspaceState, restoreWorkspaceState } from "./workspace-persistence";
-import { createLocalWorkspace, createRemoteWorkspace } from "./workspace-target";
+import {
+  createContainerWorkspace,
+  createLocalWorkspace,
+  createRemoteWorkspace,
+} from "./workspace-target";
 import type {
   LocalShellProfile,
   PersistedWorkspaceState,
@@ -159,6 +163,40 @@ describe("Workspace restoration", () => {
     expect((restored.workspaces[0] as RemoteWorkspace).remoteShell).toEqual(workspace.remoteShell);
     expect(restored.workspaces[0].connectRequested).toBe(true);
     expect(restored.workspaces[0].sessionId).toBeNull();
+  });
+  it("reopens a Container Terminal on the same container in its terminal", () => {
+    const host = createRemoteWorkspace(connection("docker-host"));
+    const container = {
+      ...createContainerWorkspace(connection("docker-host"), {
+        id: "a".repeat(64),
+        name: "web",
+        image: "nginx:1.27",
+      }),
+      sessionId: "old-session",
+      state: "connected" as const,
+    };
+    const saved = persistWorkspaceState([host, container], container.id, []);
+    expect(saved.workspaces[0]).not.toHaveProperty("container");
+    expect(saved.workspaces[1].container).toEqual({
+      id: "a".repeat(64),
+      name: "web",
+      image: "nginx:1.27",
+    });
+
+    const restored = restoreWorkspaceState([connection("docker-host")], {
+      ...saved,
+      // A view other than Terminal never belongs to a Container Terminal.
+      workspaces: saved.workspaces.map((item, index) =>
+        index === 1 ? { ...item, view: "docker" } : item,
+      ),
+    });
+    const reopened = restored.workspaces[1] as RemoteWorkspace;
+    expect(reopened.container).toEqual(container.container);
+    expect(reopened.view).toBe("terminal");
+    expect(reopened.sessionId).toBeNull();
+    expect(reopened.connectRequested).toBe(true);
+    expect(restored.activeWorkspaceId).toBe(container.id);
+    expect((restored.workspaces[0] as RemoteWorkspace).container).toBeUndefined();
   });
   it("restores tabs and splits with fresh connection requests and no session IDs", () => {
     const state: PersistedWorkspaceState = {

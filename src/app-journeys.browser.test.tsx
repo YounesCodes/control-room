@@ -3291,6 +3291,83 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .toHaveValue(fixtures.container.id);
   });
 
+  it("opens a container terminal from Docker as a leaf under its host", async () => {
+    await mount();
+    await navigate("Docker");
+    await page.getByRole("button", { name: /fixture-web/ }).click();
+    await page.getByRole("button", { name: "Open terminal", exact: true }).click();
+
+    // The session names only the container's full ID, never a command.
+    await vi.waitFor(() =>
+      expect(
+        native.invoke.mock.calls.filter(
+          ([command, args]) => command === "start_session" && args?.containerId,
+        ),
+      ).toHaveLength(1),
+    );
+    const started = native.invoke.mock.calls.find(
+      ([command, args]) => command === "start_session" && args?.containerId,
+    )![1];
+    expect(started).toMatchObject({
+      connectionId: "host-a",
+      remoteShellId: null,
+      containerId: fixtures.container.id,
+    });
+
+    // The tab names the container and, quieter, its host.
+    const tabs = page.getByRole("navigation", { name: "Open Workspaces" });
+    const tab = tabs.getByRole("button", { name: "fixture-web Fixture Alpha" });
+    await expect.element(tab).toHaveAttribute("aria-current", "page");
+    await expect
+      .element(tab)
+      .toHaveAccessibleDescription("Container terminal on Fixture Alpha, Terminal connected");
+
+    // The host card gains a leaf; the leaf, not the card, is selected, and a
+    // container terminal is terminal-only.
+    const leaves = page.getByRole("list", { name: "Container terminals on Fixture Alpha" });
+    const leaf = leaves.getByRole("button", { name: "fixture-web", exact: true });
+    await expect.element(leaf).toHaveAttribute("aria-current", "page");
+    expect(element.querySelector(".host-row.active")).toBeNull();
+    await expect
+      .element(page.getByRole("navigation", { name: "Workspace features" }))
+      .not.toBeInTheDocument();
+
+    // The host card returns to the host's own Workspace, still on Docker.
+    await page
+      .getByRole("navigation", { name: "Saved connections" })
+      .getByRole("button", { name: /Fixture Alpha/ })
+      .first()
+      .click();
+    await expect
+      .element(page.getByRole("heading", { name: "fixture-web", exact: true }))
+      .toBeVisible();
+    expect(element.querySelector(".host-row.active")).not.toBeNull();
+    await expect.element(leaf).not.toHaveAttribute("aria-current");
+
+    // Opening the same container again brings its terminal back rather than
+    // starting a second shell.
+    await page.getByRole("button", { name: "Open terminal", exact: true }).click();
+    await expect.element(leaf).toHaveAttribute("aria-current", "page");
+    expect(
+      native.invoke.mock.calls.filter(
+        ([command, args]) => command === "start_session" && args?.containerId,
+      ),
+    ).toHaveLength(1);
+
+    // Closing the leaf ends only the shell and removes the leaf. Close appears
+    // on hover, in the space the label leaves.
+    await leaf.hover();
+    await leaves
+      .getByRole("button", { name: "Close fixture-web container terminal", exact: true })
+      .click();
+    await expect.element(page.getByText(/The container keeps running\./)).toBeVisible();
+    await page.getByRole("button", { name: "Disconnect & close", exact: true }).click();
+    await expect.element(leaves).not.toBeInTheDocument();
+    await expect
+      .element(tabs.getByRole("button", { name: "fixture-web Fixture Alpha" }))
+      .not.toBeInTheDocument();
+  });
+
   it("follows a Docker publication to Ports and returns to its container", async () => {
     overrides.set("inspect_container", () => ({
       ...fixtures.containerDetails,

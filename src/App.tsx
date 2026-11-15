@@ -16,6 +16,7 @@ import {
 } from "./lib/panel-layout";
 import {
   type ComponentType,
+  Fragment,
   useCallback,
   lazy,
   memo,
@@ -69,6 +70,7 @@ import { ConnectionGroupsDialog } from "./components/ConnectionGroupsDialog";
 import { ErrorState, LoadingState } from "./components/PanelState";
 import { PromptDialog } from "./components/PromptDialog";
 import { HostOsIcon } from "./components/HostOsIcon";
+import { ContainerTerminalMark } from "./components/ContainerImageIcon";
 import { LocalShellIcon } from "./components/LocalShellIcon";
 import { WindowControls, WindowResizeHandles } from "./components/WindowControls";
 import { TerminalScratchpad } from "./components/TerminalScratchpad";
@@ -128,12 +130,16 @@ import {
   workspaceDisplayLabel,
 } from "./lib/workspace-lifecycle";
 import {
+  createContainerWorkspace,
   createLocalWorkspace,
   createRemoteWorkspace,
+  isContainerWorkspace,
   isLocalWorkspace,
   isRemoteWorkspace,
   terminalStateLabel,
+  workspaceHostContext,
   workspaceTargetName,
+  type ContainerWorkspace,
 } from "./lib/workspace-target";
 import { DockerPane } from "./pages/DockerPane";
 import { HistoryPane } from "./pages/HistoryPane";
@@ -302,6 +308,7 @@ type InspectionHandlers = {
   openSystemd: (id: string, unit: string) => void;
   openSystemdPorts: (workspace: RemoteWorkspace, unit: string) => void;
   openPort: (id: string, endpoint: PublishedPortSelection) => void;
+  openContainerTerminal: (workspace: RemoteWorkspace, container: DockerContainer) => void;
   connectionChanged: (workspace: RemoteWorkspace, saved: SavedConnection) => void;
   paste: (command: string) => void;
 };
@@ -398,6 +405,7 @@ const WorkspaceInspection = memo(function WorkspaceInspection({
             handlers.containerDetailsCache(id, containerId, details)
           }
           onViewLogs={(source) => handlers.viewLogs(id, source)}
+          onOpenTerminal={(container) => handlers.openContainerTerminal(workspace, container)}
           focusId={workspace.containerSelectionId}
         />
       )}
@@ -812,7 +820,7 @@ export function App() {
       hostCapabilities[activeRemoteWorkspace.connectionId]?.osId === "macos");
   // Local workspaces offer Terminal only; notes live in the terminal toolbar.
   const offeredNavigation =
-    activeWorkspace && isLocalWorkspace(activeWorkspace)
+    activeWorkspace && (isLocalWorkspace(activeWorkspace) || isContainerWorkspace(activeWorkspace))
       ? navigation.filter((item) => item.id === "terminal")
       : windowsWorkspace
         ? navigation
@@ -1166,7 +1174,8 @@ export function App() {
     const priority: ConnectionState[] = ["connected", "connecting", "error", "disconnected"];
     const map: Record<string, ConnectionState> = {};
     for (const workspace of workspaces) {
-      if (!isRemoteWorkspace(workspace)) continue;
+      // A Container Terminal shows its state on its own leaf under the host.
+      if (!isRemoteWorkspace(workspace) || workspace.container) continue;
       const current = map[workspace.connectionId];
       if (!current || priority.indexOf(workspace.state) < priority.indexOf(current)) {
         map[workspace.connectionId] = workspace.state;
@@ -1176,9 +1185,12 @@ export function App() {
   }, [workspaces]);
 
   const processingConnections = new Set(hostOperations);
+  // A Container Terminal's work spins its own leaf, and host reads spin the
+  // host, so neither indicator speaks for the other.
   for (const workspace of workspaces) {
     if (
       isRemoteWorkspace(workspace) &&
+      !workspace.container &&
       (terminalProcessing[workspace.id] || workspace.state === "connecting")
     ) {
       processingConnections.add(workspace.connectionId);
@@ -1189,7 +1201,9 @@ export function App() {
     return (
       workspace.state === "connecting" ||
       !!terminalProcessing[workspace.id] ||
-      (isRemoteWorkspace(workspace) && hostOperations.has(workspace.connectionId))
+      (isRemoteWorkspace(workspace) &&
+        !workspace.container &&
+        hostOperations.has(workspace.connectionId))
     );
   }
 
@@ -1515,7 +1529,10 @@ export function App() {
         const existing = [...workspaces]
           .reverse()
           .find(
-            (workspace) => isRemoteWorkspace(workspace) && workspace.connectionId === connection.id,
+            (workspace) =>
+              isRemoteWorkspace(workspace) &&
+              workspace.connectionId === connection.id &&
+              !workspace.container,
           );
         if (existing) {
           setActiveWorkspaceId(existing.id);
@@ -1543,6 +1560,37 @@ export function App() {
     if (remoteShellRequest.split) splitWithNewWorkspace(workspace);
     else openWorkspace(workspace);
     setRemoteShellRequest(null);
+  }
+
+  /// Opens a shell inside a container from Docker. A container already open in
+  /// a terminal is brought forward rather than opened twice; a new one lands
+  /// beside its host's other tabs and appears as a leaf under the host card.
+  /// The host keeps the container selected, so returning to Docker shows it.
+  function openContainerTerminal(host: RemoteWorkspace, container: DockerContainer) {
+    updateRemoteWorkspace(host.id, { containerSelectionId: container.id });
+    const existing = workspaces.find(
+      (workspace) =>
+        isContainerWorkspace(workspace) &&
+        workspace.connectionId === host.connectionId &&
+        workspace.container.id === container.id,
+    );
+    if (existing) {
+      selectWorkspaceTab(existing);
+      return;
+    }
+    const workspace = createContainerWorkspace(host.connectionSnapshot, container);
+    setWorkspaces((current) => {
+      let after = current.length - 1;
+      for (let index = current.length - 1; index >= 0; index -= 1) {
+        const item = current[index];
+        if (isRemoteWorkspace(item) && item.connectionId === host.connectionId) {
+          after = index;
+          break;
+        }
+      }
+      return [...current.slice(0, after + 1), workspace, ...current.slice(after + 1)];
+    });
+    setActiveWorkspaceId(workspace.id);
   }
 
   /// Opens a local shell as its own Workspace. Each launch is a new
@@ -1761,7 +1809,9 @@ export function App() {
         title: "Close workspace",
         message: local
           ? `Stop the local shell and close “${duplicateLabel(workspace)}”?`
-          : `Disconnect the SSH session and close “${duplicateLabel(workspace)}”?`,
+          : isContainerWorkspace(workspace)
+            ? `End the shell in container “${duplicateLabel(workspace)}” on ${workspace.connectionSnapshot.displayName} and close it? The container keeps running.`
+            : `Disconnect the SSH session and close “${duplicateLabel(workspace)}”?`,
         confirmLabel: local ? "Stop & close" : "Disconnect & close",
         danger: true,
         onConfirm: () => void performCloseWorkspace(id),
@@ -2005,6 +2055,14 @@ export function App() {
     );
   }
 
+  /// Menus list a Container Terminal by its container's name, so its host
+  /// rides along with the session state.
+  function workspaceMenuDetail(workspace: Workspace) {
+    const hostContext = workspaceHostContext(workspace);
+    const state = terminalStateLabel(workspace);
+    return hostContext ? `${hostContext} · ${state}` : state;
+  }
+
   function renameWorkspace(workspace: Workspace) {
     setRenameTarget(workspace);
   }
@@ -2038,6 +2096,8 @@ export function App() {
 
   /// Keep shell and host identity consistent across tabs, menus, and split panes.
   function workspaceMark(workspace: Workspace) {
+    if (isContainerWorkspace(workspace))
+      return <ContainerTerminalMark image={workspace.container.image} />;
     return isLocalWorkspace(workspace) ? (
       <LocalShellIcon kind={workspace.shell.kind} elevated={workspace.shell.elevated} />
     ) : (
@@ -2048,18 +2108,90 @@ export function App() {
     );
   }
 
+  /// A Container Terminal hangs under its host's card as a leaf, so the rail
+  /// shows which host each container shell runs on and reaches it in one click.
+  function renderContainerTerminalLeaf(workspace: ContainerWorkspace) {
+    const active = workspace.id === activeWorkspaceId && !settingsOpen;
+    const label = duplicateLabel(workspace);
+    return (
+      <li
+        className={["host-child-row", active ? "active" : ""].filter(Boolean).join(" ")}
+        data-session-state={workspace.state}
+        key={workspace.id}
+      >
+        <button
+          className="host-child-main"
+          type="button"
+          title={`${activityLabel(workspace)} on ${workspace.connectionSnapshot.displayName}`}
+          aria-current={active ? "page" : undefined}
+          aria-describedby={`container-session-${workspace.id}`}
+          onClick={() => {
+            selectWorkspaceTab(workspace);
+            setNavigationOpen(false);
+          }}
+        >
+          <span className="target-mark">{workspaceMark(workspace)}</span>
+          <span className="host-child-label">
+            <strong>{label}</strong>
+          </span>
+          <span className="host-session-status">
+            <span
+              className={`presence presence-${workspace.state}${workspaceProcessing(workspace) ? " presence-busy" : ""}`}
+              aria-hidden="true"
+            />
+          </span>
+        </button>
+        <span className="sr-only" id={`container-session-${workspace.id}`}>
+          Container terminal {workspaceStatus(workspace)}
+        </span>
+        <button
+          className="host-child-close"
+          type="button"
+          onClick={() => void closeWorkspace(workspace.id)}
+          aria-label={`Close ${label} container terminal`}
+        >
+          <X size={13} />
+        </button>
+      </li>
+    );
+  }
+
   function renderConnectionRow(connection: SavedConnection) {
+    const containerTerminals = workspaces.filter(
+      (workspace): workspace is ContainerWorkspace =>
+        isContainerWorkspace(workspace) && workspace.connectionId === connection.id,
+    );
+    return (
+      <Fragment key={connection.id}>
+        {renderHostRow(connection)}
+        {!!containerTerminals.length && (
+          <ul
+            className="host-children"
+            aria-label={`Container terminals on ${connection.displayName}`}
+          >
+            {containerTerminals.map(renderContainerTerminalLeaf)}
+          </ul>
+        )}
+      </Fragment>
+    );
+  }
+
+  function renderHostRow(connection: SavedConnection) {
     return (
       <div
         className={[
           "host-row",
-          activeRemoteWorkspace?.connectionId === connection.id && !settingsOpen ? "active" : "",
+          // A Container Terminal marks its own leaf, not the host card above it.
+          activeRemoteWorkspace?.connectionId === connection.id &&
+          !activeRemoteWorkspace.container &&
+          !settingsOpen
+            ? "active"
+            : "",
           hostMenuConnectionId === connection.id ? "menu-open" : "",
         ]
           .filter(Boolean)
           .join(" ")}
         data-host-menu={connection.id}
-        key={connection.id}
       >
         <button
           className="host-main"
@@ -2221,6 +2353,7 @@ export function App() {
   }
 
   function renderWorkspaceTab(workspace: Workspace, grouped = false) {
+    const hostContext = workspaceHostContext(workspace);
     return (
       <div
         className={[
@@ -2233,15 +2366,20 @@ export function App() {
         key={workspace.id}
       >
         <button
-          className="session-tab-main"
+          className={["session-tab-main", hostContext ? "has-context" : ""]
+            .filter(Boolean)
+            .join(" ")}
           type="button"
-          title={activityLabel(workspace)}
+          title={
+            hostContext ? `${activityLabel(workspace)} on ${hostContext}` : activityLabel(workspace)
+          }
           aria-current={workspace.id === activeWorkspaceId && !settingsOpen ? "page" : undefined}
           aria-describedby={`workspace-session-${workspace.id}`}
           onClick={() => selectWorkspaceTab(workspace)}
         >
           <span className="target-mark">{workspaceMark(workspace)}</span>
           <span className="session-tab-label">{activityLabel(workspace)}</span>
+          {hostContext && <span className="session-tab-context">{hostContext}</span>}
           {(workspace.state !== "connected" ||
             terminalFocusMode ||
             workspaceProcessing(workspace)) && (
@@ -2260,7 +2398,8 @@ export function App() {
           )}
         </button>
         <span className="sr-only" id={`workspace-session-${workspace.id}`}>
-          Terminal {workspaceStatus(workspace)}
+          {hostContext ? `Container terminal on ${hostContext}, ` : ""}Terminal{" "}
+          {workspaceStatus(workspace)}
         </span>
         <button
           className="session-tab-rename"
@@ -2414,6 +2553,7 @@ export function App() {
       setPortFocus({ ...endpoint, workspaceId: id });
       updateRemoteWorkspace(id, { view: "ports" });
     },
+    openContainerTerminal,
     connectionChanged(workspace, saved) {
       saveConnection(saved);
       updateRemoteWorkspace(workspace.id, {
@@ -2454,7 +2594,7 @@ export function App() {
         id: workspace.id,
         label: activityLabel(workspace),
         icon: workspaceMark(workspace),
-        detail: terminalStateLabel(workspace),
+        detail: workspaceMenuDetail(workspace),
         active: workspace.id === activeWorkspaceId && !settingsOpen,
         onSelect: () => selectWorkspaceTab(workspace),
       },
@@ -2656,7 +2796,8 @@ export function App() {
             </nav>
           }
           capabilities={
-            activeRemoteWorkspace && (
+            activeRemoteWorkspace &&
+            !activeRemoteWorkspace.container && (
               <div className="workspace-navigation">
                 <nav className="feature-nav" aria-label="Workspace features">
                   {offeredNavigation.map(({ id, label, icon: Icon }) => (
@@ -3006,7 +3147,7 @@ export function App() {
                         id,
                         label: activityLabel(workspace),
                         icon: workspaceMark(workspace),
-                        detail: terminalStateLabel(workspace),
+                        detail: workspaceMenuDetail(workspace),
                         active: id === activeWorkspaceId,
                         onSelect: () => selectWorkspaceTab(workspace),
                       },

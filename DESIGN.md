@@ -47,14 +47,14 @@ square corners when maximized or fullscreen.
 
 The rail holds Saved Connections, search, grouping, and remote feature
 navigation. Order capabilities by expected frequency of use: Terminal, Docker,
-Systemd, Logs, Ports, then History. Local Workspaces are terminal-only, so hide
-the capability navigation and its divider for them. Windows hosts offer
-Terminal, Services, Ports, Docker, and container Logs. Mac hosts keep the Linux
-order but name launchd jobs Services and list them without the systemd
-dependency explorer, because launchd reports no dependency graph. Keep Docker
-and Logs discoverable when Docker is missing and let their views report the
-failure. Do not repeat a connection's identity in a second header or status
-rail.
+Systemd, Logs, Ports, then History. Local Workspaces and container terminals are
+terminal-only, so hide the capability navigation and its divider for them.
+Windows hosts offer Terminal, Services, Ports, Docker, and container Logs. Mac
+hosts keep the Linux order but name launchd jobs Services and list them without
+the systemd dependency explorer, because launchd reports no dependency graph.
+Keep Docker and Logs discoverable when Docker is missing and let their views
+report the failure. Do not repeat a connection's identity in a second header or
+status rail.
 
 Compact windows replace the rail with a titlebar navigation drawer. The drawer
 holds host selection and every inspection view, and contains keyboard focus
@@ -95,6 +95,10 @@ panes included. Keep the gutter reserved so a thumb never shifts content.
   rest. Saved Connection cards reveal their three-dot button the same way.
 - Each tab carries its shell or host OS mark. Overflow menus list full names,
   stay inside the window, and support arrow keys, Home, End, Enter, and Escape.
+- A container terminal's tab carries the image mark and the container name,
+  followed by its host in quieter text that gives way first when the tab
+  narrows. In the rail it hangs under its host card as a leaf joined by a thin
+  elbow. The leaf, not the host card, shows its selection and session state.
 
 ### Focus Mode and splits
 
@@ -199,6 +203,10 @@ rest. A published port opens its exact endpoint in Ports, matched by container
 ID, address, ports, and protocol. Report a missing publication instead of
 selecting another owner on the same port.
 
+Open terminal starts a shell in a running container as its own tab beside the
+host's tabs. Opening the same container again returns to that tab instead of
+starting a second shell.
+
 Recognized images show their logo, matched by full repository name or known
 alias and never by container name. Unknown images use the Lucide Container
 outline. Exited containers are neutral gray. Red is for failed or dead
@@ -266,8 +274,10 @@ ones. Reserve built-in hues for status, and pair each with a shape, label, or
 other cue. Do not add a new accent color for an individual screen or action.
 
 Use borders and restrained fills to separate controls and surfaces. Selected
-rows get an outline around the whole box, never only a left edge. Avoid heavy
-shadows and reserve stronger elevation for menus and dialogs.
+rows get an outline around the whole box, never only a left edge. The current
+host, container terminal, and capability in the sidebar share one quiet
+selection: a faintly warm fill with a hairline border, never the bright accent.
+Avoid heavy shadows and reserve stronger elevation for menus and dialogs.
 
 Connection tags use user-selected colors and never imply connection state.
 Terminal ANSI colors are user-editable, belong to terminal output, and apply to
@@ -384,9 +394,15 @@ or OSC 9;4 progress reports. A pause in output never counts as completion.
 Typing, blank submissions, idle redraws, approval prompts, editors, pagers, and
 background header polling stay idle.
 
-Automatic tab titles use only shell-reported metadata, reduced to a bare
-executable name. Manual names win. Titles stay in memory and never change saved
-workspace names.
+Automatic tab titles name the program of the command submitted at the shell
+prompt, read from the line the shell echoed or from shell integration (OSC 633
+E, Enhanced History). Unechoed input such as a password never counts. Reduce it
+to a bare program name, skipping wrappers like `sudo` and variable assignments.
+Show it once the command has run for a moment, so quick commands never flash,
+and restore the shell's name when the prompt returns. Ignore OSC 0/2 window
+titles: they name documents, and a local `ssh` or `wsl` host reports its own
+title before the remote shell starts. Manual names win. Titles stay in memory
+and never change saved workspace names.
 
 In Codex CLI, a plain left drag selects terminal text. Left clicks and scrolling
 still go to Codex. Right-click copies selected text or pastes when there is no
@@ -395,7 +411,7 @@ selection. Other mouse-tracking programs keep their own drag gestures.
 Terminal search opens as a compact overlay that does not reduce terminal
 height. It is the shared search field, with its match count, Previous, Next,
 and Close inside it. Terminal notices are inline errors or warnings in a strip
-above the output, with a dismiss cross when no recovery action applies. Keep matches distinguishable without washing out ANSI colors, and make
+above the output; a shell that ended on its own gets a neutral notice, with a dismiss cross when no recovery action applies. Keep matches distinguishable without washing out ANSI colors, and make
 the active match the most prominent.
 
 Keep the command palette searchable and keyboard-operable, and make shortcuts

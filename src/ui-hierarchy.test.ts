@@ -219,13 +219,14 @@ describe("application hierarchy", () => {
   it("keeps a local Workspace terminal-only and off every remote code path", () => {
     // The launcher lists detected shells beside Add connection, and a local
     // Workspace has no capability navigation because there is no host to inspect.
+    // A container terminal is terminal-only too: its host keeps the inspection.
     expect(appSource).toContain("api.listLocalShells()");
     expect(appSource).toContain("Local terminal");
     expect(appSource).toMatch(
-      /capabilities=\{\s*activeRemoteWorkspace && \(\s*<div className="workspace-navigation"/,
+      /capabilities=\{\s*activeRemoteWorkspace &&\s*!activeRemoteWorkspace\.container && \(\s*<div className="workspace-navigation"/,
     );
     expect(appSource).toMatch(
-      /isLocalWorkspace\(activeWorkspace\)\s*\?\s*navigation\.filter\(\(item\) => item\.id === "terminal"\)/,
+      /\(isLocalWorkspace\(activeWorkspace\) \|\| isContainerWorkspace\(activeWorkspace\)\)\s*\?\s*navigation\.filter\(\(item\) => item\.id === "terminal"\)/,
     );
     expect(appSource).toContain(
       "{activeRemoteWorkspace && activeConnection && activeSavedConnection && (",

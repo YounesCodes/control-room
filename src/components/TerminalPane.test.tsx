@@ -233,7 +233,12 @@ vi.mock("@xterm/xterm", () => ({
 }));
 
 import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
-import { createLocalWorkspace, createRemoteWorkspace } from "../lib/workspace-target";
+import {
+  createContainerWorkspace,
+  createLocalWorkspace,
+  createRemoteWorkspace,
+} from "../lib/workspace-target";
+import { TERMINAL_TITLE_DELAY_MS } from "../lib/terminal-title";
 import type { AppSettings, ConnectionState, LocalShellProfile, SavedConnection } from "../types";
 
 const settings: AppSettings = {
@@ -289,6 +294,7 @@ function renderPane(
     onTitle?: (title: string | null) => void;
     findRequest?: number;
     platform?: "windows" | "macos";
+    onReconnect?: () => void;
   } = {},
 ) {
   render(
@@ -359,6 +365,7 @@ describe("TerminalPane sessions", () => {
         100,
         30,
         expect.anything(),
+        null,
         null,
       ),
     );
@@ -518,6 +525,23 @@ describe("TerminalPane sessions", () => {
         30,
         expect.anything(),
         "wsl:Ubuntu",
+        null,
+      ),
+    );
+  });
+
+  it("starts a container terminal with only the container's ID", async () => {
+    renderPane(
+      createContainerWorkspace(connection, { id: "a".repeat(64), name: "web", image: "nginx" }),
+    );
+    await vi.waitFor(() =>
+      expect(api.startSession).toHaveBeenCalledWith(
+        connection.id,
+        100,
+        30,
+        expect.anything(),
+        null,
+        "a".repeat(64),
       ),
     );
   });
@@ -550,17 +574,15 @@ describe("TerminalPane sessions", () => {
         expect(kind === "local" ? api.startLocalSession : api.startSession).toHaveBeenCalled(),
       );
       await act(async () => undefined);
-      act(() => xterm.onTitle?.("npm run dev --token private"));
-      expect(onTitle).toHaveBeenLastCalledWith("npm");
+      // A local ssh.exe or shell host reports its own window title first.
+      expect(xterm.onTitle).toBeNull();
+      act(() => xterm.osc.get(633)?.("E;npm run dev --token private"));
+      await vi.waitFor(() => expect(onTitle).toHaveBeenLastCalledWith("npm"));
       act(() => xterm.osc.get(133)?.("D;0"));
       expect(onTitle).toHaveBeenLastCalledWith(null);
-      act(() => xterm.onTitle?.("npm stale title"));
-      expect(onTitle).toHaveBeenLastCalledWith(null);
-      act(() => {
-        xterm.osc.get(133)?.("C");
-        xterm.onTitle?.("python private.py");
-      });
-      expect(onTitle).toHaveBeenLastCalledWith("python");
+      act(() => xterm.osc.get(633)?.("E;python private.py"));
+      await vi.waitFor(() => expect(onTitle).toHaveBeenLastCalledWith("python"));
+      act(() => xterm.osc.get(633)?.("E;vim secret.txt"));
       act(() =>
         nativeEvents.get("session-state-changed")?.forEach((listener) =>
           listener({
@@ -573,20 +595,24 @@ describe("TerminalPane sessions", () => {
         ),
       );
       expect(onTitle).toHaveBeenLastCalledWith(null);
-      xterm.parseWrite = () => xterm.onTitle?.("vim secret.txt");
+      xterm.parseWrite = () => xterm.osc.get(633)?.("E;vim secret.txt");
       act(() => channels[0].onmessage?.(new TextEncoder().encode("retired title").buffer));
+      await act(() => new Promise((resolve) => setTimeout(resolve, TERMINAL_TITLE_DELAY_MS + 50)));
       expect(onTitle).toHaveBeenLastCalledWith(null);
+      expect(onTitle).not.toHaveBeenCalledWith("vim");
     },
   );
 
-  it("accepts new titles after successive unmarked commands return to their prompt", async () => {
+  it("names each command typed at the prompt until the prompt returns", async () => {
     const onTitle = vi.fn();
     renderPane({ ...createLocalWorkspace(shell), state: "connected" }, vi.fn(), { onTitle });
     await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
     for (const command of ["npm", "python"]) {
-      act(() => xterm.onData?.(`${command}\r`));
-      act(() => xterm.onTitle?.(`${command} --private secret`));
-      expect(onTitle).toHaveBeenLastCalledWith(command);
+      act(() => xterm.onData?.(command));
+      xterm.prompt = `$ ${command} --private secret`;
+      act(() => xterm.onData?.("\r"));
+      await vi.waitFor(() => expect(onTitle).toHaveBeenLastCalledWith(command));
+      xterm.prompt = "$ ";
       act(() => channels[0].onmessage?.(new TextEncoder().encode("$ ").buffer));
       expect(onTitle).toHaveBeenLastCalledWith(null);
     }
@@ -1062,6 +1088,35 @@ describe("TerminalPane sessions", () => {
       xterm.customKeyHandler?.(new KeyboardEvent("keydown", { key: "v", metaKey: true })),
     ).toBe(true);
     expect(clipboard.readText).not.toHaveBeenCalled();
+  });
+
+  it("ends a cleanly exited SSH session with a calm notice and Reconnect", () => {
+    const onReconnect = vi.fn();
+    renderPane(
+      {
+        ...createRemoteWorkspace(connection),
+        state: "disconnected",
+        connectRequested: false,
+        reason: "SSH session ended.",
+      },
+      vi.fn(),
+      { onReconnect },
+    );
+
+    const notice = screen.getByRole("status");
+    expect(notice.textContent).toContain("SSH session ended.");
+    expect(notice.getAttribute("data-tone")).toBe("neutral");
+    screen.getByRole("button", { name: "Reconnect" }).click();
+    expect(onReconnect).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    renderPane({
+      ...createRemoteWorkspace(connection),
+      state: "error",
+      connectRequested: false,
+      reason: "SSH connection was lost (exit code 255)",
+    });
+    expect(screen.getByRole("alert").getAttribute("data-tone")).toBe("error");
   });
 
   it("keeps the original connection failure when input is attempted", () => {
