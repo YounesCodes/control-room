@@ -2583,6 +2583,24 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
   });
 
+  it("restarts the open terminal after enabling Enhanced History", async () => {
+    overrides.set("get_history_integration_status", () => "not-installed");
+    overrides.set("install_history_integration", ({ connectionId }) => ({
+      ...fixtures.connection(connectionId),
+      historyEnabled: true,
+    }));
+    const calls = (name: string) =>
+      native.invoke.mock.calls.filter(([command]) => command === name).length;
+    await mount();
+    await navigate("History");
+    await vi.waitFor(() => expect(calls("start_session")).toBe(1));
+    await page.getByRole("button", { name: "Enable Enhanced History" }).click();
+    await page.getByRole("button", { name: "Restart terminal" }).click();
+    await vi.waitFor(() => expect(calls("start_session")).toBe(2));
+    expect(calls("close_session")).toBe(1);
+    await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
+  });
+
   it.each([960, 1600])(
     "gives Settings the full window at %s pixels and restores its workspace",
     async (width) => {

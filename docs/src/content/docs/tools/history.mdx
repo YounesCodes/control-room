@@ -9,7 +9,9 @@ import historyScreenshot from "../../../assets/screenshots/history.png";
 
 Open **History** for the host and select **Enable Enhanced History**. Control Room adds a marked block to the remote account's `~/.bashrc` and a script under `~/.local/share/control-room/`. Capture also needs **Enable Enhanced History globally** in Settings to be on.
 
-If History offers **Update Bash integration**, select it and reconnect so new sessions load the updated script.
+Only sessions opened after the integration is enabled report entries. If the tab's terminal is already open when you enable capture, History offers **Restart terminal**, which starts a new shell that loads the integration. Restarting stops anything running in that terminal; choose **Not now** to keep it and restart later.
+
+If History offers **Update Bash integration**, select it and restart the terminal so it loads the updated script.
 
 <figure class="docs-screenshot">
   <a href={historyScreenshot.src} target="_blank" rel="noreferrer">
@@ -21,7 +23,7 @@ If History offers **Update Bash integration**, select it and reconnect so new se
   <figcaption>Saved commands from Bash sessions. Example data shown.</figcaption>
 </figure>
 
-Only sessions opened after the integration is enabled report entries. Commands that Bash excludes from its history, such as space-prefixed commands with `HISTCONTROL=ignorespace`, are skipped. The integration reports:
+Commands that Bash excludes from its history, such as space-prefixed commands with `HISTCONTROL=ignorespace`, are skipped. The integration reports:
 
 - the command line
 - working directory

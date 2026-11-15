@@ -86,6 +86,7 @@ function props() {
     onPausedChange: vi.fn(),
     onConnectionChanged: vi.fn(),
     onPaste: vi.fn(),
+    onRestartTerminal: vi.fn(),
     canPaste: true,
   };
 }
@@ -147,6 +148,62 @@ describe("HistoryPane", () => {
     await waitFor(() => expect(options.onConnectionChanged).toHaveBeenCalledWith(connection));
   });
 
+  it("offers to restart the open terminal after enabling Enhanced History", async () => {
+    api.historyIntegrationStatus.mockResolvedValue("not-installed");
+    api.installHistoryIntegration.mockResolvedValue(connection);
+    const options = props();
+    render(<HistoryPane {...options} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Enable Enhanced History" }));
+    const restart = await screen.findByRole("button", { name: "Restart terminal" });
+    expect(document.activeElement).toBe(restart);
+    expect(options.onRestartTerminal).not.toHaveBeenCalled();
+    await userEvent.click(restart);
+    expect(options.onRestartTerminal).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Restart terminal" })).toBeNull();
+  });
+
+  it("lets the user keep the open terminal running after enabling", async () => {
+    api.historyIntegrationStatus.mockResolvedValue("not-installed");
+    api.installHistoryIntegration.mockResolvedValue(connection);
+    const options = props();
+    render(<HistoryPane {...options} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Enable Enhanced History" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Not now" }));
+    expect(screen.queryByRole("button", { name: "Restart terminal" })).toBeNull();
+    expect(options.onRestartTerminal).not.toHaveBeenCalled();
+  });
+
+  it("does not offer a restart without a running terminal or global recording", async () => {
+    api.historyIntegrationStatus.mockResolvedValue("not-installed");
+    api.installHistoryIntegration.mockResolvedValue(connection);
+    render(<HistoryPane {...props()} canPaste={false} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Enable Enhanced History" }));
+    await waitFor(() => expect(api.installHistoryIntegration).toHaveBeenCalledOnce());
+    expect(screen.queryByRole("button", { name: "Restart terminal" })).toBeNull();
+    cleanup();
+    render(<HistoryPane {...props()} globalEnabled={false} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Enable Enhanced History" }));
+    await waitFor(() => expect(api.installHistoryIntegration).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("button", { name: "Restart terminal" })).toBeNull();
+  });
+
+  it("offers a restart when capture is enabled on the connection, not when disabled", async () => {
+    const disabled = { ...connection, historyEnabled: false };
+    api.historyIntegrationStatus.mockResolvedValue("installed");
+    api.setConnectionHistoryEnabled.mockResolvedValue(connection);
+    const options = props();
+    const { rerender } = render(<HistoryPane {...options} connection={disabled} />);
+    await screen.findByText("docker ps");
+    await clickAction("Enable on this connection");
+    rerender(<HistoryPane {...options} connection={connection} />);
+    await screen.findByRole("button", { name: "Restart terminal" });
+    api.setConnectionHistoryEnabled.mockResolvedValue(disabled);
+    await clickAction("Disable on this connection");
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Restart terminal" })).toBeNull(),
+    );
+  });
+
   it("updates an older Bash integration without enabling a disabled connection", async () => {
     const options = props();
     const disabled = { ...connection, historyEnabled: false };
@@ -157,6 +214,7 @@ describe("HistoryPane", () => {
     expect(api.installHistoryIntegration).toHaveBeenCalledExactlyOnceWith(connection.id, false);
     expect(options.onConnectionChanged).toHaveBeenCalledExactlyOnceWith(disabled);
     await screen.findByText("Disabled for this connection");
+    expect(screen.queryByRole("button", { name: "Restart terminal" })).toBeNull();
   });
 
   it("keeps local commands searchable when the remote integration check fails", async () => {
@@ -169,6 +227,7 @@ describe("HistoryPane", () => {
         onPausedChange={vi.fn()}
         onConnectionChanged={vi.fn()}
         onPaste={vi.fn()}
+        onRestartTerminal={vi.fn()}
         canPaste={false}
       />,
     );
