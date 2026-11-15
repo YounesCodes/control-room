@@ -43,6 +43,7 @@ const settings: AppSettings = {
 };
 
 const environment: EnvironmentInfo = {
+  platform: "windows",
   sshPath: "C:/Windows/System32/OpenSSH/ssh.exe",
   sshConfigPath: "C:/Users/test/.ssh/config",
   sshAgentAvailable: true,
@@ -630,7 +631,7 @@ describe("Settings SSH environment", () => {
   function agentRow(sshAgentAvailable: boolean) {
     renderPane({ environment: { ...environment, sshAgentAvailable } });
     fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
-    return screen.getByText("ssh-agent").parentElement!;
+    return screen.getByText("SSH agent").parentElement!;
   }
 
   it("leads with the agent state and offers a check only when no identity is loaded", () => {
@@ -641,10 +642,10 @@ describe("Settings SSH environment", () => {
     expect(missing.querySelector("code")?.textContent).toBe("ssh-add -l");
   });
 
-  it("marks a missing ssh.exe instead of printing it as a path", () => {
+  it("marks a missing SSH executable instead of printing it as a path", () => {
     renderPane({ environment: { ...environment, sshPath: null } });
     fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
-    const row = screen.getByText("ssh.exe").parentElement!;
+    const row = screen.getByText("SSH executable").parentElement!;
     expect(row.querySelector("dd")?.textContent).toBe("Not detected");
     expect(row.querySelector(".technical")).toBeNull();
   });

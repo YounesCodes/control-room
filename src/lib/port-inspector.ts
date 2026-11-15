@@ -91,6 +91,13 @@ export function resolveSocketContainer(
   return { container: matches[0], composeProject: matches[0].composeProject };
 }
 
+/** macOS reports launchd services as `domain/label`; systemd unit IDs never contain a slash. */
+export function serviceOwnerLabels(id: string | null | undefined, macosHost = false) {
+  return macosHost || !!id?.includes("/")
+    ? { kind: "Launchd service", open: "Open service", logs: "View logs" }
+    : { kind: "Systemd unit", open: "Open unit", logs: "View journal" };
+}
+
 export function socketScope(socket: ListeningSocket) {
   if (["*", "0.0.0.0", "::"].includes(socket.localAddress)) return "Wildcard";
   if (socket.localAddress === "::1" || socket.localAddress.startsWith("127.")) return "Loopback";
@@ -269,6 +276,15 @@ export function firewallForSocket(
   }
   if (firewall.backend === "windows") {
     return { state: "unknown", label: "Windows Firewall: profile policies only" };
+  }
+  if (firewall.backend === "macos") {
+    return {
+      state: "unknown",
+      label:
+        firewall.active === false
+          ? "Application Firewall inactive"
+          : "macOS Application Firewall: application rules only",
+    };
   }
   if (firewall.active === false) return { state: "inactive", label: "Firewall inactive" };
   if (firewall.active !== true) return { state: "unknown", label: "Firewall status unknown" };

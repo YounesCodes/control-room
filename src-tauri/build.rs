@@ -1,6 +1,7 @@
 fn main() {
     println!("cargo:rerun-if-changed=icons/icon.ico");
     println!("cargo:rerun-if-changed=icons/icon-dev.ico");
+    println!("cargo:rerun-if-changed=icons/icon.icns");
     // Debug exes wear the dev-marked icon so a taskbar button cannot be
     // mistaken for the installed app. Release keeps the shipped icon.
     let attributes = if std::env::var("PROFILE").as_deref() == Ok("debug") {

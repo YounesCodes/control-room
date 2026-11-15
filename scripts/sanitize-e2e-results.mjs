@@ -9,6 +9,7 @@ export function sanitize(text, environment = process.env) {
     ).join("");
   for (const key of [
     "USERPROFILE",
+    "HOME",
     "CONTROL_ROOM_TEST_HOST",
     "CONTROL_ROOM_TEST_USER",
     "CONTROL_ROOM_E2E_DATA_DIR",

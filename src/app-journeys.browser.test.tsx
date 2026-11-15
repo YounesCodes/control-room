@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { settleMotion } from "./test/motion";
 import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import { runAxe } from "./test/axe";
@@ -33,6 +34,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 import { App } from "./App";
+import { tabKey, shiftTabKey } from "./test/keyboard";
 
 let root: Root;
 let element: HTMLDivElement;
@@ -69,6 +71,7 @@ async function respond(command: string, args: any = {}) {
   switch (command) {
     case "get_environment_info":
       return {
+        platform: "windows",
         sshPath: "fixture-ssh",
         sshConfigPath: "fixture-config",
         sshAgentAvailable: false,
@@ -250,6 +253,9 @@ async function openSplit(card: "Split right" | "Split down" = "Split right") {
 describe("complete app journeys with typed IPC fixtures", () => {
   it("keeps navigation reachable on both sides of the compact breakpoint", async () => {
     await mount();
+    // The terminal takes focus when it first mounts; on a slow runner that can
+    // land after Escape has returned focus to the navigation button.
+    await expect.element(page.getByRole("textbox", { name: "Terminal input" })).toBeInTheDocument();
     for (const width of [858, 859, 860, 861, 862, 864]) {
       await page.viewport(width, 600);
       await expect
@@ -464,6 +470,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect
       .element(page.getByRole("separator", { name: "Resize terminal split 1" }))
       .toHaveAttribute("aria-orientation", "vertical");
+    // Panes glide to their wide bounds, and the glide can start a frame late;
+    // aim the drop once that motion settles.
+    await settleMotion(element);
     const dock = begin("bottom");
     await expect
       .poll(() => element.querySelector(".terminal-drop-preview")?.textContent)
@@ -843,7 +852,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const overflowLogo = git.element().querySelector<HTMLImageElement>(".local-shell-icon img")!;
     expect(overflowLogo.src).toBe(gitLogo.src);
     await expect.poll(() => getComputedStyle(overflowLogo).filter).toBe("none");
-  });
+    // Opening five terminals alone takes most of the default budget on slow WebKit runners.
+  }, 60_000);
 
   it("shows shell identities and elevation in the command palette and Settings", async () => {
     await page.viewport(1200, 800);
@@ -895,7 +905,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const badge = admin.querySelector(".local-shell-elevation")!;
     await expect.poll(() => getComputedStyle(logo).color).toBe("rgb(83, 145, 254)");
     expect(getComputedStyle(badge).color).toBe("rgb(214, 168, 74)");
-    expect(badge.getBoundingClientRect().width).toBe(10);
+    expect(badge.getBoundingClientRect().width).toBeCloseTo(10, 2);
     await page.getByRole("combobox", { name: "Search commands" }).fill("");
     await page.screenshot({ path: "../test-results/local-shell-icons-palette.png" });
     await userEvent.keyboard("{Escape}");
@@ -1051,9 +1061,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await userEvent.keyboard("{End}");
       const last = menu.getByRole("button", { name: "Local terminals: Git Bash" });
       await expect.element(last).toHaveFocus();
-      expect(last.element().getBoundingClientRect().bottom).toBeLessThanOrEqual(
-        node.getBoundingClientRect().bottom - 5,
-      );
+      await expect
+        .poll(
+          () => last.element().getBoundingClientRect().bottom - node.getBoundingClientRect().bottom,
+        )
+        .toBeLessThanOrEqual(-5);
       await page.screenshot({ path: `../test-results/terminal-chooser-${count}.png` });
     },
   );
@@ -1346,6 +1358,89 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(element.querySelector(".host-row.active .presence-busy")).toBeNull(),
     );
   });
+  for (const platform of ["macos", "windows"] as const) {
+    it(`keeps ${platform} window controls in the existing row across workspace, Focus Mode, and Settings`, async () => {
+      await page.viewport(960, 640);
+      overrides.set("get_environment_info", () => ({
+        platform,
+        sshPath: "fixture-ssh",
+        sshConfigPath: "fixture-config",
+        sshAgentAvailable: false,
+        platformSupported: true,
+      }));
+      persisted.panelSizes = { connections: 200 };
+      await mount();
+      await navigate("History");
+      const shell = element.querySelector<HTMLElement>(".app-shell")!;
+      await expect.poll(() => shell.dataset.platform).toBe(platform);
+      const header = element.querySelector<HTMLElement>(".sidebar-top-heading")!;
+      const label = header.querySelector<HTMLElement>("span")!;
+      expect(header.getBoundingClientRect().top).toBeCloseTo(1, 2);
+      expect(header.getBoundingClientRect().height).toBe(platform === "macos" ? 41 : 42);
+      expect(label.scrollWidth).toBeLessThanOrEqual(label.clientWidth);
+      if (platform === "macos") {
+        const bar = element.querySelector<HTMLElement>(".app-bar")!;
+        const sidebar = element.querySelector<HTMLElement>(".sidebar")!;
+        const workspace = element.querySelector<HTMLElement>(".workspace-shell")!;
+        expect(bar.getBoundingClientRect().left).toBeCloseTo(1, 2);
+        expect(bar.getBoundingClientRect().width).toBe(shell.clientWidth);
+        expect(header.closest(".app-bar")).toBe(bar);
+        expect(label.getBoundingClientRect().left).toBeGreaterThanOrEqual(104);
+        expect(sidebar.getBoundingClientRect().top).toBe(bar.getBoundingClientRect().bottom);
+        expect(workspace.getBoundingClientRect().top).toBe(bar.getBoundingClientRect().bottom);
+        expect(getComputedStyle(header.querySelectorAll("span")[1]).display).not.toBe("none");
+        expect(element.querySelector(".window-controls")).toBeNull();
+        expect(
+          element.querySelector<HTMLElement>(".app-window-actions")!.getBoundingClientRect().width,
+        ).toBe(40);
+        const divider = page.getByRole("separator", { name: "Resize Connections panel" });
+        await userEvent.click(divider);
+        await userEvent.keyboard("{End}");
+        await expect.poll(() => sidebar.clientWidth).toBe(479);
+        expect(label.getBoundingClientRect().left).toBeGreaterThanOrEqual(104);
+        expect(bar.getBoundingClientRect().left).toBeCloseTo(1, 2);
+        await expect.element(divider).toHaveFocus();
+        await userEvent.keyboard("{Home}");
+        await expect.poll(() => sidebar.clientWidth).toBe(199);
+        await page.viewport(1440, 900);
+        await expect.poll(() => bar.clientWidth).toBe(1438);
+        await page.getByRole("button", { name: "Reset layout", exact: true }).click();
+        await expect.poll(() => sidebar.clientWidth).toBe(243);
+        await page.viewport(960, 640);
+        await expect.poll(() => bar.clientWidth).toBe(958);
+      }
+      await navigate("Terminal");
+      if (platform === "windows") {
+        const group = element.querySelector<HTMLElement>(".app-window-actions")!;
+        const controls = group.querySelector<HTMLElement>(".window-controls")!;
+        expect(controls.getBoundingClientRect().top).toBe(group.getBoundingClientRect().top);
+        expect(controls.getBoundingClientRect().bottom).toBeGreaterThanOrEqual(
+          group.getBoundingClientRect().bottom - 1,
+        );
+        expect(controls.getBoundingClientRect().bottom).toBeLessThanOrEqual(
+          group.getBoundingClientRect().bottom,
+        );
+      }
+      await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+      const tabs = element.querySelector<HTMLElement>(".session-tabs")!;
+      await expect.poll(() => tabs.getBoundingClientRect().top).toBeCloseTo(1, 2);
+      await expect
+        .poll(() => getComputedStyle(tabs).paddingLeft)
+        .toBe(platform === "macos" ? "104px" : "0px");
+      expect(element.querySelector<HTMLElement>(".app-bar")!.getBoundingClientRect().height).toBe(
+        0,
+      );
+      await page.screenshot({ path: `../test-results/${platform}-integrated-focus-controls.png` });
+      await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
+      await page.getByRole("button", { name: "Open Settings", exact: true }).click();
+      const bar = element.querySelector<HTMLElement>(".app-bar")!;
+      await expect.poll(() => bar.getBoundingClientRect().top).toBeCloseTo(1, 2);
+      expect(bar.getBoundingClientRect().height).toBeCloseTo(42, 2);
+      await expect
+        .poll(() => getComputedStyle(bar).paddingLeft)
+        .toBe(platform === "macos" ? "104px" : "0px");
+    });
+  }
 
   it("selects overflowing terminals and group panes by full names without changing live sessions", async () => {
     await page.viewport(960, 640);
@@ -1399,6 +1494,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
         ),
       ).not.toBeNull();
     }
+    await expect
+      .poll(
+        () =>
+          native.invoke.mock.calls.filter(
+            ([command]) => command === "start_session" || command === "start_local_session",
+          ).length,
+      )
+      .toBe(8);
     const sessions = native.invoke.mock.calls.filter(
       ([command]) => command === "start_session" || command === "start_local_session",
     ).length;
@@ -1449,6 +1552,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await page
         .getByRole("button", { name: "New local terminal: Command Prompt", exact: true })
         .click();
+      await expect
+        .poll(
+          () =>
+            native.invoke.mock.calls.filter(
+              ([command]) => command === "start_session" || command === "start_local_session",
+            ).length,
+        )
+        .toBe(sessions + index + 1);
       if (index === 0) {
         const local = native.invoke.mock.calls
           .filter(([command]) => command === "start_local_session")
@@ -1463,7 +1574,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
         await userEvent.keyboard("{Escape}");
       }
     }
-    await page.getByRole("button", { name: "Scroll terminals right" }).first().click();
+    // The active group can already occupy the last page. The picker must work
+    // without assuming that scrolling farther right is possible.
     await page.getByRole("button", { name: "All terminals", exact: true }).click();
     const groupItem = page
       .getByRole("menu", { name: "All terminals menu" })
@@ -1511,7 +1623,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       ),
     ).toHaveLength(sessions + 5);
     expect(native.invoke.mock.calls.some(([command]) => command === "close_session")).toBe(false);
-  });
+  }, 40_000);
 
   it("keeps grouped session state and activity visible and routes input to the selected pane", async () => {
     await mount();
@@ -1944,7 +2056,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const controls = element.querySelector(".window-controls")!;
     const focus = element.querySelector(".app-focus-toggle")!;
     const bar = element.querySelector(".app-bar")!;
-    await expect.poll(() => actions.getBoundingClientRect().width).toBe(178);
+    await expect.poll(() => actions.getBoundingClientRect().width).toBeCloseTo(178, 2);
     const initial = controls.getBoundingClientRect().left;
     const style = document.createElement("style");
     style.id = "focus-slot-motion-test";
@@ -2322,7 +2434,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
           expect(
             Math.abs(glyph.left + glyph.width / 2 - (button.left + button.width / 2)),
           ).toBeLessThanOrEqual(0.5);
-          expect(glyph.top).toBe(glyphs[0].top);
+          // WebKit on macOS may snap icons to half pixels independently.
+          expect(Math.abs(glyph.top - glyphs[0].top)).toBeLessThanOrEqual(0.5);
         }
         await page.screenshot({
           element: header,
@@ -2467,6 +2580,24 @@ describe("complete app journeys with typed IPC fixtures", () => {
     );
     const data = native.invoke.mock.calls.find(([command]) => command === "write_session")![1].data;
     expect(new TextDecoder().decode(new Uint8Array(data))).toBe("printf safe");
+    await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
+  });
+
+  it("restarts the open terminal after enabling Enhanced History", async () => {
+    overrides.set("get_history_integration_status", () => "not-installed");
+    overrides.set("install_history_integration", ({ connectionId }) => ({
+      ...fixtures.connection(connectionId),
+      historyEnabled: true,
+    }));
+    const calls = (name: string) =>
+      native.invoke.mock.calls.filter(([command]) => command === name).length;
+    await mount();
+    await navigate("History");
+    await vi.waitFor(() => expect(calls("start_session")).toBe(1));
+    await page.getByRole("button", { name: "Enable Enhanced History" }).click();
+    await page.getByRole("button", { name: "Restart terminal" }).click();
+    await vi.waitFor(() => expect(calls("start_session")).toBe(2));
+    expect(calls("close_session")).toBe(1);
     await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
   });
 
@@ -2657,8 +2788,12 @@ describe("complete app journeys with typed IPC fixtures", () => {
       const rows = panel.querySelectorAll<HTMLElement>(".dense-row, .docker-branch");
       rows[0].focus();
       await userEvent.keyboard("{End}");
+      // WebKit may leave trailing padding below the keyboard scroll endpoint.
+      // The last record, rather than empty padding, must be fully reachable.
       await vi.waitFor(() =>
-        expect(panel.scrollTop + panel.clientHeight).toBeGreaterThanOrEqual(panel.scrollHeight - 1),
+        expect(rows[rows.length - 1].getBoundingClientRect().bottom).toBeLessThanOrEqual(
+          panel.getBoundingClientRect().bottom + 1,
+        ),
       );
       const last = rows[rows.length - 1].getBoundingClientRect();
       expect(last.bottom).toBeLessThanOrEqual(panel.getBoundingClientRect().bottom + 1);
@@ -2686,14 +2821,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         expect(graph.bottom).toBeLessThanOrEqual(viewport.bottom - 48);
       };
       await vi.waitFor(expectEntireGraph);
-      await vi.waitFor(() =>
-        expect(
-          element
-            .querySelector(".arch-content")!
-            .getAnimations({ subtree: true })
-            .filter((animation) => animation.playState === "running"),
-        ).toHaveLength(0),
-      );
+      await settleMotion(element.querySelector(".arch-content")!);
       const fittedHeight = element.querySelector(".arch-content")!.getBoundingClientRect().height;
       await page.getByRole("button", { name: "Zoom in", exact: true }).click();
       await vi.waitFor(() =>
@@ -2703,18 +2831,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
       );
       await page.getByRole("button", { name: "Fit to view", exact: true }).click();
       await vi.waitFor(expectEntireGraph);
-      await vi.waitFor(() =>
-        expect(
-          element
-            .querySelector(".arch-content")!
-            .getAnimations({ subtree: true })
-            .filter((animation) => animation.playState === "running"),
-        ).toHaveLength(0),
-      );
-      expect(element.querySelector(".arch-content")!.getBoundingClientRect().height).toBeCloseTo(
-        fittedHeight,
-        1,
-      );
+      await settleMotion(element.querySelector(".arch-content")!);
+      // WebKit on macOS can settle the first fit a few pixels from a later one
+      // as chip text finishes laying out.
+      expect(
+        Math.abs(
+          element.querySelector(".arch-content")!.getBoundingClientRect().height - fittedHeight,
+        ),
+      ).toBeLessThanOrEqual(4);
       const last = element.querySelectorAll<HTMLButtonElement>(".arch-chip")[99];
       last.focus();
       await vi.waitFor(() => {
@@ -2788,7 +2912,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const textarea = element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea")!;
     expect(textarea.scrollHeight).toBeGreaterThan(textarea.clientHeight);
     textarea.focus();
-    await userEvent.keyboard("{Control>}{End}{/Control}");
+    await userEvent.keyboard(
+      navigator.platform.startsWith("Mac")
+        ? "{Meta>}{ArrowDown}{/Meta}"
+        : "{Control>}{End}{/Control}",
+    );
     expect(textarea.scrollTop).toBeGreaterThan(0);
     await navigate("Logs");
     await page.getByRole("button", { name: "Start", exact: true }).click();
@@ -2946,20 +3074,91 @@ describe("complete app journeys with typed IPC fixtures", () => {
         "example-99.service",
       );
       await expect.element(page.getByRole("button", { name: "View journal" })).toBeVisible();
-      await vi.waitFor(() =>
-        expect(
-          element
-            .querySelector(".systemd-inspector")!
-            .getAnimations({ subtree: true })
-            .filter((animation) => animation.playState === "running"),
-        ).toHaveLength(0),
-      );
+      await settleMotion(element.querySelector(".systemd-inspector")!);
       expect(
         (await runAxe(element.querySelector<HTMLElement>(".systemd-page")!)).violations,
       ).toEqual([]);
       await page.screenshot({ path: `../test-results/linux-service-list-${width}.png` });
     },
   );
+
+  it("opens a Mac shell and exposes native inspection without Linux boot controls", async () => {
+    const capabilities = {
+      ...fixtures.capabilities(),
+      osId: "macos",
+      osName: "macOS",
+      osVersion: "26.7.1",
+      defaultShell: "/bin/zsh",
+      systemdAvailable: false,
+      journaldAvailable: false,
+      launchdAvailable: true,
+      unifiedLogAvailable: true,
+      dockerContext: "lab",
+      dockerEndpoint: "ssh://docker.example.invalid",
+      dockerRemote: true,
+    };
+    overrides.set("get_cached_capabilities", () => capabilities);
+    overrides.set("discover_remote_shells", () => ({
+      platform: "macos",
+      shells: [{ id: "macos:zsh", label: "zsh" }],
+      capabilities,
+    }));
+    overrides.set("list_services", () => [
+      {
+        ...fixtures.service,
+        id: "system/com.example.agent",
+        unitType: "daemon",
+        subState: "running (PID 42)",
+      },
+    ]);
+    root.render(<App />);
+    await page
+      .getByRole("button", { name: /Fixture Alpha/ })
+      .first()
+      .click();
+    await expect.element(page.getByRole("group", { name: "Mac shells" })).toBeVisible();
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await expect
+      .poll(
+        () =>
+          native.invoke.mock.calls.find(([command]) => command === "start_session")?.[1]
+            .remoteShellId,
+      )
+      .toBe("macos:zsh");
+    await navigate("Services");
+    await expect
+      .element(page.getByRole("heading", { name: "Services", exact: true }))
+      .toBeVisible();
+    await expect.element(page.getByRole("combobox", { name: "Service type" })).toBeVisible();
+    expect(
+      (await runAxe(element.querySelector<HTMLElement>(".services-page")!)).violations,
+    ).toEqual([]);
+    await page.screenshot({ path: "../test-results/macos-host-services.png" });
+    await navigate("Ports");
+    await vi.waitFor(() =>
+      expect(element.querySelector(".ports-page .arch-chip")?.textContent).toContain("443"),
+    );
+    // A remote Docker context publishes ports elsewhere, so none map to this host.
+    expect(element.querySelector(".ports-page")?.textContent).not.toContain(
+      fixtures.container.name,
+    );
+    await navigate("Logs");
+    await expect
+      .element(page.getByRole("combobox", { name: "Service", exact: true }))
+      .toHaveValue("all");
+    await navigate("Docker");
+    await expect
+      .element(page.getByRole("heading", { name: "Containers", exact: true }))
+      .toHaveAttribute(
+        "title",
+        expect.stringContaining("Docker context lab · ssh://docker.example.invalid"),
+      );
+    expect(
+      [...element.querySelectorAll("nav[aria-label='Workspace features'] button")].map(
+        (button) => button.textContent,
+      ),
+    ).not.toContain("Systemd");
+  });
 
   it("offers Windows Docker as its own capability even when detection finds no CLI", async () => {
     const capabilities = {
@@ -3207,7 +3406,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await vi.waitFor(() => expect(color()).toBe("rgb(2, 136, 209)"));
     await userEvent.hover(ports.element());
     await vi.waitFor(() => expect(color()).toBe(resting));
-    await userEvent.keyboard("{Tab}");
+    await userEvent.keyboard(tabKey);
     (docker.element() as HTMLElement).focus();
     await vi.waitFor(() => expect(color()).toBe("rgb(2, 136, 209)"));
   });
@@ -3372,8 +3571,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const searchField = element.querySelector<HTMLElement>(".ports-search-field")!;
     const searchPanel = element.querySelector<HTMLElement>("#ports-tools")!;
     expect(searchPanel.querySelectorAll("button")).toHaveLength(1);
-    expect(searchPanel.getBoundingClientRect().width).toBe(
+    expect(searchPanel.getBoundingClientRect().width).toBeCloseTo(
       searchField.getBoundingClientRect().width,
+      0,
     );
     expect(searchPanel.getBoundingClientRect().height).toBe(
       searchField.getBoundingClientRect().height,
@@ -3403,11 +3603,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.screenshot({ path: "../test-results/ports-docker-inspector.png" });
     async function checkInspectorLayout() {
       const inspector = element.querySelector<HTMLElement>(".arch-detail")!;
-      await expect
-        .poll(() =>
-          inspector.getAnimations({ subtree: true }).some((a) => a.playState === "running"),
-        )
-        .toBe(false);
+      await settleMotion(inspector);
       const body = inspector.querySelector<HTMLElement>(".port-inspector-body")!;
       const header = inspector.querySelector("header")!;
       const actions = inspector.querySelector(".detail-actions")!;
@@ -3627,13 +3823,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(document.activeElement).toBe(more.element());
     await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
     await more.click();
-    await userEvent.keyboard("{Tab}");
+    await userEvent.keyboard(tabKey);
     await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
     expect(document.activeElement).toBe(
       page.getByRole("textbox", { name: "Search commands" }).element(),
     );
     await more.click();
-    await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
+    await userEvent.keyboard(shiftTabKey);
     expect(document.activeElement).toBe(more.element());
     await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
 

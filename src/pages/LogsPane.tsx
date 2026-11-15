@@ -136,6 +136,7 @@ function chunkRows(rows: LogRowData[]): { key: number; rows: LogRowData[] }[] {
 export function LogsPane({
   connection,
   windowsHost = false,
+  macosHost = false,
   settings,
   logTailOptions,
   servicesCache,
@@ -147,6 +148,7 @@ export function LogsPane({
 }: {
   connection: SavedConnection;
   windowsHost?: boolean;
+  macosHost?: boolean;
   settings: AppSettings;
   logTailOptions: number[];
   servicesCache: CachedList<SystemdUnit>;
@@ -159,12 +161,14 @@ export function LogsPane({
   const [sourceType, setSourceType] = useState<LogSourceType>(
     windowsHost ? "docker" : (selectedSource?.type ?? "systemd"),
   );
-  const [sourceId, setSourceId] = useState(selectedSource?.id ?? "");
+  const [sourceId, setSourceId] = useState(selectedSource?.id ?? (macosHost ? "all" : ""));
+  // launchd services are named domain/label, so a Mac service link is explicit
+  // even though it is not a systemd unit name.
   const explicitSystemdSource =
     sourceType === "systemd" &&
     selectedSource?.type === "systemd" &&
     sourceId === selectedSource.id &&
-    isSystemdUnitName(sourceId);
+    (isSystemdUnitName(sourceId) || (macosHost && sourceId.includes("/")));
   const [tail, setTail] = useState(settings.defaultLogTail);
   const [follow, setFollow] = useState(true);
   const [streamStatus, setStreamStatus] = useState<StreamStatus>("stopped");
@@ -344,6 +348,7 @@ export function LogsPane({
   useEffect(() => {
     if (explicitSystemdSource) return;
     const items = sourceType === "systemd" ? servicesCache.items : containersCache.items;
+    if (macosHost && sourceType === "systemd" && sourceId === "all") return;
     const next = reconcileSelection(items, sourceId) ?? "";
     if (next === sourceId) return;
     setSourceId(next);
@@ -528,7 +533,11 @@ export function LogsPane({
       startingRef.current = false;
       setError(message);
       setStreamStatus("stopped");
-      if (!windowsHost && message.toLowerCase().includes("permission denied"))
+      if (
+        !windowsHost &&
+        !(macosHost && sourceType === "docker") &&
+        message.toLowerCase().includes("permission denied")
+      )
         setSudoPurpose("stream");
     }
   }
@@ -567,7 +576,7 @@ export function LogsPane({
   function changeType(next: LogSourceType) {
     if (next === sourceType) return;
     const items = next === "systemd" ? servicesCache.items : containersCache.items;
-    const nextId = items[0]?.id ?? "";
+    const nextId = macosHost && next === "systemd" ? "all" : (items[0]?.id ?? "");
     setSourceType(next);
     setSourceId(nextId);
     onSourceChange(nextId ? { type: next, id: nextId } : null);
@@ -652,12 +661,19 @@ export function LogsPane({
   }
 
   const sourceCache = sourceType === "systemd" ? servicesCache : containersCache;
-  const sourceOptions = sourceCache.items;
-  if (sourceCache.loading && !sourceCache.items.length && !explicitSystemdSource)
+  const sourceOptions =
+    macosHost && sourceType === "systemd"
+      ? [{ id: "all", name: "All unified logs" }, ...sourceCache.items]
+      : sourceCache.items;
+  // Mac hosts can always stream the whole unified log, so a missing service
+  // list does not block the view.
+  const sourceListOptional = explicitSystemdSource || (macosHost && sourceType === "systemd");
+  if (sourceCache.loading && !sourceCache.items.length && !sourceListOptional)
     return <LoadingState label="Finding available log sources…" />;
-  if (sourceCache.error && !sourceCache.items.length && !explicitSystemdSource) {
+  if (sourceCache.error && !sourceCache.items.length && !sourceListOptional) {
     const dockerPermissionError =
       !windowsHost &&
+      !macosHost &&
       sourceType === "docker" &&
       sourceCache.error.toLowerCase().includes("permission denied");
     return (
@@ -683,7 +699,7 @@ export function LogsPane({
     );
   }
 
-  const sourceNoun = sourceType === "systemd" ? "unit" : "container";
+  const sourceNoun = sourceType === "systemd" ? (macosHost ? "service" : "unit") : "container";
   const selectedLabel = sourceId ? sourceLabel(sourceOptions, sourceId) : "";
   const statusLabel =
     streamStatus === "starting"
@@ -724,12 +740,14 @@ export function LogsPane({
             value={sourceType}
             onChange={(event) => changeType(event.target.value as LogSourceType)}
           >
-            {!windowsHost && <option value="systemd">systemd</option>}
+            {!windowsHost && (
+              <option value="systemd">{macosHost ? "Unified log" : "systemd"}</option>
+            )}
             <option value="docker">Docker</option>
           </select>
         </label>
         <label className="source-select">
-          <span>{sourceType === "systemd" ? "Unit" : "Container"}</span>
+          <span>{sourceType === "systemd" ? (macosHost ? "Service" : "Unit") : "Container"}</span>
           <select
             value={sourceId}
             onChange={(event) => selectSource(event.target.value)}
@@ -817,15 +835,17 @@ export function LogsPane({
       {error && (
         <div className="inline-error" role="alert">
           <span>{error}</span>
-          {!windowsHost && error.toLowerCase().includes("permission denied") && (
-            <button
-              className="inline-action"
-              type="button"
-              onClick={() => setSudoPurpose("stream")}
-            >
-              Retry with sudo
-            </button>
-          )}
+          {!windowsHost &&
+            !(macosHost && sourceType === "docker") &&
+            error.toLowerCase().includes("permission denied") && (
+              <button
+                className="inline-action"
+                type="button"
+                onClick={() => setSudoPurpose("stream")}
+              >
+                Retry with sudo
+              </button>
+            )}
         </div>
       )}
       <div className="log-panel">
@@ -995,7 +1015,7 @@ export function LogsPane({
   );
 }
 
-function sourceLabel(items: (SystemdUnit | DockerContainer)[], id: string): string {
+function sourceLabel(items: { id: string; name?: string }[], id: string): string {
   const item = items.find((source) => source.id === id);
-  return item && "name" in item ? item.name : id;
+  return item?.name ?? id;
 }

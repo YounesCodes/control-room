@@ -10,6 +10,7 @@ import {
   Play,
   Power,
   RefreshCw,
+  RotateCw,
   TerminalSquare,
   Trash2,
   X,
@@ -172,20 +173,26 @@ function HistoryEntryRow({
 }
 
 export function HistoryPane({
+  macosHost = false,
   connection,
   paused,
   globalEnabled,
   onPausedChange,
   onConnectionChanged,
   onPaste,
+  onRestartTerminal,
   canPaste,
 }: {
+  macosHost?: boolean;
   connection: SavedConnection;
   paused: boolean;
   globalEnabled: boolean;
   onPausedChange: (paused: boolean) => void;
   onConnectionChanged: (connection: SavedConnection) => void;
   onPaste: (command: string) => void;
+  /// Restarts this workspace's terminal so its new shell loads the integration.
+  onRestartTerminal: () => void;
+  /// The workspace's terminal has a live session.
   canPaste: boolean;
 }) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
@@ -201,6 +208,11 @@ export function HistoryPane({
   const [readError, setReadError] = useState<string | null>(null);
   const error = actionError ?? readError;
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  // Set when capture turns on while this workspace's terminal is already
+  // running: that shell started without the integration, so it records
+  // nothing until it restarts.
+  const [restartOffered, setRestartOffered] = useState(false);
+  const restartButtonRef = useRef<HTMLButtonElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [confirmState, setConfirmState] = useState<{
@@ -230,6 +242,7 @@ export function HistoryPane({
     setReadError(null);
     setConfirmState(null);
     setCopiedId(null);
+    setRestartOffered(false);
     setMenuOpen(false);
     setMenuPosition(null);
     if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
@@ -311,6 +324,16 @@ export function HistoryPane({
       integrationRequestRef.current += 1;
     };
   }, [connection.id]);
+
+  useEffect(() => {
+    // The control that turned capture on is gone (the opt-in card) or closed
+    // (the More menu returns focus to its trigger). Only take focus that the
+    // removed card would otherwise drop on the page body.
+    if (!restartOffered) return;
+    if (document.activeElement === document.body || document.activeElement === null) {
+      restartButtonRef.current?.focus();
+    }
+  }, [restartOffered]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -408,6 +431,7 @@ export function HistoryPane({
       setIntegrationError(null);
       setIntegration("installed");
       onConnectionChanged(updated);
+      offerRestartIfCaptureStarted(updated);
     } catch (caught) {
       if (generation === mutationGeneration.current) setError(errorMessage(caught));
     } finally {
@@ -420,8 +444,7 @@ export function HistoryPane({
     moreMenuTriggerRef.current?.focus();
     setConfirmState({
       title: "Remove integration",
-      message:
-        "Remove the Control Room Bash integration from this remote account? Other Saved Connections using the same remote account will stop capturing commands.",
+      message: `Remove the Control Room ${macosHost ? "Bash and zsh" : "Bash"} integration from this remote account? Other Saved Connections using the same remote account will stop capturing commands.`,
       confirmLabel: "Remove integration",
       onConfirm: () => void performRemoveIntegration(),
     });
@@ -446,6 +469,15 @@ export function HistoryPane({
     }
   }
 
+  function offerRestartIfCaptureStarted(updated: SavedConnection) {
+    if (updated.historyEnabled && globalEnabled && canPaste) setRestartOffered(true);
+  }
+
+  function restartTerminal() {
+    setRestartOffered(false);
+    onRestartTerminal();
+  }
+
   async function toggleCapture() {
     const generation = mutationGeneration.current;
     setWorking(true);
@@ -457,6 +489,8 @@ export function HistoryPane({
       );
       if (generation !== mutationGeneration.current) return;
       onConnectionChanged(updated);
+      if (updated.historyEnabled) offerRestartIfCaptureStarted(updated);
+      else setRestartOffered(false);
     } catch (caught) {
       if (generation === mutationGeneration.current) setError(errorMessage(caught));
     } finally {
@@ -668,7 +702,7 @@ export function HistoryPane({
                     onClick={removeIntegration}
                     disabled={working}
                   >
-                    <Trash2 size={14} /> Remove from remote Bash
+                    <Trash2 size={14} /> Remove from remote {macosHost ? "shells" : "Bash"}
                   </button>
                 )}
               </div>
@@ -678,7 +712,7 @@ export function HistoryPane({
       </header>
       {integrationError && (
         <p className="inline-warning">
-          Saved history is stored locally, but Control Room could not check the remote Bash
+          Saved history is stored locally, but Control Room could not check the remote shell
           integration: {integrationError}
         </p>
       )}
@@ -691,18 +725,51 @@ export function HistoryPane({
             onClick={installIntegration}
             disabled={working}
           >
-            {working ? "Updating…" : "Update Bash integration"}
+            {working ? "Updating…" : `Update ${macosHost ? "shell" : "Bash"} integration`}
           </button>
+        </section>
+      )}
+      {restartOffered && canPaste && (
+        <section className="history-opt-in history-restart" aria-label="Restart terminal">
+          <p>
+            Recording starts in new terminals. Restart the open terminal to record its commands;
+            anything running in it will stop.
+          </p>
+          <div className="history-opt-in-actions">
+            <button
+              ref={restartButtonRef}
+              className="primary-button"
+              type="button"
+              onClick={restartTerminal}
+            >
+              <RotateCw size={14} aria-hidden="true" />
+              Restart terminal
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => setRestartOffered(false)}
+            >
+              Not now
+            </button>
+          </div>
         </section>
       )}
       {integration === "not-installed" && !integrationError && (
         <section className="history-opt-in">
-          <h3>Enable exact Bash command history</h3>
+          <h3>Enable exact {macosHost ? "Bash and zsh" : "Bash"} command history</h3>
           <p>
-            Control Room will install one script under <code>~/.local/share/control-room/</code> and
-            one marked source block in <code>~/.bashrc</code>. It records commands, directories,
-            times, and exit codes from integrated Control Room sessions. Command lines may contain
-            secrets.
+            Control Room will install {macosHost ? "scripts" : "one script"} under{" "}
+            <code>~/.local/share/control-room/</code> and marked source blocks in{" "}
+            <code>~/.bashrc</code>
+            {macosHost ? (
+              <>
+                {" "}
+                and <code>~/.zshrc</code>
+              </>
+            ) : null}
+            . It records commands, directories, times, and exit codes from integrated Control Room
+            sessions. Command lines may contain secrets.
           </p>
           <p className="history-opt-in-note">
             <Info size={15} aria-hidden="true" />

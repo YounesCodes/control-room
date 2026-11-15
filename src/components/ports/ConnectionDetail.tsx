@@ -1,4 +1,5 @@
 import { FileClock, Server } from "lucide-react";
+import { serviceOwnerLabels } from "../../lib/port-inspector";
 import type { ConnectionSummary, LogSourceSelection } from "../../types";
 
 export function ConnectionDetail({
@@ -10,6 +11,7 @@ export function ConnectionDetail({
   onOpenSystemd: (unitId: string) => void;
   onViewLogs: (source: LogSourceSelection) => void;
 }) {
+  const ownerLabels = serviceOwnerLabels(selected.systemdUnit);
   return (
     <>
       <header>
@@ -46,7 +48,7 @@ export function ConnectionDetail({
             <dd>{selected.processId ?? "Unavailable"}</dd>
           </div>
           <div>
-            <dt>Systemd unit</dt>
+            <dt>{ownerLabels.kind}</dt>
             <dd>{selected.systemdUnit ?? "Not established"}</dd>
           </div>
         </dl>
@@ -72,14 +74,14 @@ export function ConnectionDetail({
             type="button"
             onClick={() => onOpenSystemd(selected.systemdUnit!)}
           >
-            <Server size={15} /> Open unit
+            <Server size={15} /> {ownerLabels.open}
           </button>
           <button
             className="secondary-button"
             type="button"
             onClick={() => onViewLogs({ type: "systemd", id: selected.systemdUnit! })}
           >
-            <FileClock size={15} /> View journal
+            <FileClock size={15} /> {ownerLabels.logs}
           </button>
         </div>
       )}

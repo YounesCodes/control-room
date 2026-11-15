@@ -5,6 +5,7 @@ import { useState } from "react";
 import { ContainerImageIcon } from "./ContainerImageIcon";
 import catalog from "../assets/container-logos/catalog.json";
 import "../styles.css";
+import { tabKey, shiftTabKey } from "../test/keyboard";
 
 afterEach(cleanup);
 function Fixture() {
@@ -36,10 +37,15 @@ it("keeps logos neutral at rest and reveals brand colors on hover, keyboard focu
   await waitFor(() => expect(color()).toBe(branded));
   await page.getByRole("button", { name: "Custom image" }).click();
   await waitFor(() => expect(color()).toBe(neutral));
-  await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
-  await waitFor(() => expect(color()).toBe(branded));
-  await userEvent.keyboard("{Enter}{Tab}");
-  await waitFor(() => expect(color()).toBe(branded));
+  // WebKit does not focus buttons on click; start keyboard travel from there.
+  screen.getByRole("button", { name: "Custom image" }).focus();
+  await userEvent.keyboard(shiftTabKey);
+  const postgres = screen.getByRole("button", { name: /PostgreSQL/ });
+  await waitFor(() => expect(document.activeElement).toBe(postgres));
+  // Slow macOS runners can take longer than the default wait to start the fade.
+  await waitFor(() => expect(color()).toBe(branded), { timeout: 3000 });
+  await userEvent.keyboard("{Enter}" + tabKey);
+  await waitFor(() => expect(color()).toBe(branded), { timeout: 3000 });
   const mask = getComputedStyle(icon).maskImage;
   const url = mask.slice(5, -2);
   const response = await fetch(url);

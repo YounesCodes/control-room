@@ -291,7 +291,8 @@ describe("Local Terminal Mode desktop", () => {
     await $(".new-terminal-menu").$(`aria/Local terminals: ${localShellLabel}`).click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
     await $("button=Add connection").click();
-    await expect($("[role=dialog]")).toBeDisplayed();
+    // The new-terminal menu is also a dialog and can still be closing here.
+    await expect($(".connection-dialog[role=dialog]")).toBeDisplayed();
     await browser.keys("Escape");
     await browser.waitUntil(
       async () =>

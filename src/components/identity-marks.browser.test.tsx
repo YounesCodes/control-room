@@ -105,14 +105,14 @@ it("uses the same logo scale for every OS and local shell, including larger dial
     if (!svg) {
       const image = mark.querySelector("img")!;
       await expect.poll(() => image.naturalWidth).toBeGreaterThan(0);
-      expect(image.getBoundingClientRect().width).toBe(16);
-      expect(image.getBoundingClientRect().height).toBe(16);
+      expect(image.getBoundingClientRect().width).toBeCloseTo(16, 2);
+      expect(image.getBoundingClientRect().height).toBeCloseTo(16, 2);
       continue;
     }
-    expect(mark.getBoundingClientRect().width).toBe(18);
-    expect(mark.getBoundingClientRect().height).toBe(18);
-    expect(svg.getBoundingClientRect().width).toBe(16);
-    expect(svg.getBoundingClientRect().height).toBe(16);
+    expect(mark.getBoundingClientRect().width).toBeCloseTo(18, 2);
+    expect(mark.getBoundingClientRect().height).toBeCloseTo(18, 2);
+    expect(svg.getBoundingClientRect().width).toBeCloseTo(16, 2);
+    expect(svg.getBoundingClientRect().height).toBeCloseTo(16, 2);
     // Logos keep their aspect ratio and fit the shared slot, rather than
     // stretching wide shell or distribution marks into squares.
     const artwork = svg.getBBox();
@@ -122,7 +122,7 @@ it("uses the same logo scale for every OS and local shell, including larger dial
     await userEvent.hover(row.querySelector("button")!);
   }
   const heading = container.querySelector("[data-heading-mark] .host-os-icon")!;
-  expect(heading.getBoundingClientRect().width).toBe(24);
-  expect(heading.querySelector("svg")!.getBoundingClientRect().width).toBe(22);
+  expect(heading.getBoundingClientRect().width).toBeCloseTo(24, 2);
+  expect(heading.querySelector("svg")!.getBoundingClientRect().width).toBeCloseTo(22, 2);
   await page.screenshot({ path: "../../test-results/identity-logo-scale.png" });
 });

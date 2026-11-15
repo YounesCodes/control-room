@@ -52,6 +52,7 @@ vi.mock("../lib/api", () => {
         sshConfigPath: "",
         sshAgentAvailable: false,
         platformSupported: true,
+        platform: "windows",
       }),
       workspaceState: async () => ({
         workspaces: [],

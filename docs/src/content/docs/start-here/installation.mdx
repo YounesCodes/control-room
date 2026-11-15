@@ -25,6 +25,12 @@ On Linux the database is at `$XDG_DATA_HOME/app.controlroom.desktop/control-room
 
 If your window manager does not support dragging the undecorated window from its edges, use its system move or resize shortcut. The automated desktop check runs under X11 with Openbox.
 
+## macOS preview
+
+The macOS port supports Intel and Apple Silicon. Before the first public Mac release, use the matching test bundle from the [macOS workflow](https://github.com/YounesCodes/control-room/actions/workflows/macos.yml), or build from the port branch with Node.js 22.22.2 or newer, Rust stable, and Xcode Command Line Tools. Run `npm ci`, then `npm run tauri build`. Open `src-tauri/target/release/bundle/macos/Control Room.app`.
+
+Test bundles use ad-hoc signing and are not notarized. Public Mac releases remain disabled until Apple Developer signing and notarization are configured. macOS includes the OpenSSH client.
+
 ## Updates
 
 The Windows installer and Linux AppImage check GitHub Releases while the app is open. When an update is available, select the download icon in the title bar to see the version and changes. Its tooltip says **Update available**. The download starts when you ask for it. A ring shows download progress. Control Room verifies the update's signature before installation.

@@ -58,7 +58,11 @@ const sections = {
     "sudo permissions root passwordless structured operations",
   ],
   updates: ["app", "Control Room updates", "version automatic check download restart"],
-  ssh: ["app", "SSH environment", "ssh openssh config agent paths diagnostics"],
+  ssh: [
+    "app",
+    "SSH environment",
+    "ssh.exe openssh executable config agent paths platform diagnostics",
+  ],
 } satisfies Record<string, [Category, string, string]>;
 
 const terminalTabs = [
@@ -218,6 +222,14 @@ export function SettingsPane({
   const [saveFailed, setSaveFailed] = useState(false);
   const [checking, setChecking] = useState(false);
   const [checkResult, setCheckResult] = useState<ManualCheckResult | null>(null);
+  const platformLabel =
+    environment?.platform === "windows"
+      ? "Windows"
+      : environment?.platform === "macos"
+        ? "macOS"
+        : environment?.platform === "linux"
+          ? "Linux"
+          : "Unsupported platform";
   const [category, setCategory] = useState<Category>("general");
   const [terminalSection, setTerminalSection] = useState<TerminalSection>("appearance");
   const [search, setSearch] = useState("");
@@ -624,7 +636,7 @@ export function SettingsPane({
                         onUse={async (family) => {
                           const updated = {
                             ...savedSettings.current,
-                            terminalFontFamily: `"${family}", Cascadia Mono, Consolas, monospace`,
+                            terminalFontFamily: `"${family}", ${defaults.terminalFontFamily}`,
                           };
                           await api.saveSettings(updated);
                           onSaved(updated);
@@ -918,7 +930,11 @@ export function SettingsPane({
               <SettingsSection id="ssh" {...sectionProps}>
                 <dl className="detail-list settings-ssh">
                   <div>
-                    <dt>{linux ? "ssh" : "ssh.exe"}</dt>
+                    <dt>Platform</dt>
+                    <dd>{environment ? platformLabel : "Checking…"}</dd>
+                  </div>
+                  <div>
+                    <dt>SSH executable</dt>
                     {!environment ? (
                       <dd>Checking…</dd>
                     ) : environment.sshPath ? (
@@ -933,11 +949,11 @@ export function SettingsPane({
                     )}
                   </div>
                   <div>
-                    <dt>OpenSSH config</dt>
+                    <dt>SSH config</dt>
                     <dd className="technical">{environment?.sshConfigPath ?? "Checking…"}</dd>
                   </div>
                   <div>
-                    <dt>ssh-agent</dt>
+                    <dt>SSH agent</dt>
                     <dd>
                       {!environment ? (
                         "Checking…"
