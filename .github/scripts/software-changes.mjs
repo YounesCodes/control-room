@@ -41,6 +41,6 @@ if (process.argv.includes("--check")) {
     software = affectsSoftware(paths);
     frontend = frontendOnly(paths, EVENT_NAME);
   }
-  console.log(`software=${software} frontend_only=${frontend}`);
+  process.stdout.write(`software=${software} frontend_only=${frontend}\n`);
   appendFileSync(GITHUB_OUTPUT, `software=${software}\nfrontend_only=${frontend}\n`);
 }

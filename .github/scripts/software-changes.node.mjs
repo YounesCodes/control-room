@@ -4,7 +4,8 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import process from "node:process";
+import { URL, fileURLToPath } from "node:url";
 import { affectsSoftware, frontendOnly } from "./software-changes.mjs";
 
 const script = fileURLToPath(new URL("./software-changes.mjs", import.meta.url));
