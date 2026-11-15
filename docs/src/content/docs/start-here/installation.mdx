@@ -3,7 +3,13 @@ title: Install and update
 description: Install Control Room on Windows or Linux and keep it up to date.
 ---
 
-Download a package from the [latest GitHub release](https://github.com/YounesCodes/control-room/releases/latest). You can compare it with the SHA-256 checksum attached to the release.
+Download a package from the [latest GitHub release](https://github.com/YounesCodes/control-room/releases/latest).
+
+To check a download, save `SHA256SUMS.txt` from the same release into the same folder and run the command for your system from that folder:
+
+- **Windows (PowerShell):** `(Get-Content SHA256SUMS.txt) -match (Get-FileHash .\<filename>.exe).Hash` prints the package's line if the file matches, and nothing if it does not.
+- **Linux:** `sha256sum --ignore-missing -c SHA256SUMS.txt` prints `OK` for each matching package.
+- **macOS:** `shasum -a 256 --ignore-missing -c SHA256SUMS.txt` prints `OK` for each matching package.
 
 ## Windows
 
