@@ -269,6 +269,7 @@ function renderPane(
     onProcessing?: (busy: boolean) => void;
     onTitle?: (title: string | null) => void;
     findRequest?: number;
+    onReconnect?: () => void;
   } = {},
 ) {
   render(
@@ -886,6 +887,35 @@ describe("TerminalPane sessions", () => {
     xterm.onData?.("echo once");
     await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalledTimes(1));
     expect(writtenText()).toEqual(["echo once"]);
+  });
+
+  it("ends a cleanly exited SSH session with a calm notice and Reconnect", () => {
+    const onReconnect = vi.fn();
+    renderPane(
+      {
+        ...createRemoteWorkspace(connection),
+        state: "disconnected",
+        connectRequested: false,
+        reason: "SSH session ended.",
+      },
+      vi.fn(),
+      { onReconnect },
+    );
+
+    const notice = screen.getByRole("status");
+    expect(notice.textContent).toContain("SSH session ended.");
+    expect(notice.getAttribute("data-tone")).toBe("neutral");
+    screen.getByRole("button", { name: "Reconnect" }).click();
+    expect(onReconnect).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    renderPane({
+      ...createRemoteWorkspace(connection),
+      state: "error",
+      connectRequested: false,
+      reason: "SSH connection was lost (exit code 255)",
+    });
+    expect(screen.getByRole("alert").getAttribute("data-tone")).toBe("error");
   });
 
   it("keeps the original connection failure when input is attempted", () => {

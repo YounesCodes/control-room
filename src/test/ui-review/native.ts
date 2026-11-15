@@ -320,7 +320,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
                 ? {
                     sessionId,
                     state: "disconnected",
-                    reason: "Connection to example.invalid closed by remote host.",
+                    reason: "SSH session ended.",
                   }
                 : { sessionId, state: "connected", reason: null },
           }),
