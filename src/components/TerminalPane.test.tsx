@@ -210,7 +210,11 @@ vi.mock("@xterm/xterm", () => ({
 }));
 
 import { TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
-import { createLocalWorkspace, createRemoteWorkspace } from "../lib/workspace-target";
+import {
+  createContainerWorkspace,
+  createLocalWorkspace,
+  createRemoteWorkspace,
+} from "../lib/workspace-target";
 import type { AppSettings, ConnectionState, LocalShellProfile, SavedConnection } from "../types";
 
 const settings: AppSettings = {
@@ -334,6 +338,7 @@ describe("TerminalPane sessions", () => {
         30,
         expect.anything(),
         null,
+        null,
       ),
     );
     expect(api.startLocalSession).not.toHaveBeenCalled();
@@ -351,6 +356,23 @@ describe("TerminalPane sessions", () => {
         30,
         expect.anything(),
         "wsl:Ubuntu",
+        null,
+      ),
+    );
+  });
+
+  it("starts a container terminal with only the container's ID", async () => {
+    renderPane(
+      createContainerWorkspace(connection, { id: "a".repeat(64), name: "web", image: "nginx" }),
+    );
+    await vi.waitFor(() =>
+      expect(api.startSession).toHaveBeenCalledWith(
+        connection.id,
+        100,
+        30,
+        expect.anything(),
+        null,
+        "a".repeat(64),
       ),
     );
   });

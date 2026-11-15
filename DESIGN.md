@@ -42,8 +42,8 @@ their contents across the screen.
 
 The rail holds Saved Connections, search, grouping, and remote feature
 navigation. Order capabilities by expected frequency of use: Terminal, Docker,
-Systemd, Logs, Ports, then History. Local Workspaces are terminal-only, so hide
-the capability navigation and its divider for them. Windows hosts offer
+Systemd, Logs, Ports, then History. Local Workspaces and container terminals are
+terminal-only, so hide the capability navigation and its divider for them. Windows hosts offer
 Terminal, Services, Ports, Docker, and container Logs. Keep Docker and Logs
 discoverable when Docker is missing and let their views report the failure.
 Do not repeat a connection's identity in a second header or status rail.
@@ -81,6 +81,10 @@ panes included. Keep the gutter reserved so a thumb never shifts content.
   rest. Saved Connection cards reveal their three-dot button the same way.
 - Each tab carries its shell or host OS mark. Overflow menus list full names,
   stay inside the window, and support arrow keys, Home, End, Enter, and Escape.
+- A container terminal's tab carries the image mark and the container name,
+  followed by its host in quieter text that gives way first when the tab
+  narrows. In the rail it hangs under its host card as a leaf joined by a thin
+  elbow. The leaf, not the host card, shows its selection and session state.
 
 ### Focus Mode and splits
 
@@ -180,6 +184,10 @@ rest. A published port opens its exact endpoint in Ports, matched by container
 ID, address, ports, and protocol. Report a missing publication instead of
 selecting another owner on the same port.
 
+Open terminal starts a shell in a running container as its own tab beside the
+host's tabs. Opening the same container again returns to that tab instead of
+starting a second shell.
+
 Recognized images show their logo, matched by full repository name or known
 alias and never by container name. Unknown images use the Lucide Container
 outline. Exited containers are neutral gray. Red is for failed or dead
@@ -247,8 +255,10 @@ ones. Reserve built-in hues for status, and pair each with a shape, label, or
 other cue. Do not add a new accent color for an individual screen or action.
 
 Use borders and restrained fills to separate controls and surfaces. Selected
-rows get an outline around the whole box, never only a left edge. Avoid heavy
-shadows and reserve stronger elevation for menus and dialogs.
+rows get an outline around the whole box, never only a left edge. The current
+host, container terminal, and capability in the sidebar share one quiet
+selection: a faintly warm fill with a hairline border, never the bright accent.
+Avoid heavy shadows and reserve stronger elevation for menus and dialogs.
 
 Connection tags use user-selected colors and never imply connection state.
 Terminal ANSI colors are user-editable, belong to terminal output, and apply to

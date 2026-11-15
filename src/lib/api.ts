@@ -161,10 +161,14 @@ export const api = {
     rows: number,
     output: Channel<ArrayBuffer>,
     remoteShellId: string | null = null,
+    // A Container Terminal names only the container's full ID. Rust builds the
+    // `docker exec` command from it.
+    containerId: string | null = null,
   ) =>
     invoke<{ sessionId: string; connectionId: string }>("start_session", {
       connectionId,
       remoteShellId,
+      containerId,
       cols,
       rows,
       output,

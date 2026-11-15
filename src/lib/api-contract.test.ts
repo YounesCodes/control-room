@@ -71,6 +71,19 @@ describe("IPC data and lifetime contracts", () => {
       rows: 40,
       output,
       remoteShellId: "wsl:Ubuntu",
+      containerId: null,
+    });
+  });
+  it("sends only the container ID when starting a container terminal", async () => {
+    const output = new Channel<ArrayBuffer>();
+    await api.startSession("host", 120, 40, output, null, "a".repeat(64));
+    expect(invoke).toHaveBeenCalledWith("start_session", {
+      connectionId: "host",
+      cols: 120,
+      rows: 40,
+      output,
+      remoteShellId: null,
+      containerId: "a".repeat(64),
     });
   });
   it("uses bounded history defaults and preserves an explicit search limit", async () => {

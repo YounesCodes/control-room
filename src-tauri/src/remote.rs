@@ -1381,7 +1381,7 @@ fn parse_established_connections(text: &str) -> EstablishedConnections {
     }
 }
 
-fn validate_stable_container_id(value: &str) -> Result<&str, String> {
+pub(crate) fn validate_stable_container_id(value: &str) -> Result<&str, String> {
     let value = validate_container_id(value)?;
     if value.len() != 64 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
         return Err("Container inspection requires a full Docker ID".into());
@@ -1955,6 +1955,37 @@ fn journal_command(service: &str, lines: u16, follow: bool) -> String {
         "env LC_ALL=C journalctl -u '{service}' -n {lines} --no-pager -o short-iso-precise{}",
         if follow { " -f" } else { "" }
     )
+}
+
+/// The shell started inside a container: bash when the image has it, otherwise
+/// sh. It carries no quotes, so the Linux command and the Windows PowerShell
+/// launcher can both pass it as one argument unchanged.
+pub(crate) const CONTAINER_SHELL_SCRIPT: &str =
+    "if command -v bash >/dev/null 2>&1; then exec bash; else exec sh; fi";
+
+/// An interactive shell inside one container, run on a Linux host over the
+/// terminal's own ssh pty. The connected marker means ssh reached the host;
+/// what `docker exec` then reports, such as a stopped container or a missing
+/// shell, stays visible in the terminal. With sudo allowed, a host where this
+/// account cannot reach the daemon retries through sudo, which can prompt in
+/// the terminal. Only a full container ID is accepted, so the ID carries no
+/// shell syntax.
+pub(crate) fn docker_exec_command(
+    container_id: &str,
+    sudo_allowed: bool,
+) -> Result<String, String> {
+    let container_id = validate_stable_container_id(container_id)?;
+    let exec = format!(
+        "docker exec -it -e TERM=xterm-256color '{container_id}' sh -c '{CONTAINER_SHELL_SCRIPT}'"
+    );
+    let marker = "printf '\\033]633;ControlRoom;connected\\007'";
+    Ok(if sudo_allowed {
+        format!(
+            "{marker}; if docker version >/dev/null 2>&1; then exec {exec}; else exec sudo {exec}; fi"
+        )
+    } else {
+        format!("{marker}; exec {exec}")
+    })
 }
 
 fn docker_log_command(container: &str, lines: u16, follow: bool) -> String {
@@ -2846,6 +2877,48 @@ esac
         for mutation in [" start ", " stop ", " restart ", " rm ", " exec "] {
             assert!(!command.contains(mutation));
         }
+    }
+
+    #[test]
+    fn a_container_terminal_execs_one_validated_container_through_the_host_pty() {
+        let id = "d".repeat(64);
+        let command = docker_exec_command(&id, false).unwrap();
+        assert!(command.starts_with("printf '\\033]633;ControlRoom;connected\\007'; exec "));
+        assert!(command.contains(&format!(
+            "docker exec -it -e TERM=xterm-256color '{id}' sh -c '{CONTAINER_SHELL_SCRIPT}'"
+        )));
+        // bash when the image has it, otherwise sh, and no quotes that could
+        // close the surrounding argument.
+        assert!(CONTAINER_SHELL_SCRIPT.contains("exec bash"));
+        assert!(CONTAINER_SHELL_SCRIPT.contains("exec sh"));
+        assert!(!CONTAINER_SHELL_SCRIPT.contains(['\'', '"']));
+        assert!(!command.contains("sudo"));
+        for mutation in [" rm ", " stop ", " restart ", " kill "] {
+            assert!(!command.contains(mutation));
+        }
+
+        // A short ID, a name, or shell syntax never reaches the host.
+        for rejected in [
+            "short",
+            "web",
+            &format!("{id}'; reboot; '"),
+            &"g".repeat(64),
+        ] {
+            assert!(docker_exec_command(rejected, false).is_err(), "{rejected}");
+        }
+    }
+
+    #[test]
+    fn a_container_terminal_uses_sudo_only_when_allowed_and_the_daemon_needs_it() {
+        let id = "e".repeat(64);
+        let command = docker_exec_command(&id, true).unwrap();
+        let direct = format!("then exec docker exec -it -e TERM=xterm-256color '{id}'");
+        let elevated = format!("else exec sudo docker exec -it -e TERM=xterm-256color '{id}'");
+        assert!(command.contains("if docker version >/dev/null 2>&1; "));
+        assert!(command.contains(&direct));
+        assert!(command.contains(&elevated));
+        // Never `sudo -n`: the prompt belongs in the interactive terminal.
+        assert!(!command.contains("sudo -n"));
     }
 
     #[test]
