@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
-import axe from "axe-core";
+import { runAxe } from "../test/axe";
 import { ConnectionSection } from "./ResizablePanels";
 import { WindowsServicesPane } from "../pages/WindowsServicesPane";
 import type { SavedConnection } from "../types";
@@ -72,7 +72,7 @@ describe("Windows service layout", () => {
     expect(Number.parseFloat(getComputedStyle(field.parentElement!).gap)).toBeGreaterThanOrEqual(8);
     expect(filter.getBoundingClientRect().width).toBeGreaterThan(90);
     expect(pane.scrollWidth).toBeLessThanOrEqual(pane.clientWidth);
-    const accessibility = await axe.run(host, { rules: { region: { enabled: false } } });
+    const accessibility = await runAxe(host, { rules: { region: { enabled: false } } });
     expect(accessibility.violations).toEqual([]);
     await page
       .getByRole("group", { name: "Services panes" })

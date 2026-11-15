@@ -2,7 +2,7 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import { settleMotion } from "../test/motion";
 import { page, userEvent } from "vitest/browser";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import axe from "axe-core";
+import { runAxe } from "../test/axe";
 import { ServicesPane } from "./ServicesPane";
 import { TooltipLayer } from "../components/TooltipLayer";
 import { useState } from "react";
@@ -142,7 +142,7 @@ function renderPane(items = units) {
 }
 async function audit() {
   await settleMotion();
-  return axe.run(document.querySelector(".systemd-page")!);
+  return runAxe(document.querySelector(".systemd-page")!);
 }
 function camera() {
   return document.querySelector<HTMLElement>(".systemd-graph-content")!.style.transform;

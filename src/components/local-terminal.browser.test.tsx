@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
-import axe from "axe-core";
+import { runAxe } from "../test/axe";
 import { App } from "../App";
 import { TooltipLayer } from "./TooltipLayer";
 import "../styles.css";
@@ -314,7 +314,7 @@ describe("Local Terminal Mode in the real App", () => {
       await expect
         .element(page.getByRole("button", { name: "Open Build and logs 3 terminals" }))
         .toBeVisible();
-      const result = await axe.run(container!, {
+      const result = await runAxe(container!, {
         runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
       });
       expect(
@@ -521,7 +521,7 @@ describe("Local Terminal Mode in the real App", () => {
         }),
       ),
     );
-    const result = await axe.run(container!.querySelector<HTMLElement>(".workspace-content")!, {
+    const result = await runAxe(container!.querySelector<HTMLElement>(".workspace-content")!, {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
     });
     expect(result.violations.map(({ id }) => id)).toEqual([]);
@@ -708,7 +708,7 @@ describe("Local Terminal Mode in the real App", () => {
       await expect
         .element(page.getByRole("region", { name: "Local terminal surface" }))
         .toBeVisible();
-      const result = await axe.run(container, {
+      const result = await runAxe(container, {
         runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
       });
       expect(result.violations.map(({ id }) => id)).toEqual([]);
