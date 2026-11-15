@@ -23,19 +23,22 @@ import {
     // typed at the prompt, never the window title or its arguments.
     const report =
       "process.stdout.write(String.fromCharCode(27)+']0;python --token private-title-argument'+String.fromCharCode(7));";
+    const finished = `${isWindows ? "&" : ";"} echo TITLE_FINISHED`;
     await typeTerminalText(
-      `node -e "${report}process.stdin.once('data',function(){process.stdout.write(String.fromCharCode(27)+']133;D;0'+String.fromCharCode(7));process.exit(0)})" ${isWindows ? "&" : ";"} echo TITLE_FINISHED`,
+      `node -e "${report}process.stdin.once('data',function(){process.stdout.write(String.fromCharCode(27)+']133;D;0'+String.fromCharCode(7));process.exit(0)})" ${finished}`,
     );
     // The title comes from the line the shell echoed, so let the echo arrive first.
     await browser.waitUntil(
       async () =>
-        browser.execute(() =>
-          Array.from(
-            document.querySelectorAll(".terminal-workspace-pane.active .xterm-rows > div"),
-            (row) => row.textContent ?? "",
-          )
-            .join("")
-            .includes(`${isWindows ? "&" : ";"} echo TITLE_FINISHED`),
+        browser.execute(
+          (text) =>
+            Array.from(
+              document.querySelectorAll(".terminal-workspace-pane.active .xterm-rows > div"),
+              (row) => row.textContent ?? "",
+            )
+              .join("")
+              .includes(text),
+          finished,
         ),
       { timeout: 15_000, timeoutMsg: "the shell did not echo the command" },
     );
