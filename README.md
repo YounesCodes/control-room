@@ -29,7 +29,7 @@ npm ci
 npm run tauri build
 ```
 
-Open `src-tauri/target/release/bundle/macos/Control Room.app`, or install the DMG from `bundle/dmg/`. Pull request CI also produces separate Intel and Apple Silicon test bundles. These use ad-hoc signing; public signed and notarized Mac releases require Apple Developer credentials.
+Open `src-tauri/target/release/bundle/macos/Control Room.app`, or install the DMG from `bundle/dmg/`. Pull request CI also produces separate Intel and Apple Silicon test bundles. Mac builds use ad-hoc signing and are not notarized, so macOS asks you to approve the first launch. See [Install and update](https://younescodes.github.io/control-room/start-here/installation/#macos-preview).
 
 ## Documentation
 
