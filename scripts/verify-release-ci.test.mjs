@@ -15,6 +15,7 @@ const jobs = [
   "validate",
   "installer",
   "desktop / desktop",
+  "desktop / linux",
   "hosted-ssh",
   "linux-desktop",
 ].map((name) => ({
@@ -39,15 +40,15 @@ describe("release CI verification", () => {
   });
   it("rejects missing, skipped, or failed required jobs", () => {
     expect(() => verifyReleaseCI(sha, [run], jobs.slice(0, -1))).toThrow();
-    expect(() =>
-      verifyReleaseCI(
-        sha,
-        [run],
-        jobs.map((job) =>
-          job.name === "desktop / desktop" ? { ...job, conclusion: "skipped" } : job,
+    for (const name of ["desktop / desktop", "desktop / linux"]) {
+      expect(() =>
+        verifyReleaseCI(
+          sha,
+          [run],
+          jobs.map((job) => (job.name === name ? { ...job, conclusion: "skipped" } : job)),
         ),
-      ),
-    ).toThrow();
+      ).toThrow();
+    }
     expect(() =>
       verifyReleaseCI(
         sha,
