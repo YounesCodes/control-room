@@ -46,6 +46,18 @@ function execute(script, ...args) {
   return request("POST", "/session/" + session + "/execute/sync", { script, args });
 }
 
+// Window state as the app's own window commands read it. Toggle Maximize acts
+// on this state, which can trail the X geometry by a few milliseconds.
+async function maximized() {
+  const value = await request("POST", "/session/" + session + "/execute/async", {
+    script:
+      "const done = arguments[arguments.length - 1]; window.__TAURI_INTERNALS__.invoke('plugin:window|is_maximized', { label: 'main' }).then(done, (error) => done({ error: String(error) }));",
+    args: [],
+  });
+  if (typeof value !== "boolean") throw new Error("is_maximized failed: " + JSON.stringify(value));
+  return value;
+}
+
 async function waitFor(label, condition) {
   const deadline = Date.now() + 15_000;
   do {
@@ -72,6 +84,35 @@ async function click(label) {
     "/session/" + session + "/element/" + Object.values(element)[0] + "/click",
     {},
   );
+}
+
+// Native clicks aim at a point in the page. Pane layout glides with Web
+// Animations, and a hidden window holds them until it is shown again, so read
+// the point only once no finite animation runs and two reads agree.
+async function settledPoint(label, script) {
+  let previous = "";
+  let point;
+  await waitFor("settled " + label, async () => {
+    const sample = await execute(
+      `if (document.visibilityState !== "visible") return null;
+      const moving = document.getAnimations().some((animation) =>
+        animation.playState === "running" &&
+        animation.effect?.getComputedTiming().endTime !== Infinity);
+      if (moving) return null;
+      ${script}`,
+    );
+    const key = JSON.stringify(sample);
+    const stable = sample !== null && key === previous;
+    previous = key;
+    point = sample;
+    return stable;
+  });
+  return point.map(String);
+}
+
+function center(selector) {
+  return `const box = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
+    return [Math.round(box.x + box.width / 2), Math.round(box.y + box.height / 2)];`;
 }
 
 function xdo(...args) {
@@ -150,10 +191,11 @@ try {
         .map(([key, value]) => [key, Number(value)]),
     );
   const width = () => geometry().WIDTH;
-  const outputPoint = await execute(
+  const outputPoint = await settledPoint(
+    "clipboard output",
     "const row = Array.from(document.querySelectorAll('.terminal-workspace-pane.active .xterm-rows > div')).find(el => el.textContent.includes('LINUX_CLIPBOARD')); const box = row.getBoundingClientRect(); return [Math.round(box.x + 6), Math.round(box.y + box.height / 2)];",
   );
-  xdo("mousemove", "--window", id, ...outputPoint.map(String), "click", "--repeat", "2", "1");
+  xdo("mousemove", "--window", id, ...outputPoint, "click", "--repeat", "2", "1");
   xdo("key", "--clearmodifiers", "ctrl+shift+c");
   await waitFor("terminal selection copied to clipboard", () =>
     execFileSync("xclip", ["-selection", "clipboard", "-o"], {
@@ -180,9 +222,9 @@ try {
 
   const initial = width();
   await click("Maximize or restore window");
-  await waitFor("maximized window", () => width() > initial);
+  await waitFor("maximized window", async () => width() > initial && (await maximized()));
   await click("Maximize or restore window");
-  await waitFor("restored window", () => width() === initial);
+  await waitFor("restored window", async () => width() === initial && !(await maximized()));
 
   const height = geometry().HEIGHT;
   xdo(
@@ -199,14 +241,22 @@ try {
   xdo("mouseup", "1");
   await waitFor("window resize by its edge", () => width() > initial);
 
-  await click("Minimize window");
+  // A WebDriver click can still be waiting for the page's next rendering
+  // update when the window iconifies, and a minimized page renders nothing.
+  // Click the control the way a user does instead.
+  const minimizePoint = await settledPoint(
+    "minimize button",
+    center("button[aria-label='Minimize window']"),
+  );
+  xdo("mousemove", "--window", id, ...minimizePoint, "click", "1");
   await waitFor("minimized window", () => !windowId());
   xdo("windowactivate", "--sync", id);
   await waitFor("restored window after minimize", () => windowId() === id);
-  const terminalPoint = await execute(
-    "const box = document.querySelector('.terminal-workspace-pane.active .terminal-content').getBoundingClientRect(); return [Math.round(box.x + box.width / 2), Math.round(box.y + box.height / 2)];",
+  const terminalPoint = await settledPoint(
+    "restored terminal",
+    center(".terminal-workspace-pane.active .terminal-content"),
   );
-  xdo("mousemove", "--window", id, ...terminalPoint.map(String), "click", "1");
+  xdo("mousemove", "--window", id, ...terminalPoint, "click", "1");
   await waitFor("active terminal focus", () =>
     execute("return document.activeElement?.classList.contains('xterm-helper-textarea')"),
   );
@@ -222,10 +272,8 @@ try {
   const screenshot = await request("GET", "/session/" + session + "/screenshot");
   writeFileSync("test-results/linux-desktop/terminal.png", Buffer.from(screenshot, "base64"));
 
-  const closePoint = await execute(
-    "const box = document.querySelector('.window-close-button').getBoundingClientRect(); return [Math.round(box.x + box.width / 2), Math.round(box.y + box.height / 2)];",
-  );
-  xdo("mousemove", "--window", id, ...closePoint.map(String), "click", "1");
+  const closePoint = await settledPoint("close button", center(".window-close-button"));
+  xdo("mousemove", "--window", id, ...closePoint, "click", "1");
   await waitFor("closed window", () => !windowId());
   assert.ok(existsSync(join(env.XDG_DATA_HOME, "app.controlroom.desktop", "control-room.db")));
   console.log(
@@ -234,6 +282,12 @@ try {
 } catch (error) {
   // Report the cause here: a cleanup failure below must not replace it.
   console.error(error);
+  if (session) {
+    const page = await execute(
+      "return { visibility: document.visibilityState, focused: document.hasFocus(), active: document.activeElement?.className || document.activeElement?.nodeName };",
+    ).catch((cause) => "unavailable: " + cause.message);
+    console.error("Page state:", page);
+  }
   try {
     // Tells an unmapped window apart from a missing or retitled one.
     console.error("Windows named Control Room:", xdo("search", "--name", "Control Room") || "none");
