@@ -99,7 +99,19 @@ jobs:
       - name: Build ad-hoc signed test bundles
         env:
           APPLE_SIGNING_IDENTITY: "-"
-        run: npm run tauri build -- --target ${{ matrix.target }}
+          TARGET: ${{ matrix.target }}
+        # Hosted runners sometimes keep the scratch disk image busy while
+        # bundle_dmg.sh ejects it. Retry only that failure; the compiled app
+        # is reused, so a second attempt only rebuilds the bundles.
+        run: |
+          set -o pipefail
+          log="$RUNNER_TEMP/tauri-build.log"
+          for attempt in 1 2 3; do
+            if npm run tauri build -- --target "$TARGET" 2>&1 | tee "$log"; then exit 0; fi
+            if [[ $attempt == 3 ]] || ! grep -Fq 'Resource busy' "$log"; then exit 1; fi
+            echo "DMG disk image was busy; retrying (attempt $attempt of 2)" >&2
+            sleep 15
+          done
       - name: Verify and archive the application
         env:
           TARGET: ${{ matrix.target }}
