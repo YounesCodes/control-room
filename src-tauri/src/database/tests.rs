@@ -1,0 +1,2262 @@
+use super::*;
+
+fn input(name: &str) -> SavedConnectionInput {
+    SavedConnectionInput {
+        display_name: name.into(),
+        destination: "debian-laptop".into(),
+        username: Some("test-user".into()),
+        port: None,
+        identity_file: None,
+        history_enabled: true,
+        sudo_enabled: false,
+        group_id: None,
+        tag_names: Vec::new(),
+    }
+}
+
+#[test]
+fn app_metadata_round_trips_and_clears() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+
+    assert_eq!(
+        database.get_app_metadata("pending_update_notice").unwrap(),
+        None
+    );
+
+    database
+        .set_app_metadata("pending_update_notice", r#"{"version":"0.7.0"}"#)
+        .unwrap();
+    assert_eq!(
+        database.get_app_metadata("pending_update_notice").unwrap(),
+        Some(r#"{"version":"0.7.0"}"#.to_string())
+    );
+
+    database
+        .set_app_metadata("pending_update_notice", r#"{"version":"0.8.0"}"#)
+        .unwrap();
+    assert_eq!(
+        database.get_app_metadata("pending_update_notice").unwrap(),
+        Some(r#"{"version":"0.8.0"}"#.to_string())
+    );
+
+    database
+        .delete_app_metadata("pending_update_notice")
+        .unwrap();
+    assert_eq!(
+        database.get_app_metadata("pending_update_notice").unwrap(),
+        None
+    );
+}
+
+#[test]
+fn app_metadata_shares_the_settings_table_without_disturbing_it() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+
+    let settings = AppSettings {
+        terminal_font_size: 17,
+        ..AppSettings::default()
+    };
+    database.save_settings(&settings).unwrap();
+    database
+        .set_app_metadata("pending_update_notice", "{}")
+        .unwrap();
+
+    assert_eq!(database.get_settings().unwrap().terminal_font_size, 17);
+    database
+        .delete_app_metadata("pending_update_notice")
+        .unwrap();
+    assert_eq!(database.get_settings().unwrap().terminal_font_size, 17);
+}
+
+#[test]
+fn header_preferences_persist_and_invalid_intervals_are_rejected() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let mut settings = AppSettings {
+        host_metrics_enabled: true,
+        host_metrics: vec![
+            crate::models::HeaderMetric::Cpu,
+            crate::models::HeaderMetric::DiskIo,
+            crate::models::HeaderMetric::Uptime,
+        ],
+        host_metrics_interval_seconds: 10,
+        ..AppSettings::default()
+    };
+    database.save_settings(&settings).unwrap();
+    let loaded = database.get_settings().unwrap();
+    assert!(loaded.host_metrics_enabled);
+    assert_eq!(loaded.host_metrics, settings.host_metrics);
+    assert_eq!(loaded.host_metrics_interval_seconds, 10);
+    settings.host_metrics = AppSettings::default().host_metrics;
+    assert_eq!(settings.host_metrics.len(), 5);
+    database.save_settings(&settings).unwrap();
+    assert_eq!(
+        database.get_settings().unwrap().host_metrics,
+        settings.host_metrics
+    );
+    settings
+        .host_metrics
+        .retain(|metric| *metric != crate::models::HeaderMetric::DiskIo);
+    database.save_settings(&settings).unwrap();
+    assert_eq!(
+        database.get_settings().unwrap().host_metrics.len(),
+        4,
+        "existing selections stay unchanged"
+    );
+    settings.host_metrics = vec![
+        crate::models::HeaderMetric::Cpu,
+        crate::models::HeaderMetric::Disk,
+        crate::models::HeaderMetric::DiskIo,
+    ];
+    database.save_settings(&settings).unwrap();
+    assert_eq!(
+        database.get_settings().unwrap().host_metrics,
+        settings.host_metrics
+    );
+    settings.host_metrics_interval_seconds = 1;
+    assert!(database.save_settings(&settings).is_err());
+    settings.host_metrics_interval_seconds = 5;
+    settings.host_metrics.push(crate::models::HeaderMetric::Cpu);
+    assert!(database.save_settings(&settings).is_err());
+}
+
+#[test]
+fn settings_written_before_the_updater_existed_still_load() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("control-room.db");
+    let database = Database::open(&path).unwrap();
+
+    let legacy = r##"{"terminalFontFamily":"Consolas","terminalFontSize":15,"terminalScrollback":9000,"terminalRightClickPaste":true,"terminalForeground":"#f2f2ee","terminalRed":"#ff6f7d","terminalGreen":"#52cf91","terminalYellow":"#e8c56c","terminalBlue":"#55aef2","terminalMagenta":"#c793ff","terminalCyan":"#65d4d1","defaultLogTail":500,"globalHistoryEnabled":false,"globalSudoEnabled":true}"##;
+    database.set_app_metadata("settings", legacy).unwrap();
+
+    let loaded = database.get_settings().unwrap();
+    assert_eq!(loaded.terminal_font_size, 15, "existing settings survive");
+    assert_eq!(loaded.default_log_tail, 500);
+    assert!(!loaded.host_metrics_enabled);
+    assert_eq!(loaded.host_metrics_interval_seconds, 5);
+    assert_eq!(loaded.host_metrics.len(), 5);
+    assert!(loaded.global_sudo_enabled);
+    assert!(loaded.automatic_terminal_titles);
+    assert!(
+        loaded.automatic_update_checks,
+        "a missing preference defaults to on rather than wiping the payload"
+    );
+}
+
+#[test]
+fn automatic_terminal_titles_preference_round_trips() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("control-room.db");
+    let database = Database::open(&path).unwrap();
+    for enabled in [false, true] {
+        let settings = AppSettings {
+            automatic_terminal_titles: enabled,
+            ..AppSettings::default()
+        };
+        database.save_settings(&settings).unwrap();
+        let reopened = Database::open(&path).unwrap();
+        assert_eq!(
+            reopened.get_settings().unwrap().automatic_terminal_titles,
+            enabled
+        );
+    }
+}
+
+#[test]
+fn connections_and_history_round_trip() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let saved = database.create_connection(input("Laptop")).unwrap();
+    assert_eq!(database.list_connections().unwrap(), vec![saved.clone()]);
+
+    let history = database
+        .add_history(HistoryInput {
+            connection_id: saved.id.clone(),
+            session_id: "session-a".into(),
+            command: "docker ps".into(),
+            cwd: Some("/home/test-user".into()),
+            started_at: Utc::now().to_rfc3339(),
+            finished_at: None,
+            exit_code: Some(0),
+            shell: "bash".into(),
+        })
+        .unwrap();
+    assert_eq!(
+        database
+            .list_history(&saved.id, Some("docker"), 100)
+            .unwrap()[0]
+            .id,
+        history.id
+    );
+    database.delete_connection(&saved.id).unwrap();
+    assert!(
+        database
+            .list_history(&saved.id, None, 100)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
+fn open_ssh_aliases_keep_explicit_username_and_default_port() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let saved = database.create_connection(input("Laptop")).unwrap();
+    assert_eq!(saved.destination, "debian-laptop");
+    assert_eq!(saved.port, None);
+    assert_eq!(saved.username.as_deref(), Some("test-user"));
+}
+
+#[test]
+fn connection_organization_persists_and_group_deletion_preserves_connections() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("control-room.db");
+    let database = Database::open(&path).unwrap();
+    let homelab = database.create_connection_group("Homelab").unwrap();
+    let production = database.create_connection_group("Production").unwrap();
+    database
+        .set_connection_group_collapsed(&homelab.id, true)
+        .unwrap();
+    let groups = database
+        .move_connection_group(&production.id, "up")
+        .unwrap();
+    assert_eq!(groups[0].id, production.id);
+    assert!(groups[1].collapsed);
+
+    let mut organized = input("Database");
+    organized.group_id = Some(production.id.clone());
+    database.create_connection_tag("Docker", "#3a3a3a").unwrap();
+    database
+        .create_connection_tag("Critical", "#8250df")
+        .unwrap();
+    organized.tag_names = vec![" Docker ".into(), "docker".into(), "Critical".into()];
+    let saved = database.create_connection(organized).unwrap();
+    assert_eq!(saved.group_id.as_deref(), Some(production.id.as_str()));
+    assert_eq!(
+        saved
+            .tags
+            .iter()
+            .map(|tag| tag.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Critical", "Docker"]
+    );
+    assert_eq!(database.list_connection_tags().unwrap(), saved.tags);
+    let critical_tag = saved
+        .tags
+        .iter()
+        .find(|tag| tag.name == "Critical")
+        .unwrap();
+    let recolored = database
+        .set_connection_tag_color(&critical_tag.id, "#A371F7")
+        .unwrap();
+    assert_eq!(recolored.color, "#a371f7");
+    assert_eq!(
+        database
+            .get_connection(&saved.id)
+            .unwrap()
+            .tags
+            .iter()
+            .find(|tag| tag.id == critical_tag.id)
+            .unwrap()
+            .color,
+        "#a371f7"
+    );
+    assert_eq!(
+        database
+            .set_connection_tag_color(&critical_tag.id, "purple")
+            .unwrap_err(),
+        "Tag colors must use #RRGGBB format"
+    );
+
+    database.delete_connection_group(&production.id).unwrap();
+    let returned = database.get_connection(&saved.id).unwrap();
+    assert_eq!(returned.group_id, None);
+    assert_eq!(returned.tags.len(), 2);
+    let renamed = database
+        .rename_connection_tag(&critical_tag.id, "Priority")
+        .unwrap();
+    assert_eq!(renamed.name, "Priority");
+    assert_eq!(
+        database
+            .get_connection(&saved.id)
+            .unwrap()
+            .tags
+            .iter()
+            .find(|tag| tag.id == critical_tag.id)
+            .unwrap()
+            .name,
+        "Priority"
+    );
+    database.delete_connection_tag(&critical_tag.id).unwrap();
+    assert_eq!(database.get_connection(&saved.id).unwrap().tags.len(), 1);
+    drop(database);
+
+    let reopened = Database::open(&path).unwrap();
+    let groups = reopened.list_connection_groups().unwrap();
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].id, homelab.id);
+    assert!(groups[0].collapsed);
+    assert_eq!(reopened.get_connection(&saved.id).unwrap().group_id, None);
+}
+
+#[test]
+fn organization_names_and_tag_limits_are_deterministic() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let first = database.create_connection_group(" Production ").unwrap();
+    assert_eq!(first.name, "Production");
+    assert_eq!(
+        database.create_connection_group("production").unwrap_err(),
+        "A group with that name already exists"
+    );
+    let second = database.create_connection_group("Staging").unwrap();
+    assert_eq!(
+        database
+            .rename_connection_group(&second.id, "PRODUCTION")
+            .unwrap_err(),
+        "A group with that name already exists"
+    );
+
+    let mut unknown_tag = input("Unknown tag");
+    unknown_tag.tag_names = vec!["missing".into()];
+    assert_eq!(
+        database.create_connection(unknown_tag).unwrap_err(),
+        "Tag 'missing' does not exist"
+    );
+
+    database.create_connection_tag("docker", "#3a3a3a").unwrap();
+    assert_eq!(
+        database
+            .create_connection_tag("DOCKER", "#3a3a3a")
+            .unwrap_err(),
+        "A tag with that name already exists"
+    );
+
+    let mut duplicate_tags = input("Duplicates");
+    duplicate_tags.tag_names = vec!["docker".into(); MAX_TAGS_PER_CONNECTION + 1];
+    assert_eq!(
+        database
+            .create_connection(duplicate_tags)
+            .unwrap()
+            .tags
+            .len(),
+        1
+    );
+
+    let mut too_many_tags = input("Too many");
+    too_many_tags.tag_names = (0..=MAX_TAGS_PER_CONNECTION)
+        .map(|index| format!("tag-{index}"))
+        .collect();
+    assert_eq!(
+        database.create_connection(too_many_tags).unwrap_err(),
+        "A Saved Connection can have at most 5 tags"
+    );
+}
+
+#[test]
+fn scratchpad_notes_round_trip_for_connection_and_global_scopes() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let saved = database.create_connection(input("Laptop")).unwrap();
+    let connection_note = database
+        .save_scratchpad_note(ScratchpadNoteInput {
+            scope: "connection".into(),
+            owner_id: saved.id.clone(),
+            connection_id: Some(saved.id.clone()),
+            text: "/srv/api".into(),
+        })
+        .unwrap();
+    let updated = database
+        .save_scratchpad_note(ScratchpadNoteInput {
+            scope: "connection".into(),
+            owner_id: saved.id.clone(),
+            connection_id: Some(saved.id.clone()),
+            text: "Redis reminder".into(),
+        })
+        .unwrap();
+    assert_eq!(updated.id, connection_note.id);
+    assert_eq!(updated.created_at, connection_note.created_at);
+    assert_eq!(updated.text, "Redis reminder");
+
+    let global_note = database
+        .save_scratchpad_note(ScratchpadNoteInput {
+            scope: "global".into(),
+            owner_id: "global".into(),
+            connection_id: None,
+            text: "Shared reminder".into(),
+        })
+        .unwrap();
+    assert_ne!(global_note.id, connection_note.id);
+    assert_eq!(
+        database
+            .get_scratchpad_note("global", "global", None)
+            .unwrap(),
+        Some(global_note)
+    );
+
+    database
+        .delete_scratchpad_note("global", "global", None)
+        .unwrap();
+    assert!(
+        database
+            .get_scratchpad_note("global", "global", None)
+            .unwrap()
+            .is_none()
+    );
+    database.delete_connection(&saved.id).unwrap();
+    assert!(
+        database
+            .get_scratchpad_note("connection", &saved.id, Some(&saved.id))
+            .unwrap()
+            .is_none()
+    );
+
+    let workspace_id = "22222222-2222-4222-8222-222222222222";
+    let local_note = database
+        .save_scratchpad_note(ScratchpadNoteInput {
+            scope: "local".into(),
+            owner_id: workspace_id.into(),
+            connection_id: None,
+            text: "Build flags for this tab".into(),
+        })
+        .unwrap();
+    assert_eq!(local_note.connection_id, None);
+    assert_eq!(
+        database
+            .get_scratchpad_note("local", workspace_id, None)
+            .unwrap(),
+        Some(local_note)
+    );
+    database
+        .delete_scratchpad_note("local", workspace_id, None)
+        .unwrap();
+    assert!(
+        database
+            .get_scratchpad_note("local", workspace_id, None)
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[test]
+fn scratchpad_validation_rejects_invalid_owners_and_oversized_text() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let saved = database.create_connection(input("Laptop")).unwrap();
+    assert_eq!(
+        database
+            .save_scratchpad_note(ScratchpadNoteInput {
+                scope: "global".into(),
+                owner_id: saved.id.clone(),
+                connection_id: None,
+                text: "wrong owner".into(),
+            })
+            .unwrap_err(),
+        "Global scratchpad ownership is invalid"
+    );
+    assert_eq!(
+        database
+            .save_scratchpad_note(ScratchpadNoteInput {
+                scope: "connection".into(),
+                owner_id: saved.id.clone(),
+                connection_id: Some(saved.id),
+                text: "x".repeat(MAX_SCRATCHPAD_CHARS + 1),
+            })
+            .unwrap_err(),
+        "Scratchpad text must be at most 16384 characters"
+    );
+    let workspace_id = "33333333-3333-4333-8333-333333333333";
+    assert_eq!(
+        database
+            .save_scratchpad_note(ScratchpadNoteInput {
+                scope: "local".into(),
+                owner_id: workspace_id.into(),
+                connection_id: Some(workspace_id.into()),
+                text: "claims a connection".into(),
+            })
+            .unwrap_err(),
+        "Local terminal scratchpad ownership is invalid"
+    );
+    assert_eq!(
+        database
+            .save_scratchpad_note(ScratchpadNoteInput {
+                scope: "local".into(),
+                owner_id: "global".into(),
+                connection_id: None,
+                text: "collides with the global owner".into(),
+            })
+            .unwrap_err(),
+        "Local terminal scratchpad ownership is invalid"
+    );
+}
+
+#[test]
+fn local_scratchpad_scope_migrates_without_disturbing_existing_notes() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("control-room.db");
+    let connection_id = "11111111-1111-4111-8111-111111111111";
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch(&format!(
+            r#"
+                CREATE TABLE saved_connections (id TEXT PRIMARY KEY);
+                INSERT INTO saved_connections (id) VALUES ('{connection_id}');
+                CREATE TABLE scratchpad_notes (
+                    id TEXT PRIMARY KEY,
+                    scope TEXT NOT NULL CHECK(scope IN ('connection', 'global')),
+                    owner_id TEXT NOT NULL,
+                    connection_id TEXT REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    text TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(scope, owner_id),
+                    CHECK(
+                        (scope = 'connection' AND connection_id IS NOT NULL AND owner_id = connection_id)
+                        OR (scope = 'global' AND owner_id = 'global' AND connection_id IS NULL)
+                    )
+                );
+                INSERT INTO scratchpad_notes VALUES
+                    ('connection-note', 'connection', '{connection_id}', '{connection_id}', 'Host note', '2026-01-01', '2026-01-02'),
+                    ('global-note', 'global', 'global', NULL, 'Shared note', '2026-01-01', '2026-01-03');
+                CREATE INDEX idx_scratchpad_notes_connection
+                ON scratchpad_notes(connection_id);
+                PRAGMA user_version = 9;
+                "#,
+        ))
+        .unwrap();
+    drop(connection);
+
+    let database = Database::open(&path).unwrap();
+    assert_eq!(
+        database
+            .get_scratchpad_note("connection", connection_id, Some(connection_id))
+            .unwrap()
+            .unwrap()
+            .text,
+        "Host note"
+    );
+    assert_eq!(
+        database
+            .get_scratchpad_note("global", "global", None)
+            .unwrap()
+            .unwrap()
+            .text,
+        "Shared note"
+    );
+    let workspace_id = "44444444-4444-4444-8444-444444444444";
+    database
+        .save_scratchpad_note(ScratchpadNoteInput {
+            scope: "local".into(),
+            owner_id: workspace_id.into(),
+            connection_id: None,
+            text: "Terminal tab note".into(),
+        })
+        .unwrap();
+    assert_eq!(
+        database
+            .get_scratchpad_note("local", workspace_id, None)
+            .unwrap()
+            .unwrap()
+            .text,
+        "Terminal tab note"
+    );
+}
+
+#[test]
+fn scoped_scratchpads_migrate_connection_notes_and_latest_workspace_note() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("control-room.db");
+    let connection_id = "11111111-1111-4111-8111-111111111111";
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch(&format!(
+            r#"
+                CREATE TABLE saved_connections (id TEXT PRIMARY KEY);
+                INSERT INTO saved_connections (id) VALUES ('{connection_id}');
+                CREATE TABLE scratchpad_notes (
+                    id TEXT PRIMARY KEY,
+                    scope TEXT NOT NULL,
+                    owner_id TEXT NOT NULL,
+                    connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    text TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(scope, owner_id)
+                );
+                INSERT INTO scratchpad_notes VALUES
+                    ('connection-note', 'connection', '{connection_id}', '{connection_id}', 'Host note', '2026-01-01', '2026-01-02'),
+                    ('older-workspace', 'workspace', 'workspace-1', '{connection_id}', 'Older', '2026-01-01', '2026-01-03'),
+                    ('latest-workspace', 'workspace', 'workspace-2', '{connection_id}', 'Latest global', '2026-01-01', '2026-01-04');
+                PRAGMA user_version = 4;
+                "#,
+        ))
+        .unwrap();
+    drop(connection);
+
+    let database = Database::open(&path).unwrap();
+    assert_eq!(
+        database
+            .get_scratchpad_note("connection", connection_id, Some(connection_id))
+            .unwrap()
+            .unwrap()
+            .text,
+        "Host note"
+    );
+    let global = database
+        .get_scratchpad_note("global", "global", None)
+        .unwrap()
+        .unwrap();
+    assert_eq!(global.id, "latest-workspace");
+    assert_eq!(global.text, "Latest global");
+    assert_eq!(global.connection_id, None);
+    assert_eq!(global.scope, "global");
+}
+
+#[test]
+fn unversioned_database_is_migrated_without_losing_connections() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("control-room.db");
+    let connection = Connection::open(&path).unwrap();
+    connection
+        .execute_batch(
+            r#"
+                CREATE TABLE saved_connections (
+                    id TEXT PRIMARY KEY,
+                    display_name TEXT NOT NULL,
+                    destination TEXT NOT NULL,
+                    username TEXT,
+                    port INTEGER,
+                    identity_file TEXT,
+                    history_enabled INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    last_connected_at TEXT
+                );
+                INSERT INTO saved_connections
+                    (id, display_name, destination, history_enabled, created_at, updated_at)
+                VALUES ('legacy', 'Legacy host', 'legacy-host', 0, 'now', 'now');
+                "#,
+        )
+        .unwrap();
+    drop(connection);
+
+    let database = Database::open(&path).unwrap();
+    let legacy = &database.list_connections().unwrap()[0];
+    assert_eq!(legacy.id, "legacy");
+    assert_eq!(legacy.group_id, None);
+    assert!(legacy.tags.is_empty());
+    assert!(!legacy.sudo_enabled);
+    let version: i64 = database
+        .connection
+        .lock()
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(version, LATEST_SCHEMA_VERSION);
+    let scratchpad_table: i64 = database
+        .connection
+        .lock()
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'scratchpad_notes'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(scratchpad_table, 1);
+    drop(database);
+    Database::open(&path).unwrap();
+}
+
+#[test]
+fn stale_capability_json_is_tolerated_and_repaired() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let saved = database.create_connection(input("Laptop")).unwrap();
+    database
+        .connection
+        .lock()
+        .execute(
+            "INSERT INTO host_capabilities (connection_id, payload, detected_at) VALUES (?1, ?2, ?3)",
+            params![saved.id, r#"{"hostname":"laptop"}"#, "detected"],
+        )
+        .unwrap();
+    let capabilities = database.get_capabilities(&saved.id).unwrap().unwrap();
+    assert_eq!(capabilities.connection_id, saved.id);
+    assert_eq!(capabilities.hostname.as_deref(), Some("laptop"));
+    assert_eq!(capabilities.detected_at, "detected");
+
+    database
+        .connection
+        .lock()
+        .execute(
+            "UPDATE host_capabilities SET payload = 'not-json' WHERE connection_id = ?1",
+            [&saved.id],
+        )
+        .unwrap();
+    assert!(database.get_capabilities(&saved.id).unwrap().is_none());
+    assert!(database.get_capabilities(&saved.id).unwrap().is_none());
+}
+
+#[test]
+fn connection_target_edits_invalidate_capabilities_and_reject_old_reads() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let saved = database.create_connection(input("Laptop")).unwrap();
+    let caps = HostCapabilities {
+        connection_id: saved.id.clone(),
+        os_id: Some("windows".into()),
+        ..HostCapabilities::default()
+    };
+    database.save_capabilities(&saved, &caps).unwrap();
+    database.mark_connected(&saved.id).unwrap();
+    let mut renamed = input("Renamed");
+    database
+        .update_connection(&saved.id, renamed.clone())
+        .unwrap();
+    assert!(database.get_capabilities(&saved.id).unwrap().is_some());
+    renamed.destination = "different-host".into();
+    let updated = database.update_connection(&saved.id, renamed).unwrap();
+    assert!(database.get_capabilities(&saved.id).unwrap().is_none());
+    assert!(updated.last_connected_at.is_none());
+    assert!(database.save_capabilities(&saved, &caps).is_err());
+    assert!(database.get_capabilities(&saved.id).unwrap().is_none());
+    database.save_capabilities(&updated, &caps).unwrap();
+    assert!(database.get_capabilities(&saved.id).unwrap().is_some());
+}
+
+#[test]
+fn invalid_settings_are_discarded_before_the_frontend_uses_them() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    database
+        .connection
+        .lock()
+        .execute(
+            "INSERT INTO application_settings (key, value) VALUES ('settings', ?1)",
+            [r#"{"terminalFontSize":0,"terminalScrollback":4294967295}"#],
+        )
+        .unwrap();
+
+    let settings = database.get_settings().unwrap();
+    assert_eq!(
+        settings.terminal_font_size,
+        AppSettings::default().terminal_font_size
+    );
+    let stored: i64 = database
+        .connection
+        .lock()
+        .query_row(
+            "SELECT COUNT(*) FROM application_settings WHERE key = 'settings'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(stored, 0);
+}
+
+#[test]
+fn legacy_settings_receive_default_terminal_colors() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    database
+        .connection
+        .lock()
+        .execute(
+            "INSERT INTO application_settings (key, value) VALUES ('settings', ?1)",
+            [r#"{"terminalFontFamily":"Consolas","terminalFontSize":14,"terminalScrollback":10000,"defaultLogTail":200,"globalHistoryEnabled":true}"#],
+        )
+        .unwrap();
+
+    let settings = database.get_settings().unwrap();
+
+    assert_eq!(settings.terminal_blue, AppSettings::default().terminal_blue);
+    assert_eq!(
+        settings.terminal_green,
+        AppSettings::default().terminal_green
+    );
+}
+
+#[test]
+fn terminal_palette_migration_preserves_custom_colors_and_runs_only_once() {
+    for custom in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let database = Database::open(&path).unwrap();
+        let mut settings = AppSettings {
+            terminal_foreground: "#f2f2ee".into(),
+            terminal_red: "#ff6f7d".into(),
+            terminal_green: "#52cf91".into(),
+            terminal_yellow: "#e8c56c".into(),
+            terminal_blue: "#55aef2".into(),
+            terminal_magenta: "#c793ff".into(),
+            terminal_cyan: "#65d4d1".into(),
+            ..AppSettings::default()
+        };
+        if custom {
+            settings.terminal_red = "#123456".into();
+        }
+        database.save_settings(&settings).unwrap();
+        database
+            .connection
+            .lock()
+            .execute_batch("PRAGMA user_version = 10")
+            .unwrap();
+        drop(database);
+
+        let database = Database::open(&path).unwrap();
+        let migrated = database.get_settings().unwrap();
+        assert_eq!(
+            migrated.terminal_green,
+            if custom { "#52cf91" } else { "#55ff55" }
+        );
+        assert_eq!(
+            migrated.terminal_blue,
+            if custom { "#55aef2" } else { "#5555ff" }
+        );
+        assert_eq!(
+            migrated.terminal_magenta,
+            if custom { "#c793ff" } else { "#ff55ff" }
+        );
+        database.save_settings(&settings).unwrap();
+        drop(database);
+        assert_eq!(
+            Database::open(&path)
+                .unwrap()
+                .get_settings()
+                .unwrap()
+                .terminal_green,
+            "#52cf91"
+        );
+    }
+}
+
+#[test]
+fn terminal_palette_migration_upgrades_campbell_preview_without_changing_custom_settings() {
+    for custom in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let database = Database::open(&path).unwrap();
+        let settings = AppSettings {
+            terminal_foreground: "#f2f2ee".into(),
+            terminal_red: "#ff6f7d".into(),
+            terminal_green: "#16c60c".into(),
+            terminal_yellow: "#e8c56c".into(),
+            terminal_blue: "#3b78ff".into(),
+            terminal_magenta: "#b4009e".into(),
+            terminal_cyan: if custom { "#123456" } else { "#65d4d1" }.into(),
+            terminal_font_size: 19,
+            ..AppSettings::default()
+        };
+        database.save_settings(&settings).unwrap();
+        database
+            .connection
+            .lock()
+            .execute_batch("PRAGMA user_version = 11")
+            .unwrap();
+        drop(database);
+        let database = Database::open(&path).unwrap();
+        let migrated = database.get_settings().unwrap();
+        let expected = if custom {
+            settings
+        } else {
+            AppSettings {
+                terminal_font_size: 19,
+                ..AppSettings::default()
+            }
+        };
+        assert_eq!(
+            serde_json::to_value(&migrated).unwrap(),
+            serde_json::to_value(&expected).unwrap()
+        );
+        drop(database);
+        assert_eq!(
+            serde_json::to_value(Database::open(&path).unwrap().get_settings().unwrap()).unwrap(),
+            serde_json::to_value(expected).unwrap()
+        );
+    }
+}
+
+#[test]
+fn terminal_palette_brightness_migration_preserves_custom_foreground_and_other_colors() {
+    for foreground in ["#aaaaaa", "#bbbbbb", "#cccccc", "#123456"] {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let database = Database::open(&path).unwrap();
+        let mut settings = AppSettings {
+            terminal_foreground: foreground.into(),
+            terminal_green: "#abcdef".into(),
+            ..AppSettings::default()
+        };
+        database.save_settings(&settings).unwrap();
+        database
+            .connection
+            .lock()
+            .execute_batch("PRAGMA user_version = 12")
+            .unwrap();
+        drop(database);
+        if foreground != "#123456" {
+            settings.terminal_foreground = "#dddddd".into();
+        }
+        assert_eq!(
+            serde_json::to_value(Database::open(&path).unwrap().get_settings().unwrap()).unwrap(),
+            serde_json::to_value(settings).unwrap()
+        );
+    }
+}
+
+#[test]
+fn settings_saved_by_v0_7_0_still_load_after_a_field_was_removed() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+
+    let stored = r##"{"terminalFontFamily":"Cascadia Mono","terminalFontSize":16,"terminalScrollback":7500,"terminalRightClickPaste":true,"terminalForeground":"#f2f2ee","terminalRed":"#ff6f7d","terminalGreen":"#52cf91","terminalYellow":"#e8c56c","terminalBlue":"#55aef2","terminalMagenta":"#c793ff","terminalCyan":"#65d4d1","defaultLogTail":1000,"globalHistoryEnabled":false,"globalSudoEnabled":true,"automaticUpdateChecks":false}"##;
+    database.set_app_metadata("settings", stored).unwrap();
+
+    let loaded = database.get_settings().unwrap();
+    assert_eq!(loaded.terminal_font_family, "Cascadia Mono");
+    assert_eq!(loaded.terminal_font_size, 16);
+    assert_eq!(loaded.terminal_scrollback, 7500);
+    assert_eq!(loaded.default_log_tail, 1000);
+    assert!(!loaded.global_history_enabled);
+    assert!(loaded.global_sudo_enabled);
+    assert!(
+        !loaded.automatic_update_checks,
+        "an unrelated preference must not be reset by removing another field"
+    );
+    assert!(!loaded.local_terminal_mode);
+    assert_eq!(loaded.default_local_shell_id, None);
+    assert!(
+        loaded.hidden_local_shells.is_empty(),
+        "a payload written before the local terminal toggles existed offers every profile"
+    );
+}
+
+#[test]
+fn local_terminal_mode_settings_round_trip_and_validate_default() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let mut settings = AppSettings {
+        local_terminal_mode: true,
+        default_local_shell_id: Some("git-bash".into()),
+        ..AppSettings::default()
+    };
+    database.save_settings(&settings).unwrap();
+    let loaded = database.get_settings().unwrap();
+    assert!(loaded.local_terminal_mode);
+    assert_eq!(loaded.default_local_shell_id, Some("git-bash".into()));
+    settings.default_local_shell_id = Some("cmd.exe".into());
+    assert_eq!(
+        database.save_settings(&settings).unwrap_err(),
+        "Unknown default local terminal profile: cmd.exe"
+    );
+}
+
+#[test]
+fn unknown_startup_default_preserves_other_settings() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    for id in ["", "future-shell"] {
+        let settings = AppSettings {
+            default_local_shell_id: Some(id.into()),
+            terminal_font_size: 19,
+            global_sudo_enabled: true,
+            ..AppSettings::default()
+        };
+        database
+            .set_app_metadata("settings", &serde_json::to_string(&settings).unwrap())
+            .unwrap();
+        let loaded = database.get_settings().unwrap();
+        assert_eq!(loaded.default_local_shell_id, None);
+        assert_eq!(loaded.terminal_font_size, 19);
+        assert!(loaded.global_sudo_enabled);
+        database.save_settings(&loaded).unwrap();
+    }
+}
+
+#[test]
+fn hidden_local_terminals_round_trip() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let settings = AppSettings {
+        hidden_local_shells: vec!["git-bash".into(), "powershell-7-administrator".into()],
+        ..AppSettings::default()
+    };
+
+    database.save_settings(&settings).unwrap();
+
+    assert_eq!(
+        database.get_settings().unwrap().hidden_local_shells,
+        settings.hidden_local_shells
+    );
+}
+
+#[test]
+fn a_local_terminal_id_the_frontend_made_up_is_refused_when_saving_settings() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let settings = AppSettings {
+        hidden_local_shells: vec!["C:\\Windows\\System32\\cmd.exe".into()],
+        ..AppSettings::default()
+    };
+
+    assert_eq!(
+        database.save_settings(&settings).unwrap_err(),
+        "Unknown local terminal profile: C:\\Windows\\System32\\cmd.exe"
+    );
+}
+
+#[test]
+fn invalid_terminal_colors_are_rejected() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let settings = AppSettings {
+        terminal_blue: "blue".into(),
+        ..AppSettings::default()
+    };
+
+    assert_eq!(
+        database.save_settings(&settings).unwrap_err(),
+        "Terminal colors must use #RRGGBB format"
+    );
+}
+
+#[test]
+fn advertised_log_tail_options_match_settings_validation() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+
+    for default_log_tail in LOG_TAIL_OPTIONS {
+        database
+            .save_settings(&AppSettings {
+                default_log_tail,
+                ..AppSettings::default()
+            })
+            .unwrap();
+    }
+
+    assert_eq!(
+        database
+            .save_settings(&AppSettings {
+                default_log_tail: 51,
+                ..AppSettings::default()
+            })
+            .unwrap_err(),
+        "Unsupported default log tail count"
+    );
+}
+
+#[test]
+fn history_search_treats_like_metacharacters_literally() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let saved = database.create_connection(input("Laptop")).unwrap();
+    for command in ["echo 100%", "echo 100x", "show_a", "showXa"] {
+        database
+            .add_history(HistoryInput {
+                connection_id: saved.id.clone(),
+                session_id: "session-a".into(),
+                command: command.into(),
+                cwd: None,
+                started_at: Utc::now().to_rfc3339(),
+                finished_at: None,
+                exit_code: Some(0),
+                shell: "bash".into(),
+            })
+            .unwrap();
+    }
+    assert_eq!(
+        database.list_history(&saved.id, Some("%"), 100).unwrap()[0].command,
+        "echo 100%"
+    );
+    assert_eq!(
+        database.list_history(&saved.id, Some("_"), 100).unwrap()[0].command,
+        "show_a"
+    );
+}
+
+#[test]
+fn invalid_connection_and_history_inputs_are_rejected() {
+    let mut connection_input = input("Laptop");
+    connection_input.username = None;
+    assert_eq!(
+        validate_connection_input(&connection_input).unwrap_err(),
+        "Username is required"
+    );
+    connection_input.username = Some("test-user".into());
+    connection_input.port = Some(0);
+    assert_eq!(
+        validate_connection_input(&connection_input).unwrap_err(),
+        "Port must be between 1 and 65535"
+    );
+    connection_input.port = None;
+    connection_input.identity_file = Some("missing-private-key".into());
+    assert_eq!(
+        validate_connection_input(&connection_input).unwrap_err(),
+        "Identity file does not exist or is not a file"
+    );
+
+    let mut history = HistoryInput {
+        connection_id: "connection".into(),
+        session_id: "session".into(),
+        command: "pwd".into(),
+        cwd: None,
+        started_at: "not-a-time".into(),
+        finished_at: None,
+        exit_code: Some(0),
+        shell: "bash".into(),
+    };
+    assert_eq!(
+        validate_history_input(&history).unwrap_err(),
+        "History start time is invalid"
+    );
+    history.started_at = Utc::now().to_rfc3339();
+    history.shell = "zsh".into();
+    assert_eq!(
+        validate_history_input(&history).unwrap_err(),
+        "Only Bash Enhanced History is supported"
+    );
+}
+
+#[test]
+fn panel_sizes_survive_database_reopen_and_reset() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("control-room.db");
+    let state = PersistedWorkspaceState {
+        panel_sizes: [
+            ("connections".into(), 320),
+            ("sidebar:hosts".into(), 250),
+            ("content:ports".into(), 720),
+            ("split:Docker".into(), 420),
+        ]
+        .into(),
+        ..Default::default()
+    };
+    {
+        let database = Database::open(&path).unwrap();
+        database.save_workspace_state(&state).unwrap();
+    }
+    let database = Database::open(&path).unwrap();
+    assert_eq!(database.get_workspace_state().unwrap(), state);
+    database
+        .save_workspace_state(&PersistedWorkspaceState::default())
+        .unwrap();
+    assert!(
+        database
+            .get_workspace_state()
+            .unwrap()
+            .panel_sizes
+            .is_empty()
+    );
+}
+
+#[test]
+fn corrupt_panel_sizes_preserve_tabs_and_terminal_groups() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("control-room.db");
+    let database = Database::open(&path).unwrap();
+    let id = Uuid::new_v4().to_string();
+    let state = PersistedWorkspaceState {
+        workspaces: vec![crate::models::PersistedWorkspace {
+            id: id.clone(),
+            label: None,
+            connection_id: None,
+            local_shell_id: Some("git-bash".into()),
+            remote_shell: None,
+            container: None,
+            view: "terminal".into(),
+            history_paused: false,
+        }],
+        active_workspace_id: Some(id.clone()),
+        terminal_groups: vec![PersistedTerminalGroup {
+            id: Uuid::new_v4().to_string(),
+            name: "Kept group".into(),
+            layout: PersistedTerminalLayout::Leaf { workspace_id: id },
+        }],
+        ..Default::default()
+    };
+    for sizes in [
+        serde_json::json!({"connections": 999, "unknown": 320, "content:ports": "bad", "split:Docker": -1, "content:docker": 799.6}),
+        serde_json::json!("bad map"),
+    ] {
+        let mut payload = serde_json::to_value(&state).unwrap();
+        payload["panelSizes"] = sizes;
+        database
+            .set_app_metadata("workspace_state", &payload.to_string())
+            .unwrap();
+        let loaded = database.get_workspace_state().unwrap();
+        assert_eq!(loaded.workspaces, state.workspaces);
+        assert_eq!(loaded.active_workspace_id, state.active_workspace_id);
+        assert_eq!(loaded.terminal_groups, state.terminal_groups);
+        assert!(!loaded.panel_sizes.contains_key("unknown"));
+        if !loaded.panel_sizes.is_empty() {
+            assert_eq!(loaded.panel_sizes["connections"], 480);
+            assert_eq!(loaded.panel_sizes["split:Docker"], 240);
+            assert_eq!(loaded.panel_sizes["content:docker"], 800);
+        }
+    }
+    drop(database);
+    assert_eq!(
+        Database::open(&path)
+            .unwrap()
+            .get_workspace_state()
+            .unwrap()
+            .workspaces,
+        state.workspaces
+    );
+}
+
+#[test]
+fn panel_sizes_reject_unknown_keys_and_out_of_bounds_values() {
+    for (key, value) in [
+        ("sidebar:hosts", 95),
+        ("sidebar:hosts", 801),
+        ("connections", 199),
+        ("connections", 481),
+        ("content:logs", 359),
+        ("content:ports", 1601),
+        ("split:Docker", 239),
+        ("split:Docker", 901),
+        ("unknown", 320),
+    ] {
+        let state = PersistedWorkspaceState {
+            panel_sizes: [(key.into(), value)].into(),
+            ..Default::default()
+        };
+        assert!(validate_workspace_state(&state).is_err(), "{key}: {value}");
+    }
+}
+
+#[test]
+fn disconnected_workspace_state_round_trips_without_session_data() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let saved = database.create_connection(input("Laptop")).unwrap();
+    let workspace_id = Uuid::new_v4().to_string();
+    let state = PersistedWorkspaceState {
+        workspaces: vec![crate::models::PersistedWorkspace {
+            id: workspace_id.clone(),
+            label: Some("Deploy".into()),
+            connection_id: Some(saved.id),
+            local_shell_id: None,
+            remote_shell: None,
+            container: None,
+            view: "ports".into(),
+            history_paused: false,
+        }],
+        active_workspace_id: Some(workspace_id.clone()),
+        terminal_groups: Vec::new(),
+        panel_sizes: Default::default(),
+        terminal_layout: Some(PersistedTerminalLayout::Leaf { workspace_id }),
+    };
+
+    database.save_workspace_state(&state).unwrap();
+
+    assert_eq!(database.get_workspace_state().unwrap(), state);
+}
+
+#[test]
+fn local_terminal_workspaces_round_trip_without_a_saved_connection() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let workspace_id = Uuid::new_v4().to_string();
+    let state = PersistedWorkspaceState {
+        workspaces: vec![crate::models::PersistedWorkspace {
+            id: workspace_id.clone(),
+            label: None,
+            connection_id: None,
+            local_shell_id: Some("powershell-7".into()),
+            remote_shell: None,
+            container: None,
+            view: "terminal".into(),
+            history_paused: false,
+        }],
+        active_workspace_id: Some(workspace_id.clone()),
+        terminal_groups: Vec::new(),
+        panel_sizes: Default::default(),
+        terminal_layout: Some(PersistedTerminalLayout::Leaf { workspace_id }),
+    };
+
+    database.save_workspace_state(&state).unwrap();
+
+    assert_eq!(database.get_workspace_state().unwrap(), state);
+}
+
+#[test]
+fn windows_remote_shell_workspaces_round_trip_and_validate_their_target() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let connection = database.create_connection(input("Windows host")).unwrap();
+    let mut state: PersistedWorkspaceState = serde_json::from_value(serde_json::json!({
+        "workspaces": [{ "id": Uuid::new_v4().to_string(), "label": null,
+            "connectionId": connection.id, "localShellId": null, "view": "terminal", "historyPaused": false,
+            "remoteShell": { "id": "wsl:Ubuntu", "label": "WSL: Ubuntu" } }]
+    })).unwrap();
+    database.save_workspace_state(&state).unwrap();
+    assert_eq!(database.get_workspace_state().unwrap(), state);
+    state.workspaces[0].remote_shell.as_mut().unwrap().id = "cmd\n&whoami".into();
+    assert!(database.save_workspace_state(&state).is_err());
+    state.workspaces[0].remote_shell.as_mut().unwrap().id = "cmd".into();
+    state.workspaces[0].connection_id = None;
+    state.workspaces[0].local_shell_id = Some("command-prompt".into());
+    assert!(database.save_workspace_state(&state).is_err());
+}
+
+#[test]
+fn a_workspace_names_exactly_one_target() {
+    let workspace_id = Uuid::new_v4().to_string();
+    let workspace = |connection_id, local_shell_id| PersistedWorkspaceState {
+        workspaces: vec![crate::models::PersistedWorkspace {
+            id: workspace_id.clone(),
+            label: None,
+            connection_id,
+            local_shell_id,
+            remote_shell: None,
+            container: None,
+            view: "terminal".into(),
+            history_paused: false,
+        }],
+        active_workspace_id: Some(workspace_id.clone()),
+        terminal_groups: Vec::new(),
+        panel_sizes: Default::default(),
+        terminal_layout: None,
+    };
+
+    assert_eq!(
+        validate_workspace_state(&workspace(None, None)).unwrap_err(),
+        "Workspace state must name one target per Workspace"
+    );
+    assert_eq!(
+        validate_workspace_state(&workspace(
+            Some(Uuid::new_v4().to_string()),
+            Some("git-bash".into())
+        ))
+        .unwrap_err(),
+        "Workspace state must name one target per Workspace"
+    );
+    assert_eq!(
+        validate_workspace_state(&workspace(None, Some("wt.exe".into()))).unwrap_err(),
+        "Workspace state names an unknown local shell"
+    );
+    assert!(validate_workspace_state(&workspace(None, Some("git-bash".into()))).is_ok());
+    assert!(
+        validate_workspace_state(&workspace(
+            None,
+            Some("command-prompt-administrator".into())
+        ))
+        .is_ok()
+    );
+    assert_eq!(
+        validate_workspace_state(&workspace(None, Some("git-bash-administrator".into())))
+            .unwrap_err(),
+        "Workspace state names an unknown local shell"
+    );
+}
+
+#[test]
+fn workspace_state_written_before_local_terminals_still_restores() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let workspace_id = Uuid::new_v4().to_string();
+    let connection_id = Uuid::new_v4().to_string();
+    let legacy = format!(
+        r#"{{"workspaces":[{{"id":"{workspace_id}","label":null,"connectionId":"{connection_id}","view":"terminal","historyPaused":false}}],"activeWorkspaceId":"{workspace_id}","terminalLayout":{{"kind":"leaf","workspaceId":"{workspace_id}"}}}}"#
+    );
+    database
+        .connection
+        .lock()
+        .execute(
+            "INSERT INTO application_settings (key, value) VALUES ('workspace_state', ?1)",
+            [legacy],
+        )
+        .unwrap();
+
+    let restored = database.get_workspace_state().unwrap();
+
+    assert_eq!(restored.workspaces.len(), 1);
+    assert_eq!(
+        restored.workspaces[0].connection_id.as_deref(),
+        Some(connection_id.as_str())
+    );
+    assert_eq!(restored.workspaces[0].local_shell_id, None);
+    assert_eq!(
+        restored.active_workspace_id.as_deref(),
+        Some(workspace_id.as_str())
+    );
+    assert_eq!(restored.terminal_groups.len(), 1);
+    assert_eq!(
+        restored.terminal_groups[0].id,
+        "00000000-0000-4000-8000-000000000001"
+    );
+    assert_eq!(restored.terminal_groups[0].name, "Terminal group");
+    assert_eq!(
+        restored.terminal_groups[0].layout,
+        PersistedTerminalLayout::Leaf { workspace_id }
+    );
+}
+
+#[test]
+fn a_database_from_a_newer_release_is_refused_rather_than_migrated() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("control-room.db");
+    {
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(&format!(
+                "CREATE TABLE saved_connections (id TEXT PRIMARY KEY);
+                     PRAGMA user_version = {};",
+                LATEST_SCHEMA_VERSION + 1
+            ))
+            .unwrap();
+    }
+
+    let error = Database::open(&path)
+        .err()
+        .expect("a newer schema must not open");
+    assert!(
+        error.contains("newer than this app supports"),
+        "unexpected error: {error}"
+    );
+
+    let connection = Connection::open(&path).unwrap();
+    let version: i64 = connection
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(version, LATEST_SCHEMA_VERSION + 1);
+}
+
+#[test]
+fn opening_an_up_to_date_database_again_changes_nothing() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("control-room.db");
+
+    let first = Database::open(&path).unwrap();
+    let saved = first.create_connection(input("Laptop")).unwrap();
+    first
+        .add_history(HistoryInput {
+            connection_id: saved.id.clone(),
+            session_id: "session-a".into(),
+            command: "uptime".into(),
+            cwd: None,
+            started_at: "2026-09-01T10:00:00Z".into(),
+            finished_at: None,
+            exit_code: Some(0),
+            shell: "bash".into(),
+        })
+        .unwrap();
+    let schema = schema_of(&path);
+    drop(first);
+
+    let second = Database::open(&path).unwrap();
+    assert_eq!(
+        schema_of(&path),
+        schema,
+        "the second open altered the schema"
+    );
+    assert_eq!(second.list_connections().unwrap().len(), 1);
+    assert_eq!(second.list_history(&saved.id, None, 50).unwrap().len(), 1);
+    drop(second);
+
+    let third = Database::open(&path).unwrap();
+    assert_eq!(third.list_connections().unwrap().len(), 1);
+    assert_eq!(third.list_history(&saved.id, None, 50).unwrap().len(), 1);
+}
+
+#[test]
+fn the_unused_schema_versions_stay_unused() {
+    let migrations = include_str!("../database.rs")
+        .split_once("fn migrate(")
+        .expect("migrate is missing")
+        .1
+        .split_once("fn map_connection(")
+        .expect("migrate is not terminated")
+        .0;
+
+    for unused in [7, 8, 9] {
+        assert!(
+            !migrations.contains(&format!("PRAGMA user_version = {unused};")),
+            "step {unused} must stay empty"
+        );
+    }
+    for released in [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 15] {
+        assert!(
+            migrations.contains(&format!("PRAGMA user_version = {released};")),
+            "migration step {released} disappeared"
+        );
+    }
+    assert_eq!(LATEST_SCHEMA_VERSION, 15);
+}
+
+#[test]
+fn baselines_storage_is_dropped_from_existing_databases() {
+    let directory = tempfile::tempdir().unwrap();
+    let fresh_path = directory.path().join("fresh.db");
+    drop(Database::open(&fresh_path).unwrap());
+    let fresh_schema = schema_of(&fresh_path);
+    assert!(
+        fresh_schema.iter().all(|entry| !entry.contains("baseline")),
+        "a fresh database must not create Baselines storage: {fresh_schema:?}"
+    );
+
+    let path = directory.path().join("control-room.db");
+    let database = Database::open(&path).unwrap();
+    let saved = database.create_connection(input("Laptop")).unwrap();
+    database
+        .connection
+        .lock()
+        .execute_batch(&format!(
+            r#"
+                CREATE TABLE host_baselines (
+                    id TEXT PRIMARY KEY,
+                    connection_id TEXT NOT NULL REFERENCES saved_connections(id) ON DELETE CASCADE,
+                    label TEXT,
+                    schema_version INTEGER NOT NULL,
+                    captured_at TEXT NOT NULL,
+                    payload TEXT NOT NULL,
+                    pinned INTEGER NOT NULL DEFAULT 0
+                );
+                CREATE INDEX idx_host_baselines_connection
+                ON host_baselines(connection_id, captured_at DESC);
+                INSERT INTO host_baselines (id, connection_id, schema_version, captured_at, payload)
+                VALUES ('capture', '{}', 1, 'now', '{{}}');
+                "#,
+            saved.id
+        ))
+        .unwrap();
+    drop(database);
+
+    let reopened = Database::open(&path).unwrap();
+    assert_eq!(schema_of(&path), fresh_schema);
+    assert_eq!(reopened.list_connections().unwrap()[0].id, saved.id);
+    let version: i64 = reopened
+        .connection
+        .lock()
+        .query_row("PRAGMA user_version", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(version, LATEST_SCHEMA_VERSION);
+}
+
+#[test]
+fn saved_tabs_on_removed_pages_reopen_on_their_terminal() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let connection_id = Uuid::new_v4().to_string();
+    let ids: Vec<String> = (0..4).map(|_| Uuid::new_v4().to_string()).collect();
+    let workspaces: Vec<_> = ["overview", "boot", "baselines", "docker"]
+        .iter()
+        .zip(&ids)
+        .map(|(view, id)| {
+            serde_json::json!({
+                "id": id,
+                "label": null,
+                "connectionId": connection_id,
+                "localShellId": null,
+                "view": view,
+                "historyPaused": false,
+            })
+        })
+        .collect();
+    let payload = serde_json::json!({
+        "panelSizes": {"content:overview": 700, "content:boot": 700, "content:baselines": 700, "content:docker": 700},
+        "workspaces": workspaces,
+        "activeWorkspaceId": ids[2],
+        "terminalGroups": [],
+    });
+    database
+        .set_app_metadata("workspace_state", &payload.to_string())
+        .unwrap();
+
+    let loaded = database.get_workspace_state().unwrap();
+    assert_eq!(
+        loaded
+            .workspaces
+            .iter()
+            .map(|workspace| workspace.view.as_str())
+            .collect::<Vec<_>>(),
+        ["terminal", "terminal", "terminal", "docker"]
+    );
+    assert_eq!(loaded.active_workspace_id.as_deref(), Some(ids[2].as_str()));
+    assert_eq!(
+        loaded.panel_sizes,
+        [("content:docker".to_string(), 700)].into()
+    );
+    for view in REMOVED_WORKSPACE_VIEWS {
+        let mut state = loaded.clone();
+        state.workspaces[0].view = view.into();
+        assert!(database.save_workspace_state(&state).is_err(), "{view}");
+    }
+}
+
+#[test]
+fn deleting_a_connection_takes_everything_collected_about_it() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let saved = database.create_connection(input("Laptop")).unwrap();
+
+    database
+        .add_history(HistoryInput {
+            connection_id: saved.id.clone(),
+            session_id: "session-a".into(),
+            command: "uptime".into(),
+            cwd: Some("/srv".into()),
+            started_at: "2026-09-01T10:00:00Z".into(),
+            finished_at: None,
+            exit_code: Some(0),
+            shell: "bash".into(),
+        })
+        .unwrap();
+    database
+        .save_capabilities(
+            &saved,
+            &HostCapabilities {
+                connection_id: saved.id.clone(),
+                ..HostCapabilities::default()
+            },
+        )
+        .unwrap();
+    database
+        .save_scratchpad_note(ScratchpadNoteInput {
+            scope: "connection".into(),
+            owner_id: saved.id.clone(),
+            connection_id: Some(saved.id.clone()),
+            text: "restart notes".into(),
+        })
+        .unwrap();
+
+    database.delete_connection(&saved.id).unwrap();
+
+    assert!(
+        database
+            .list_history(&saved.id, None, 50)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(database.get_capabilities(&saved.id).unwrap().is_none());
+
+    let connection = database.connection.lock();
+    let tables = tables_referencing_connections(&connection);
+    assert!(
+        tables.len() >= 4,
+        "expected several owned tables: {tables:?}"
+    );
+    for table in tables {
+        let rows: i64 = connection
+            .query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(rows, 0, "{table} kept rows for a deleted connection");
+    }
+}
+
+#[test]
+fn deleting_one_owner_preserves_other_and_global_data_after_reopen() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("control-room.db");
+    let database = Database::open(&path).unwrap();
+    let removed = database.create_connection(input("Removed")).unwrap();
+    let survivor = database.create_connection(input("Survivor")).unwrap();
+    for saved in [&removed, &survivor] {
+        database
+            .add_history(HistoryInput {
+                connection_id: saved.id.clone(),
+                session_id: "session".into(),
+                command: format!("echo {}", saved.display_name),
+                cwd: None,
+                started_at: "2026-10-07T10:00:00Z".into(),
+                finished_at: None,
+                exit_code: None,
+                shell: "bash".into(),
+            })
+            .unwrap();
+        database
+            .save_scratchpad_note(ScratchpadNoteInput {
+                scope: "connection".into(),
+                owner_id: saved.id.clone(),
+                connection_id: Some(saved.id.clone()),
+                text: saved.display_name.clone(),
+            })
+            .unwrap();
+    }
+    database
+        .save_scratchpad_note(ScratchpadNoteInput {
+            scope: "global".into(),
+            owner_id: "global".into(),
+            connection_id: None,
+            text: "Shared reminder".into(),
+        })
+        .unwrap();
+    drop(database);
+    let database = Database::open(&path).unwrap();
+    database.delete_connection(&removed.id).unwrap();
+    drop(database);
+    let database = Database::open(&path).unwrap();
+    assert!(database.get_connection(&removed.id).is_err());
+    assert!(
+        database
+            .list_history(&removed.id, None, 500)
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        database.get_connection(&survivor.id).unwrap().display_name,
+        "Survivor"
+    );
+    assert_eq!(
+        database.list_history(&survivor.id, None, 500).unwrap()[0].command,
+        "echo Survivor"
+    );
+    assert_eq!(
+        database
+            .get_scratchpad_note("connection", &survivor.id, Some(&survivor.id))
+            .unwrap()
+            .unwrap()
+            .text,
+        "Survivor"
+    );
+    assert_eq!(
+        database
+            .get_scratchpad_note("global", "global", None)
+            .unwrap()
+            .unwrap()
+            .text,
+        "Shared reminder"
+    );
+}
+
+#[test]
+fn workspace_state_that_cannot_be_trusted_is_discarded_rather_than_fatal() {
+    let workspace_id = Uuid::new_v4().to_string();
+    let other_id = Uuid::new_v4().to_string();
+    let connection_id = Uuid::new_v4().to_string();
+    let remote = |id: &str| {
+        format!(
+            r#"{{"id":"{id}","label":null,"connectionId":"{connection_id}","view":"terminal","historyPaused":false}}"#
+        )
+    };
+
+    let corrupt = [
+        ("truncated json", "{\"workspaces\":[".to_string()),
+        ("not json at all", "\u{1}\u{2}garbage".to_string()),
+        (
+            "a layout naming a Workspace that is gone",
+            format!(
+                r#"{{"workspaces":[{}],"activeWorkspaceId":"{workspace_id}","terminalLayout":{{"kind":"leaf","workspaceId":"{other_id}"}}}}"#,
+                remote(&workspace_id)
+            ),
+        ),
+        (
+            "an active Workspace that is gone",
+            format!(
+                r#"{{"workspaces":[{}],"activeWorkspaceId":"{other_id}","terminalLayout":null}}"#,
+                remote(&workspace_id)
+            ),
+        ),
+        (
+            "two Workspaces sharing an id",
+            format!(
+                r#"{{"workspaces":[{},{}],"activeWorkspaceId":"{workspace_id}","terminalLayout":null}}"#,
+                remote(&workspace_id),
+                remote(&workspace_id)
+            ),
+        ),
+        (
+            "a split direction the app does not have",
+            format!(
+                r#"{{"workspaces":[{}],"activeWorkspaceId":"{workspace_id}","terminalLayout":{{"kind":"split","direction":"diagonal","first":{{"kind":"leaf","workspaceId":"{workspace_id}"}},"second":{{"kind":"leaf","workspaceId":"{workspace_id}"}}}}}}"#,
+                remote(&workspace_id)
+            ),
+        ),
+    ];
+
+    for (name, payload) in corrupt {
+        let directory = tempfile::tempdir().unwrap();
+        let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+        database
+            .connection
+            .lock()
+            .execute(
+                "INSERT INTO application_settings (key, value) VALUES ('workspace_state', ?1)",
+                [payload],
+            )
+            .unwrap();
+
+        assert_eq!(
+            database.get_workspace_state().unwrap(),
+            PersistedWorkspaceState::default(),
+            "{name} should restore as no Workspaces"
+        );
+
+        let remaining: i64 = database
+            .connection
+            .lock()
+            .query_row(
+                "SELECT COUNT(*) FROM application_settings WHERE key = 'workspace_state'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            remaining, 0,
+            "{name} was left on disk, so it is re-read on every start"
+        );
+    }
+
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    database
+        .connection
+        .lock()
+        .execute(
+            "INSERT INTO application_settings (key, value) VALUES ('workspace_state', '[]')",
+            [],
+        )
+        .unwrap();
+    assert_eq!(
+        database.get_workspace_state().unwrap(),
+        PersistedWorkspaceState::default()
+    );
+}
+
+#[test]
+fn split_nesting_is_accepted_up_to_its_bound_and_refused_past_it() {
+    let workspace_id = Uuid::new_v4().to_string();
+    let nested = |depth: usize| {
+        let mut layout = PersistedTerminalLayout::Leaf {
+            workspace_id: workspace_id.clone(),
+        };
+        for _ in 0..depth {
+            layout = PersistedTerminalLayout::Split {
+                direction: "vertical".into(),
+                ratio: None,
+                first: Box::new(PersistedTerminalLayout::Leaf {
+                    workspace_id: workspace_id.clone(),
+                }),
+                second: Box::new(layout),
+            };
+        }
+        PersistedWorkspaceState {
+            workspaces: vec![crate::models::PersistedWorkspace {
+                id: workspace_id.clone(),
+                label: None,
+                connection_id: Some(Uuid::new_v4().to_string()),
+                local_shell_id: None,
+                remote_shell: None,
+                container: None,
+                view: "terminal".into(),
+                history_paused: false,
+            }],
+            active_workspace_id: Some(workspace_id.clone()),
+            terminal_groups: Vec::new(),
+            panel_sizes: Default::default(),
+            terminal_layout: Some(layout),
+        }
+    };
+
+    assert!(validate_workspace_state(&nested(15)).is_ok());
+    assert!(validate_workspace_state(&nested(16)).is_ok());
+    assert_eq!(
+        validate_workspace_state(&nested(17)).unwrap_err(),
+        "Terminal split layout is too deeply nested"
+    );
+}
+
+#[test]
+fn both_split_directions_survive_a_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let saved = database.create_connection(input("Laptop")).unwrap();
+    let left = Uuid::new_v4().to_string();
+    let right = Uuid::new_v4().to_string();
+    let pane = |id: &str, connection_id: Option<String>, shell: Option<String>| {
+        crate::models::PersistedWorkspace {
+            id: id.into(),
+            label: None,
+            connection_id,
+            local_shell_id: shell,
+            remote_shell: None,
+            container: None,
+            view: "terminal".into(),
+            history_paused: false,
+        }
+    };
+
+    for direction in ["horizontal", "vertical"] {
+        let layout = PersistedTerminalLayout::Split {
+            direction: direction.into(),
+            ratio: Some(0.65),
+            first: Box::new(PersistedTerminalLayout::Leaf {
+                workspace_id: left.clone(),
+            }),
+            second: Box::new(PersistedTerminalLayout::Leaf {
+                workspace_id: right.clone(),
+            }),
+        };
+        let state = PersistedWorkspaceState {
+            workspaces: vec![
+                pane(&left, Some(saved.id.clone()), None),
+                pane(&right, None, Some("git-bash".into())),
+            ],
+            active_workspace_id: Some(right.clone()),
+            terminal_groups: vec![crate::models::PersistedTerminalGroup {
+                id: Uuid::new_v4().to_string(),
+                name: "Build".into(),
+                layout,
+            }],
+            panel_sizes: Default::default(),
+            terminal_layout: None,
+        };
+
+        database.save_workspace_state(&state).unwrap();
+        assert_eq!(
+            database.get_workspace_state().unwrap(),
+            state,
+            "{direction}"
+        );
+    }
+}
+
+#[test]
+fn a_container_terminal_survives_a_restart_and_rejects_an_invalid_target() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("control-room.db");
+    let saved = Database::open(&path)
+        .unwrap()
+        .create_connection(input("Docker host"))
+        .unwrap();
+    let workspace_id = Uuid::new_v4().to_string();
+    let container = crate::models::ContainerTerminalTarget {
+        id: "a".repeat(64),
+        name: "web".into(),
+        image: "nginx:1.27".into(),
+    };
+    let state = PersistedWorkspaceState {
+        workspaces: vec![crate::models::PersistedWorkspace {
+            id: workspace_id.clone(),
+            label: None,
+            connection_id: Some(saved.id.clone()),
+            local_shell_id: None,
+            remote_shell: None,
+            container: Some(container.clone()),
+            view: "terminal".into(),
+            history_paused: false,
+        }],
+        active_workspace_id: Some(workspace_id),
+        ..Default::default()
+    };
+    Database::open(&path)
+        .unwrap()
+        .save_workspace_state(&state)
+        .unwrap();
+    let restored = Database::open(&path)
+        .unwrap()
+        .get_workspace_state()
+        .unwrap();
+    assert_eq!(restored.workspaces[0].container, Some(container.clone()));
+
+    let invalid = |change: fn(&mut crate::models::PersistedWorkspace)| {
+        let mut state = state.clone();
+        change(&mut state.workspaces[0]);
+        validate_workspace_state(&state).unwrap_err()
+    };
+    for error in [
+        invalid(|workspace| workspace.container.as_mut().unwrap().id = "-rm".into()),
+        invalid(|workspace| {
+            workspace.container.as_mut().unwrap().name = "web
+"
+            .into()
+        }),
+        invalid(|workspace| workspace.container.as_mut().unwrap().image = String::new()),
+        invalid(|workspace| {
+            workspace.remote_shell = Some(crate::windows_ssh::RemoteShellProfile {
+                id: "wsl:Ubuntu".into(),
+                label: "Ubuntu".into(),
+            })
+        }),
+    ] {
+        assert_eq!(
+            error,
+            "Workspace state contains an invalid container terminal"
+        );
+    }
+}
+
+#[test]
+fn terminal_split_ratios_validate_and_legacy_splits_default_to_equal_sizes() {
+    let workspace_id = Uuid::new_v4().to_string();
+    let ids = std::collections::HashSet::from([workspace_id.as_str()]);
+    let legacy = serde_json::json!({
+        "kind": "split", "direction": "vertical",
+        "first": { "kind": "leaf", "workspaceId": workspace_id },
+        "second": { "kind": "leaf", "workspaceId": workspace_id }
+    });
+    let layout: PersistedTerminalLayout = serde_json::from_value(legacy.clone()).unwrap();
+    assert!(validate_persisted_layout(&layout, &ids, 0).is_ok());
+    assert_eq!(serde_json::to_value(&layout).unwrap(), legacy);
+    for ratio in [
+        0.05,
+        0.35,
+        0.5,
+        0.95,
+        0.0,
+        1.0,
+        -0.2,
+        f64::NAN,
+        f64::INFINITY,
+    ] {
+        let layout = PersistedTerminalLayout::Split {
+            direction: "horizontal".into(),
+            ratio: Some(ratio),
+            first: Box::new(PersistedTerminalLayout::Leaf {
+                workspace_id: workspace_id.clone(),
+            }),
+            second: Box::new(PersistedTerminalLayout::Leaf {
+                workspace_id: workspace_id.clone(),
+            }),
+        };
+        assert_eq!(
+            validate_persisted_layout(&layout, &ids, 0).is_ok(),
+            ratio.is_finite() && (0.05..=0.95).contains(&ratio)
+        );
+    }
+}
+
+#[test]
+fn nothing_a_workspace_persists_describes_a_running_session() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let saved = database.create_connection(input("Laptop")).unwrap();
+    let workspace_id = Uuid::new_v4().to_string();
+    database
+        .save_workspace_state(&PersistedWorkspaceState {
+            workspaces: vec![crate::models::PersistedWorkspace {
+                id: workspace_id.clone(),
+                label: Some("Deploy".into()),
+                connection_id: Some(saved.id),
+                local_shell_id: None,
+                remote_shell: None,
+                container: None,
+                view: "terminal".into(),
+                history_paused: false,
+            }],
+            active_workspace_id: Some(workspace_id.clone()),
+            terminal_groups: Vec::new(),
+            panel_sizes: Default::default(),
+            terminal_layout: Some(PersistedTerminalLayout::Leaf { workspace_id }),
+        })
+        .unwrap();
+
+    let payload: String = database
+        .connection
+        .lock()
+        .query_row(
+            "SELECT value FROM application_settings WHERE key = 'workspace_state'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    for forbidden in ["sessionId", "session_id", "connected", "running", "pid"] {
+        assert!(
+            !payload.contains(forbidden),
+            "persisted Workspace state carries {forbidden:?}: {payload}"
+        );
+    }
+}
+
+#[test]
+fn no_persisted_column_exists_to_hold_a_secret_or_a_transcript() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let connection = database.connection.lock();
+
+    let mut statement = connection
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .unwrap();
+    let tables: Vec<String> = statement
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    assert!(tables.len() > 5, "the schema did not load: {tables:?}");
+
+    for table in &tables {
+        let mut columns = connection
+            .prepare(&format!("SELECT name FROM pragma_table_info('{table}')"))
+            .unwrap();
+        for column in columns
+            .query_map([], |row| row.get::<_, String>(0))
+            .unwrap()
+            .map(Result::unwrap)
+        {
+            let name = column.to_ascii_lowercase();
+            for forbidden in [
+                "password",
+                "passphrase",
+                "secret",
+                "credential",
+                "private_key",
+                "key_material",
+                "terminal_output",
+                "log_output",
+                "installer",
+            ] {
+                assert!(
+                    !name.contains(forbidden),
+                    "{table}.{column} looks like storage for something \
+                     Control Room must never persist"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_full_round_of_writes_leaves_no_credential_in_the_database_file() {
+    const SECRET: &str = "CONTROL-ROOM-FAKE-SUDO-PASSWORD";
+
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("control-room.db");
+    let database = Database::open(&path).unwrap();
+    let saved = database.create_connection(input("Laptop")).unwrap();
+
+    database
+        .add_history(HistoryInput {
+            connection_id: saved.id.clone(),
+            session_id: "session-a".into(),
+            command: "sudo -v".into(),
+            cwd: Some("/root".into()),
+            started_at: "2026-09-01T10:00:00Z".into(),
+            finished_at: Some("2026-09-01T10:00:01Z".into()),
+            exit_code: Some(0),
+            shell: "bash".into(),
+        })
+        .unwrap();
+    database
+        .save_capabilities(
+            &saved,
+            &HostCapabilities {
+                connection_id: saved.id.clone(),
+                ..HostCapabilities::default()
+            },
+        )
+        .unwrap();
+    database
+        .save_scratchpad_note(ScratchpadNoteInput {
+            scope: "global".into(),
+            owner_id: "global".into(),
+            connection_id: None,
+            text: "deploy checklist".into(),
+        })
+        .unwrap();
+    database.save_settings(&AppSettings::default()).unwrap();
+    database
+        .set_app_metadata("pending_update_version", "0.7.2")
+        .unwrap();
+    drop(database);
+
+    let bytes = std::fs::read(&path).unwrap();
+    assert!(
+        !bytes
+            .windows(SECRET.len())
+            .any(|window| window == SECRET.as_bytes()),
+        "a credential reached the database file"
+    );
+    assert!(
+        bytes.windows(6).any(|window| window == b"Laptop"),
+        "the file did not contain what was written to it"
+    );
+}
+
+fn schema_of(path: &std::path::Path) -> Vec<String> {
+    let connection = Connection::open(path).unwrap();
+    let mut statement = connection
+        .prepare("SELECT type, name, sql FROM sqlite_master ORDER BY type, name")
+        .unwrap();
+    statement
+        .query_map([], |row| {
+            Ok(format!(
+                "{}:{}:{}",
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?.unwrap_or_default()
+            ))
+        })
+        .unwrap()
+        .map(Result::unwrap)
+        .collect()
+}
+
+fn tables_referencing_connections(connection: &Connection) -> Vec<String> {
+    let mut statement = connection
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .unwrap();
+    let tables: Vec<String> = statement
+        .query_map([], |row| row.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    tables
+        .into_iter()
+        .filter(|table| {
+            let mut keys = connection
+                .prepare(&format!(
+                    "SELECT \"table\" FROM pragma_foreign_key_list('{table}')"
+                ))
+                .unwrap();
+            keys.query_map([], |row| row.get::<_, String>(0))
+                .unwrap()
+                .map(Result::unwrap)
+                .any(|target| target == "saved_connections")
+        })
+        .collect()
+}
+
+#[test]
+fn every_frontend_workspace_view_is_accepted() {
+    let types = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("src")
+            .join("types.ts"),
+    )
+    .unwrap();
+    let union = types
+        .split_once("export type WorkspaceView =")
+        .expect("WorkspaceView union is missing from src/types.ts")
+        .1
+        .split_once(';')
+        .expect("WorkspaceView union is not terminated")
+        .0;
+    let views: Vec<&str> = union
+        .split('|')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .map(|part| part.trim_matches('"'))
+        .collect();
+    assert!(views.len() > 1);
+
+    for view in views {
+        let workspace_id = Uuid::new_v4().to_string();
+        let state = PersistedWorkspaceState {
+            workspaces: vec![crate::models::PersistedWorkspace {
+                id: workspace_id.clone(),
+                label: None,
+                connection_id: Some(Uuid::new_v4().to_string()),
+                local_shell_id: None,
+                remote_shell: None,
+                container: None,
+                view: view.into(),
+                history_paused: false,
+            }],
+            active_workspace_id: Some(workspace_id),
+            terminal_groups: Vec::new(),
+            panel_sizes: Default::default(),
+            terminal_layout: None,
+        };
+        assert!(
+            validate_workspace_state(&state).is_ok(),
+            "backend rejects Workspace view {view:?} declared in src/types.ts"
+        );
+    }
+}
