@@ -31,8 +31,7 @@ vi.mock("../lib/api", () => ({
 
 const checkForUpdate = vi.mocked(api.checkForUpdate);
 
-/** jsdom's visibilityState is a prototype getter; an own configurable property
- *  shadows it per test and is deleted to restore the real one. */
+// jsdom defines visibilityState as a prototype getter.
 function setVisibilityState(value: DocumentVisibilityState) {
   Object.defineProperty(document, "visibilityState", { value, configurable: true });
 }
@@ -106,8 +105,6 @@ describe("automatic update scheduler", () => {
     });
     expect(checkForUpdate).toHaveBeenCalledTimes(1);
 
-    // The five minute tick asks repeatedly inside the hour and is always
-    // refused, so the spacing is the policy's, not the timer's.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PERIODIC_CHECK_INTERVAL_MS - SCHEDULER_TICK_INTERVAL_MS);
     });
@@ -130,7 +127,6 @@ describe("automatic update scheduler", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PERIODIC_CHECK_INTERVAL_MS + SCHEDULER_TICK_INTERVAL_MS);
     });
-    // Rechecking cannot improve an update the user has not acted on yet.
     expect(checkForUpdate).toHaveBeenCalledTimes(1);
   });
 
@@ -143,7 +139,6 @@ describe("automatic update scheduler", () => {
     });
     expect(checkForUpdate).not.toHaveBeenCalled();
 
-    // The manual Settings check works regardless of the preference.
     let outcome: Awaited<ReturnType<typeof result.current.checkNow>> | undefined;
     await act(async () => {
       outcome = await result.current.checkNow();
@@ -165,7 +160,6 @@ describe("automatic update scheduler", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(SCHEDULER_TICK_INTERVAL_MS);
     });
-    // The next tick picks it up, not some future multiple of the interval.
     expect(checkForUpdate).toHaveBeenCalledTimes(1);
   });
 
@@ -193,9 +187,6 @@ describe("automatic update scheduler", () => {
 
     setVisibilityState("hidden");
     await act(async () => {
-      // The feed went stale on the way out, but minimizing is the opposite of
-      // a foreground return; spending the refresh here would miss a release
-      // published while the window sat hidden.
       await vi.advanceTimersByTimeAsync(FOREGROUND_REFRESH_AFTER_MS);
       document.dispatchEvent(new Event("visibilitychange"));
       await vi.advanceTimersByTimeAsync(0);
@@ -210,7 +201,6 @@ describe("automatic update scheduler", () => {
     });
     expect(checkForUpdate).toHaveBeenCalledTimes(1);
 
-    // Stale well before the event, so only the direction decides.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(FOREGROUND_REFRESH_AFTER_MS);
     });
@@ -229,7 +219,6 @@ describe("automatic update scheduler", () => {
     });
     expect(checkForUpdate).toHaveBeenCalledTimes(1);
 
-    // The periodic schedule is nowhere near due; the foreground is.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(FOREGROUND_REFRESH_AFTER_MS);
       window.dispatchEvent(new Event("focus"));
@@ -246,9 +235,6 @@ describe("automatic update scheduler", () => {
     expect(checkForUpdate).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      // A tick and both foreground events arrive while every one of them is
-      // eligible (the hour has passed, the feed is stale). The synchronous
-      // in-flight guard lets exactly one of them through.
       await vi.advanceTimersByTimeAsync(PERIODIC_CHECK_INTERVAL_MS + SCHEDULER_TICK_INTERVAL_MS);
       window.dispatchEvent(new Event("focus"));
       document.dispatchEvent(new Event("visibilitychange"));

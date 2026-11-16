@@ -116,11 +116,9 @@ export function InspectionGraph({
       const x = element.offsetLeft;
       const lane = x - 16;
       if (x === rightmostColumn && element.offsetTop === firstRowByColumn.get(x)) {
-        // The horizontal bus ends at the top of the rightmost branch's first card.
         const center = x + element.offsetWidth / 2;
         next.push({ id, d: `M${hostX},${hostY} H${center} V${element.offsetTop}` });
       } else if (element.offsetTop === lastRowByColumn.get(x)) {
-        // End the trunk in the row gutter and enter its final card from above.
         const top = element.offsetTop;
         const center = x + element.offsetWidth / 2;
         next.push({
@@ -179,7 +177,6 @@ export function InspectionGraph({
       if (wasInspecting.current) {
         wasInspecting.current = false;
         setFocusing(true);
-        // The inspector has unmounted, so Fit uses the full canvas again.
         fit();
       }
       return;
@@ -190,7 +187,6 @@ export function InspectionGraph({
     const node = nodeRefs.current.get(selectedId);
     if (!viewport || !content || !node?.isConnected) return;
 
-    // Offset coordinates stay stable even when a previous camera move is in flight.
     let x = node.offsetWidth / 2;
     let y = node.offsetHeight / 2;
     let ancestor: HTMLElement | null = node;
@@ -296,8 +292,6 @@ export function InspectionGraph({
           ? bounds.bottom - 64 - node.bottom
           : 0;
     if (focusing && contentRef.current) {
-      // Keyboard focus interrupts the glide. Apply the reveal to the same rendered
-      // camera that produced the measured chip bounds.
       const pose = new DOMMatrixReadOnly(getComputedStyle(contentRef.current).transform);
       setFocusing(false);
       setView({ scale: pose.a, x: pose.e + dx, y: pose.f + dy });
@@ -429,25 +423,17 @@ export function InspectionGraph({
                           if (nodes[next]) revealNode(nodes[next]);
                         }}
                         onFocus={(event) => {
-                          // Pointer focus must not reveal: moving the canvas
-                          // between mousedown and mouseup makes the mouseup
-                          // miss the chip. Keyboard focus still reveals.
+                          // Moving the canvas between mousedown and mouseup makes the mouseup miss the chip.
                           if (event.currentTarget.matches(":focus-visible"))
                             revealNode(event.currentTarget);
                         }}
                         onPointerDown={(event) => {
                           if (event.button !== 0) return;
-                          // Committing on press keeps selection working while
-                          // the camera glide moves the chip away from the
-                          // cursor before the mouseup lands. The default must
-                          // go too: mousedown would otherwise focus the chip
-                          // after the inspector and steal focus back.
+                          // Without preventDefault, mousedown focuses the chip after the inspector and takes focus back.
                           event.preventDefault();
                           commitSelection(item, event.currentTarget);
                         }}
                         onClick={(event) => {
-                          // Pointer presses already committed above; only
-                          // keyboard activation (detail 0) still arrives here.
                           if (event.detail !== 0) return;
                           commitSelection(item, event.currentTarget);
                         }}

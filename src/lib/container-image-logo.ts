@@ -19,7 +19,6 @@ for (const [slug, logo] of Object.entries(catalog)) {
   }
 }
 
-/** Match known repositories only, never container names or arbitrary registry basenames. */
 export function containerImageLogo(image: string): ContainerImageLogo | null {
   let repository = image.trim().split("@")[0];
   const tag = repository.lastIndexOf(":");

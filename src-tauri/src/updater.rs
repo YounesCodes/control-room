@@ -1,16 +1,3 @@
-//! Control Room updating itself from its own signed GitHub Releases.
-//!
-//! This is the application replacing its own installer. It never touches a
-//! Remote Host, never runs a package manager, and never reaches SSH. The name
-//! "update" in this module always means Control Room on this client machine.
-//!
-//! Rust owns the whole native side, following the same rule as sessions and SSH
-//! arguments: React names an intent and nothing else. It cannot choose a URL,
-//! hand over bytes, run an installer, or ask for verification to be skipped.
-//! The endpoint is fixed in `tauri.conf.json`, the signature is checked by
-//! `tauri-plugin-updater` before any bytes are handed back, and the installer is
-//! launched by the plugin rather than by any command this module exposes.
-
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -25,8 +12,6 @@ mod network;
 
 use crate::database::Database;
 
-/// Long enough for a slow link, short enough that a hung endpoint never becomes
-/// something the user notices. An automatic check that trips this is silent.
 const CHECK_TIMEOUT: Duration = Duration::from_secs(12);
 
 /// The key the one-time post-update notice lives under in `application_settings`.
@@ -96,8 +81,6 @@ impl UpdateFailure {
         }
     }
 
-    /// Maps a plugin error, keeping signature rejection separate from every
-    /// other download problem.
     fn from_download(error: tauri_plugin_updater::Error) -> Self {
         let kind = match error {
             tauri_plugin_updater::Error::Minisign(_)
@@ -113,8 +96,6 @@ impl UpdateFailure {
     }
 }
 
-/// A short sentence for the UI. Rust error chains are useful in a log and
-/// unreadable in a popover, so each case gets deliberate wording.
 fn describe(error: &tauri_plugin_updater::Error) -> String {
     use tauri_plugin_updater::Error;
     match error {
@@ -148,8 +129,6 @@ pub struct UpdaterState {
 
 #[derive(Default)]
 struct Inner {
-    /// `Arc` because the download runs without holding the lock; the pending
-    /// update must not be swapped underneath it.
     pending: Option<Arc<Update>>,
     downloaded: Option<Vec<u8>>,
     checking: bool,
@@ -158,8 +137,6 @@ struct Inner {
 }
 
 impl UpdaterState {
-    /// Claims the right to run a check. A second caller is refused rather than
-    /// queued: two checks would race to replace `pending`.
     fn begin_check(&self) -> bool {
         let mut inner = self.inner.lock();
         if inner.checking || inner.downloading || inner.installing {
@@ -173,15 +150,12 @@ impl UpdaterState {
         self.inner.lock().checking = false;
     }
 
-    /// Replaces the pending update. Any previously downloaded bytes belong to
-    /// the version being replaced, so they are dropped with it.
     fn set_pending(&self, update: Option<Arc<Update>>) {
         let mut inner = self.inner.lock();
         inner.pending = update;
         inner.downloaded = None;
     }
 
-    /// Claims the right to download, returning the update to download.
     fn begin_download(&self) -> Result<Arc<Update>, UpdateFailure> {
         let mut inner = self.inner.lock();
         if inner.checking || inner.downloading || inner.installing {
@@ -206,8 +180,6 @@ impl UpdaterState {
         inner.downloaded = bytes;
     }
 
-    /// The pending update together with its verified bytes, or nothing. Both
-    /// come from the same lock acquisition so they cannot disagree.
     fn begin_install(&self) -> Option<(Arc<Update>, Vec<u8>)> {
         let mut inner = self.inner.lock();
         if inner.checking || inner.downloading || inner.installing {
@@ -224,8 +196,6 @@ impl UpdaterState {
     }
 }
 
-/// Formats the plugin's `time` timestamp with the `chrono` already in the tree,
-/// rather than pulling in a second date library for one field.
 fn format_published(date: Option<time::OffsetDateTime>) -> Option<String> {
     let date = date?;
     chrono::DateTime::from_timestamp(date.unix_timestamp(), date.nanosecond())
@@ -329,9 +299,6 @@ pub async fn download_update(
                     let _ = progress.send(UpdateProgress::Started { content_length });
                 }
                 downloaded += chunk as u64;
-                // One event per whole percent, or per 512 KiB when the endpoint
-                // gave no length. A 4 MB installer is a few hundred chunks; the
-                // UI does not need a repaint for each of them.
                 let step = content_length.map_or(512 * 1024, |total| (total / 100).max(1));
                 if downloaded - reported >= step || Some(downloaded) == content_length {
                     reported = downloaded;
@@ -382,8 +349,6 @@ pub async fn install_update(
         notes: info.notes.clone(),
         published_at: info.published_at.clone(),
     };
-    // A failure to record the notice must not block the update itself. The only
-    // cost is that the new version starts without showing what changed.
     if let Ok(payload) = serde_json::to_string(&notice) {
         let _ = database.set_app_metadata(PENDING_NOTICE_KEY, &payload);
     }
@@ -396,7 +361,7 @@ pub async fn install_update(
         ));
     }
 
-    // Reached only on platforms whose installer leaves this process alive.
+    // Only reached where the installer leaves this process running.
     app.restart();
 }
 
@@ -426,18 +391,10 @@ pub fn pending_update_notice(
 #[derive(Debug, PartialEq, Eq)]
 enum NoticeDecision {
     Show(PendingUpdateNotice),
-    /// Stored but not usable, so it is cleared rather than left to be
-    /// reconsidered on every start.
     Discard,
     Nothing,
 }
 
-/// Decides what a stored notice means for the version now running.
-///
-/// Split out so the rule is testable without an `AppHandle`. A notice only
-/// survives when its version is the version running, which is what makes the
-/// dialog "once, after an update that actually happened" rather than "on every
-/// start after someone clicked Download".
 fn decide_notice(stored: Option<&str>, current_version: &str) -> NoticeDecision {
     let Some(payload) = stored else {
         return NoticeDecision::Nothing;
@@ -481,7 +438,6 @@ mod tests {
     #[test]
     fn downloading_requires_a_pending_update() {
         let state = UpdaterState::default();
-        // `Update` has no Debug, so this cannot use `expect_err`.
         let Err(failure) = state.begin_download() else {
             panic!("a download with no pending update must be refused");
         };
@@ -522,8 +478,6 @@ mod tests {
         let state = UpdaterState::default();
         assert!(state.begin_install().is_none());
         state.end_download(Some(vec![1, 2, 3]));
-        // Bytes without a pending update are not installable: the pair has to
-        // come from the same check.
         assert!(state.begin_install().is_none());
     }
 
@@ -579,8 +533,6 @@ mod tests {
 
     #[test]
     fn a_notice_for_an_install_that_never_happened_is_discarded() {
-        // Downloaded 0.7.0, never restarted, still on 0.6.1: there is nothing to
-        // announce, and the stale notice is cleared rather than kept forever.
         let stored = notice("0.7.0");
         assert_eq!(
             decide_notice(Some(&stored), "0.6.1"),
@@ -590,7 +542,6 @@ mod tests {
 
     #[test]
     fn a_consumed_notice_shows_nothing() {
-        // Dismissing deletes the row, so the next start reads nothing at all.
         assert_eq!(decide_notice(None, "0.7.0"), NoticeDecision::Nothing);
     }
 

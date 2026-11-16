@@ -10,27 +10,16 @@ export function LoadingState({ label = "Loading…" }: { label?: string }) {
   );
 }
 
-/*
- * Skeletons sketch the content that is loading with the same layout classes
- * that content uses, so every row, field, and card lands exactly where the
- * placeholder stood. `Skeleton` is the one status for a loading area; the
- * shapes inside it are hidden from assistive technology.
- */
-
-/** Varied but stable widths so placeholder text reads as text, not a grid. */
 const WIDTHS = [72, 54, 84, 62, 46, 78, 58, 68];
 
-/** A stable length from the shared sequence, scaled to `max`. */
 const span = (index: number, max: number) =>
   Math.round((WIDTHS[index % WIDTHS.length] * max) / 100);
 
-/** A stable CSS width from the shared sequence, scaled to `max`. */
 export const boneWidth = (index: number, max = 100, unit = "%") => `${span(index, max)}${unit}`;
 
 type BoneShape =
   "text" | "title" | "caption" | "control" | "button" | "icon" | "mark" | "dot" | "block";
 
-/** One placeholder shape: a line of text, a control, an icon, or a status dot. */
 export function Bone({
   shape = "text",
   width,
@@ -49,13 +38,8 @@ export function Bone({
   );
 }
 
-/** Marks one row of a skeleton so rows pulse in sequence, top to bottom. */
 export const wave = (index: number) => ({ "--skeleton-row": index }) as CSSProperties;
 
-/**
- * The status for one loading area. `label` names what is being read for
- * assistive technology; `children` sketch the content in its own layout.
- */
 export function Skeleton({
   label,
   children,
@@ -75,7 +59,6 @@ export function Skeleton({
   );
 }
 
-/** Dense list rows: an optional status mark, a title over a detail, and a state. */
 export function SkeletonRows({
   count = 8,
   lead = false,
@@ -102,7 +85,6 @@ export function SkeletonRows({
   ));
 }
 
-/** Label and value pairs in the shared detail list layout. */
 export function SkeletonFields({
   count = 4,
   className = "detail-list",
@@ -124,8 +106,6 @@ export function SkeletonFields({
   );
 }
 
-/** A detail panel's heading over its fields. It belongs to the page's loading
- *  status, so it adds none of its own. */
 export function SkeletonDetail({ fields = 4 }: { fields?: number }) {
   return (
     <div className="skeleton" aria-hidden="true">
@@ -138,7 +118,6 @@ export function SkeletonDetail({ fields = 4 }: { fields?: number }) {
   );
 }
 
-/** Collapsed inspector sections, each a heading on a divider. */
 export function SkeletonSections({ count, offset = 0 }: { count: number; offset?: number }) {
   return Array.from({ length: count }, (_, index) => (
     <div className="port-disclosure skeleton-row" key={index} style={wave(index + offset)}>
@@ -147,7 +126,6 @@ export function SkeletonSections({ count, offset = 0 }: { count: number; offset?
   ));
 }
 
-/** Lines of text or code, such as a unit file, or with `lead`, timestamped log lines. */
 export function SkeletonLines({
   count = 6,
   offset = 0,
@@ -169,7 +147,6 @@ export function SkeletonLines({
   );
 }
 
-/** A placeholder for one short inline value, such as a count in a heading. */
 export function SkeletonText() {
   return <Bone className="skeleton-inline" width="7ch" />;
 }
@@ -180,11 +157,6 @@ const GRAPH_GROUPS = [
   { x: 164, y: 260, chips: 1, link: "M124,26 H148 V248 H288 V260" },
 ];
 
-/**
- * A host with its groups of nodes, drawn at the shared graph's own card sizes
- * and connector routes: a trunk from the host, a bus to the far column, and a
- * lane down to the next row. It scales down with the canvas.
- */
 export function SkeletonGraph() {
   return (
     <svg className="skeleton-graph" viewBox="-1 -1 702 382">

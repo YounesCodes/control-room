@@ -16,14 +16,6 @@ interface UpdateIndicatorProps {
   onRestart: () => void;
 }
 
-/**
- * The update control in the titlebar.
- *
- * Nothing renders while Control Room is current, so the titlebar of an
- * up-to-date app is exactly what it was before this feature existed. The
- * control is a normal button and carries no `data-tauri-drag-region`, so
- * clicking it never starts a window drag.
- */
 export function UpdateIndicator({ state, onDownload, onRestart }: UpdateIndicatorProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -46,8 +38,6 @@ export function UpdateIndicator({ state, onDownload, onRestart }: UpdateIndicato
     };
   }, [open]);
 
-  // An update that finishes downloading while the panel is open leaves the
-  // panel describing a step that has passed, so it closes itself.
   useEffect(() => {
     if (state.status === "installing") setOpen(false);
   }, [state.status]);
@@ -96,8 +86,6 @@ export function UpdateIndicator({ state, onDownload, onRestart }: UpdateIndicato
         )}
       </button>
 
-      {/* Progress semantics live on a dedicated node so the button keeps a
-          stable accessible name while the percentage moves. */}
       {state.status === "downloading" && (
         <span
           className="sr-only"

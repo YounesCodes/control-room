@@ -24,8 +24,6 @@ pub(crate) fn executable_file(path: &Path) -> bool {
 }
 
 pub fn detect_ssh_path() -> Option<PathBuf> {
-    // Hosted transport tests run without a supported desktop client. Their
-    // explicitly selected OpenSSH binary must not depend on native discovery.
     #[cfg(test)]
     if let Some(path) = env::var_os("CONTROL_ROOM_TEST_SSH_PATH") {
         let path = PathBuf::from(path);
@@ -79,10 +77,6 @@ pub fn connection_arguments(connection: &SavedConnection, terminal: bool) -> Vec
 }
 
 pub fn validate_systemd_unit_id(value: &str) -> Result<&str, String> {
-    // Accept every canonical systemd unit type. `systemd-analyze blame` and
-    // `journalctl -u` legitimately reference `.device`, `.swap`, `.target`,
-    // `.scope`, etc.; the character-class check below is what guards against
-    // injection, not the suffix set.
     let supported_suffix = [
         ".service",
         ".socket",
@@ -163,7 +157,6 @@ mod tests {
             assert_eq!(super::detect_ssh_path(), expected);
             return;
         }
-        // Isolate environment overrides from other tests running in parallel.
         let fixture = tempfile::tempdir().unwrap();
         let program = fixture.path().join("fixture-openssh");
         std::fs::write(&program, b"fixture").unwrap();
@@ -257,9 +250,6 @@ mod tests {
         );
     }
 
-    /// A Structured Operation must not inherit the interactive session's
-    /// settings. It runs unattended, so it asks for no tty, refuses to prompt,
-    /// and gives up rather than hanging on an unreachable host.
     #[test]
     fn a_noninteractive_connection_never_waits_for_a_prompt() {
         let arguments = connection_arguments(&saved(), false);
@@ -280,28 +270,8 @@ mod tests {
         );
     }
 
-    /// The one invariant that matters in here: nothing the user types into the
-    /// connection editor may reach ssh as an option.
-    ///
-    /// Two things enforce it together, so they are checked together. Username
-    /// and identity file are the arguments of flags this builder chose, and
-    /// getopt consumes those whatever they look like. The destination is the
-    /// only positional, so it is the only field ssh would read as an option,
-    /// and validation is what stops one that starts with a hyphen from ever
-    /// being stored.
-    ///
-    /// Each value is therefore required to be either refused outright or laid
-    /// out safely. Neither half can be dropped without failing this.
-    ///
-    /// "Safely" is getopt's own rule rather than "contains no hyphen": a flag
-    /// that takes an argument consumes the next argv entry whatever it looks
-    /// like, so `-l -F` sets the login name to `-F` and does not read a second
-    /// option. What must never happen is a value landing where getopt is
-    /// looking for an option, or in the positional slot ssh reads as the
-    /// destination.
     #[test]
     fn no_storable_connection_field_reaches_ssh_as_an_option() {
-        // Options the builder emits, and which of them consume the next entry.
         const FLAGS: [&str; 6] = ["-tt", "-T", "-o", "-l", "-p", "-i"];
         const TAKES_A_VALUE: [&str; 4] = ["-o", "-l", "-p", "-i"];
 
@@ -361,8 +331,6 @@ mod tests {
                             !expects_a_value && TAKES_A_VALUE.contains(&argument.as_str());
                     }
 
-                    // ssh reads the first entry that is not an option, or an
-                    // option's value, as the destination.
                     assert_eq!(
                         arguments.last().map(String::as_str),
                         Some(connection.destination.as_str()),
@@ -381,10 +349,6 @@ mod tests {
         }
     }
 
-    /// Windows key paths hold spaces and non-ASCII characters routinely. The
-    /// path is one argv entry, so neither needs quoting and neither may split
-    /// it: a path that arrived as two arguments would make ssh read the tail as
-    /// the destination.
     #[test]
     fn an_identity_path_with_spaces_stays_a_single_argument() {
         for path in [
@@ -409,8 +373,6 @@ mod tests {
         }
     }
 
-    /// Which of those the editor refuses, so the destination never reaches the
-    /// argv position where a leading hyphen would be read as an option.
     #[test]
     fn destinations_that_ssh_would_read_as_options_are_refused() {
         for rejected in [
@@ -432,8 +394,6 @@ mod tests {
             );
         }
 
-        // Strange but legitimate destinations still work. Rejecting these would
-        // make the validator the problem instead of the guard.
         for accepted in [
             "laptop",
             "192.168.1.10",
@@ -452,9 +412,6 @@ mod tests {
         }
     }
 
-    /// The username lands after `-l`, so getopt consumes it whatever it holds.
-    /// It is still restricted, because a username is a POSIX account name and a
-    /// value that could not name one is a typo worth catching at save time.
     #[test]
     fn usernames_are_account_names_and_nothing_else() {
         for accepted in ["root", "deploy", "web.admin", "svc_backup", "user-1", "u"] {
@@ -482,9 +439,6 @@ mod tests {
         }
     }
 
-    /// Port zero is representable in a `u16` and means nothing to ssh, so it is
-    /// the one port value validation has to refuse. The rest of the range is
-    /// bounded by the type.
     #[test]
     fn only_the_unusable_port_is_refused() {
         for (port, valid) in [(Some(0), false), (Some(1), true), (Some(65_535), true)] {
@@ -527,8 +481,6 @@ mod tests {
     fn identifiers_reject_shell_syntax() {
         assert!(validate_systemd_unit_id("nginx.service").is_ok());
         assert!(validate_systemd_unit_id(r"srv-data\x2darchive.mount").is_ok());
-        // Every canonical systemd unit type is a valid identifier; these appear
-        // in `systemd-analyze blame` and are addressable by `journalctl -u`.
         assert!(validate_systemd_unit_id("multi-user.target").is_ok());
         assert!(validate_systemd_unit_id("dev-sda1.device").is_ok());
         assert!(validate_systemd_unit_id("swapfile.swap").is_ok());

@@ -1,12 +1,3 @@
-// Verifies the draft release before it is published and writes its one
-// checksum file.
-//
-// A release carries only the packages people download, the macOS updater
-// archives, latest.json, and SHA256SUMS.txt. Updater signatures live inside
-// latest.json, so no .sig or per-package .sha256 asset may be published.
-//
-//   GITHUB_REF_NAME=vX.Y.Z [INCLUDE_MACOS=true] node scripts/verify-release-assets.mjs
-
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -30,10 +21,6 @@ const PACKAGES = [
   },
 ];
 
-/**
- * Checks the published asset names and returns the package names that
- * SHA256SUMS.txt must cover, sorted.
- */
 export function releasePackages(names, { includeMacos }) {
   const forbidden = names.filter((name) => /\.(sig|sha256)$/.test(name));
   assert.deepEqual(forbidden, [], "Signature or per-package checksum assets are still published");
@@ -67,10 +54,6 @@ export function requiredFeedPlatforms({ includeMacos }) {
   return platforms;
 }
 
-/**
- * Maps every updater feed entry to the published asset it names. Returns one
- * { platform, name, signature } per entry.
- */
 export function feedSignatures(feed, assets, required) {
   const platforms = feed?.platforms ?? {};
   for (const key of required)
@@ -86,7 +69,6 @@ export function feedSignatures(feed, assets, required) {
   });
 }
 
-/** Standard `sha256sum -c` format: `<hash>  <name>` per line, sorted by name. */
 export function formatChecksums(hashes) {
   return (
     [...hashes.entries()]
@@ -96,7 +78,6 @@ export function formatChecksums(hashes) {
   );
 }
 
-/** Fails unless the checksum file lists exactly these packages with these hashes. */
 export function verifyChecksums(text, hashes) {
   const listed = new Map();
   for (const line of text.replaceAll("\r\n", "\n").split("\n")) {
@@ -130,7 +111,6 @@ function main() {
     { includeMacos },
   );
 
-  // latest.json stays in the working directory for the steps that follow.
   const feed = JSON.parse(readFileSync(download(FEED, "."), "utf8"));
   assert.equal(feed.version, tag.slice(1), "Updater feed version differs from the tag");
 
@@ -141,8 +121,6 @@ function main() {
     hashes.set(name, createHash("sha256").update(contents).digest("hex"));
   }
 
-  // The signature the updater trusts is the one inside latest.json, so that
-  // is the one checked against the downloaded bundle.
   for (const { platform, name, signature } of feedSignatures(
     feed,
     assets,

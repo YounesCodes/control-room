@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
 
-/** Interpolate the visual reading only; accessibility always receives the measured value. */
 export function AnimatedNumber({
   value,
   format,

@@ -44,8 +44,6 @@ it("keeps PowerShell marks solid and legible at their actual 16-pixel display si
     for (let alpha = 3; alpha < pixels.length; alpha += 4) {
       if (pixels[alpha] > 128) opaquePixels++;
     }
-    // At this size a hairline frame breaks into faint partial pixels. The
-    // filled mark must retain a substantial solid silhouette around its prompt.
     expect(opaquePixels).toBeGreaterThan(85);
   }
 });
@@ -113,8 +111,6 @@ it("uses the same logo scale for every OS and local shell, including larger dial
     expect(mark.getBoundingClientRect().height).toBeCloseTo(18, 2);
     expect(svg.getBoundingClientRect().width).toBeCloseTo(16, 2);
     expect(svg.getBoundingClientRect().height).toBeCloseTo(16, 2);
-    // Logos keep their aspect ratio and fit the shared slot, rather than
-    // stretching wide shell or distribution marks into squares.
     const artwork = svg.getBBox();
     const viewBox = svg.viewBox.baseVal;
     const scale = Math.min(16 / viewBox.width, 16 / viewBox.height);

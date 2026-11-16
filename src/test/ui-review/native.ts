@@ -16,8 +16,6 @@ const params = new URLSearchParams(location.search);
 const scenario = params.get("scenario") ?? "settings";
 const state = params.get("state") ?? "populated";
 const linux = scenario === "settings" && state.startsWith("linux-");
-// Loading states hold one area's first read open so its placeholder stays on
-// screen; every other read answers as usual.
 const loading = scenario === "loading" ? state : null;
 const pending = <T>() => new Promise<T>(() => {});
 const windowsHost = loading === "windows-services" || loading === "shell-picker";
@@ -30,7 +28,6 @@ if (
 const host = {
   ...connection(),
   displayName: "Example host",
-  // History needs capture on for its populated list.
   historyEnabled: (scenario === "pages" && state === "history") || loading === "history",
 };
 const units = [
@@ -66,7 +63,6 @@ const workspaceView = {
     "ports-discovering": "ports",
   }[state],
 }[scenario] as "services" | "terminal" | "ports" | "docker" | "logs" | "history" | undefined;
-// Pages show the Docker, Logs, and History screens with ordinary readings.
 const containers = [
   {
     ...container,
@@ -111,12 +107,9 @@ const historyEntries = [
   exitCode: exitCode as number,
   shell: "bash",
 }));
-// An unreachable host fails each Ports read: two with the SSH timeout, two
-// behind it in the busy remote queue.
 const portsTimeout =
   "Connection timed out: ssh: connect to host 192.0.2.10 port 22: Connection timed out";
 const portsQueueBusy = "Remote operation queue was busy for 4 seconds";
-// Dialogs show organization that already exists, so their lists are populated.
 const groups =
   scenario === "dialogs"
     ? [
@@ -157,7 +150,6 @@ const journalOutput = Array.from({ length: 48 }, (_, index) => {
   }
 `;
 }).join("");
-// Container Terminals open from Docker and hang under the host as leaves.
 const containerTerminals =
   scenario === "pages" && state === "container-terminal"
     ? containers.slice(0, 2).map(({ id, name, image }) => ({
@@ -204,7 +196,6 @@ export async function listen<T>(name: string, callback: (event: { payload: T }) 
   };
 }
 
-// These substitutes cannot open windows, dialogs, SSH, processes, or a database.
 export const getCurrentWindow = () => ({
   close: async () => undefined,
   minimize: async () => undefined,
@@ -227,7 +218,6 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       };
       break;
     case "list_connections":
-      // Dialog states also review how assigned tags sit in the sidebar row.
       result = [{ ...host, tags }];
       break;
     case "list_connection_groups":
@@ -268,8 +258,6 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
     case "stop_log_stream":
       break;
     case "get_history_integration_status":
-      // History restart starts before the integration, and its prepare step
-      // enables it while the host terminal is already running.
       result = state === "history-restart" ? "not-installed" : "installed";
       break;
     case "install_history_integration":
@@ -294,7 +282,6 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       if (loading) return pending();
       throw new Error(portsQueueBusy);
     case "sample_header_metrics":
-      // GPU stays unreported so the unavailable reading is reviewed too.
       result = {
         sampledAt: "2026-11-01T10:00:00Z",
         cpuPercent: 12,
@@ -331,8 +318,6 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       result = workspace;
       break;
     case "window_compositing":
-      // Without a compositor the window keeps square corners, so captures
-      // match the native frame on every platform.
       result = false;
       break;
     case "current_app_version":
@@ -358,8 +343,6 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       if (loading) return pending();
       throw new Error(`Missing UI review native fixture for ${command}`);
     case "start_session": {
-      // Each container shell is its own session; the host shell keeps the
-      // single session ID the other scenarios use.
       const sessionId = args.containerId
         ? `example-container-${args.containerId.slice(0, 12)}`
         : "example-session";
@@ -377,9 +360,6 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
                 : { sessionId, state: "connected", reason: null },
           }),
         );
-        // A running command names the tab; the local ssh.exe window title
-        // that ConPTY reports first must never appear. The terminal scenario
-        // prints a short service log so Find has several matches to step through.
         const output =
           state === "running-command"
             ? [
@@ -440,8 +420,6 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       break;
     case "start_journal_stream":
       result = { streamId: "example-stream" };
-      // A followed journal the account may not read prints nothing on stdout;
-      // journalctl's hint arrives on stderr and becomes a stream notice.
       setTimeout(() => {
         if (state === "restricted")
           listeners
@@ -479,7 +457,6 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
     }
     default: {
       const error = new Error(`Missing UI review native fixture for ${command}`);
-      // App may catch a rejected read; an incomplete fixture must still fail capture.
       queueMicrotask(() => {
         throw error;
       });

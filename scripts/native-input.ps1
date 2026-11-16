@@ -160,8 +160,7 @@ switch ($Action) {
     if (![ControlRoomNativeInput]::PostMessage($application.MainWindowHandle, 0x50, [IntPtr]::Zero, $parent)) { throw 'Could not request the parent keyboard layout' }
     if (![ControlRoomNativeInput]::PostMessage($focused, 0x50, [IntPtr]::Zero, $layout)) { throw 'Could not request the focused WebView keyboard layout' }
     $deadline = [DateTime]::UtcNow.AddSeconds(5)
-    # Windows may sign-extend or substitute the high word of the HKL. Verify the
-    # requested language on the thread that actually receives keyboard input.
+    # Windows may sign-extend or substitute the high word of the HKL.
     $language = $layout.ToInt64() -band 0xffff
     while (([ControlRoomNativeInput]::GetKeyboardLayout($thread).ToInt64() -band 0xffff) -ne $language -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 50 }
     $actual = [ControlRoomNativeInput]::GetKeyboardLayout($thread).ToInt64()
@@ -180,8 +179,7 @@ switch ($Action) {
     do {
       $combo = $root.FindFirst([Windows.Automation.TreeScope]::Descendants, $condition)
       if (!$combo) {
-        # Settings builds use different IDs for the Scale combo. Select by its
-        # accessible percentage value, scoped to the Settings process.
+        # Settings builds use different IDs for the Scale combo.
         $settings = Get-Process -Name SystemSettings -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($settings) {
           $comboCondition = [Windows.Automation.AndCondition]::new(
@@ -219,9 +217,7 @@ switch ($Action) {
       if (!$item) { throw "The display does not offer $Value% scale" }
       $item.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Select()
     }
-    # XAML islands and ApplicationFrameHost do not consistently expose
-    # WindowPattern or Process.MainWindowHandle. Find the control's real HWND
-    # ancestor and request its ordinary close; never target the desktop.
+    # XAML islands and ApplicationFrameHost do not reliably expose WindowPattern or MainWindowHandle.
     $walker = [Windows.Automation.TreeWalker]::ControlViewWalker
     $window = $combo
     $closeHandle = [IntPtr]::Zero

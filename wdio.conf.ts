@@ -15,7 +15,6 @@ if (!["win32", "darwin", "linux"].includes(process.platform)) {
   throw new Error("Control Room desktop E2E tests require Windows, macOS, or Linux.");
 }
 
-// Installed package tests are explicit because they replace a per-user installation.
 const installLifecycle = process.argv.some((argument) =>
   [
     "e2e/install-upgrade.spec.ts",
@@ -84,7 +83,6 @@ export const config: WebdriverIO.Config = {
   onPrepare: () => {
     if (isMac) {
       // SSH and embedded WebDriver events do not reset macOS's idle timer.
-      // Keep the display awake only while this test runner is alive.
       const assertion = spawn(
         "/usr/bin/caffeinate",
         ["-d", "-i", "-u", "-w", String(process.pid)],
@@ -98,7 +96,7 @@ export const config: WebdriverIO.Config = {
   onReload: async () => {
     const { browser } = await import("@wdio/globals");
     installAsyncScriptCommand(browser);
-    // The service caches provider metadata by session ID. A native restart needs initialization too.
+    // The service caches provider metadata by session ID.
     await new TauriService({ driverProvider }, tauriCapabilities).before(
       tauriCapabilities,
       [],

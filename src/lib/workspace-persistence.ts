@@ -21,9 +21,6 @@ interface RestoredWorkspaceState {
 
 const LEGACY_TERMINAL_GROUP_ID = "00000000-0000-4000-8000-000000000001";
 
-/// Rebuilds the saved tabs and split layout. Each valid restored Workspace
-/// requests a fresh session when its TerminalPane mounts. No old session ID or
-/// terminal output is restored.
 export function restoreWorkspaceState(
   connections: SavedConnection[],
   state: PersistedWorkspaceState,
@@ -32,7 +29,6 @@ export function restoreWorkspaceState(
   const connectionsById = new Map(connections.map((connection) => [connection.id, connection]));
   const shellsById = new Map(localShells.map((shell) => [shell.id, shell]));
   const workspaces = state.workspaces.flatMap<Workspace>((saved) => {
-    // Older app versions persisted the standalone Scratchpad page.
     const view = saved.view === "scratchpad" ? "terminal" : saved.view;
     const reconnecting = {
       id: saved.id,
@@ -42,11 +38,8 @@ export function restoreWorkspaceState(
       restored: true,
     } as const;
     if (saved.localShellId) {
-      // A shell that is no longer installed is dropped, the way a Workspace for
-      // a deleted Saved Connection is.
       const shell = shellsById.get(saved.localShellId);
       if (!shell) return [];
-      // Local workspaces and legacy Scratchpad pages return to their terminal.
       return [
         {
           ...createLocalWorkspace(shell),
@@ -57,8 +50,6 @@ export function restoreWorkspaceState(
     }
     const connection = saved.connectionId ? connectionsById.get(saved.connectionId) : undefined;
     if (!connection) return [];
-    // A Container Terminal reopens on the same container, in its terminal.
-    // If the container is gone, `docker exec` says so in the terminal.
     if (saved.container && !saved.remoteShell) {
       return [
         {

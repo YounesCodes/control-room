@@ -2,7 +2,6 @@ import { browser } from "@wdio/globals";
 import { spawn } from "node:child_process";
 import { resolve } from "node:path";
 
-// Explicit only: builds and replaces an isolated, signed native installation.
 describe("Installed application's local signed updater", function () {
   this.timeout(1_800_000);
   it("rejects modified bytes, then installs and restarts the correctly signed update", async () => {

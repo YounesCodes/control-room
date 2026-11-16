@@ -10,7 +10,6 @@ const files = git(["diff", "--cached", "--name-only", "-z", "--diff-filter=ACMR"
   .filter(Boolean);
 let failed = false;
 for (const file of files) {
-  // Check the index, including partially staged files, without rewriting it.
   if (git(["ls-files", "--stage", "--", file]).startsWith("120000")) continue;
   const filepath = join(root, file);
   const info = await prettier.getFileInfo(filepath, { ignorePath: join(root, ".prettierignore") });

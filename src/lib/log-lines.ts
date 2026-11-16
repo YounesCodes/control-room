@@ -8,23 +8,16 @@ export interface LogSegment {
 }
 
 export interface ParsedLogLine {
-  /** Display text: the host line without terminal escapes or a trailing CR. */
   text: string;
   segments: LogSegment[];
   level: LogLevel | null;
-  /** Separators written by Control Room or journalctl rather than the source. */
   marker: boolean;
 }
 
-// CSI and OSC sequences from colored container output. Rendering them as text
-// adds noise; the log view does not interpret terminal colors.
 // eslint-disable-next-line no-control-regex
 const TERMINAL_ESCAPES = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-_]/g;
-// ISO 8601 at the start of a line: journalctl short-iso(-precise) and most
-// application loggers. The date and zone read as context; the time stays scannable.
 const ISO_PREFIX =
   /^(\d{4}-\d{2}-\d{2}[T ])(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)(Z| ?UTC|[+-]\d{2}:?\d{2})?(?=\s)/;
-// journalctl's "host identifier[pid]:" (kernel lines carry no PID).
 const JOURNAL_SOURCE = /^(\s+)(\S+ (?:[^\s:[\]]+\[\d+\]|kernel):)(?=\s|$)/;
 const STREAM_MARKER = /^\[(?:systemd|docker) .+\] stream started$/;
 const JOURNAL_MARKER = /^-- .+ --$/;
@@ -57,15 +50,9 @@ const LEVEL_WORDS: Record<string, LogLevel | null> = {
   trace: null,
   verbose: null,
 };
-// level=error, "level":"warn", "log.level": "INFO", severity=ERROR, ...
 const FIELD_LEVEL =
   /(?:^|[\s{,;(])["']?(?:log\.)?(?:level|lvl|loglevel|severity)["']?\s*[=:]\s*["']?([A-Za-z]+)/;
 
-/**
- * The level a line states itself: a level field, or an upper-case, bracketed,
- * or colon-terminated level among the first few words (`WARNING`, `[error]`,
- * `FATAL:`, `info:`). Returns undefined when the line states none.
- */
 export function statedLogLevel(message: string): LogLevel | null | undefined {
   const field = FIELD_LEVEL.exec(message)?.[1].toLowerCase();
   if (field && field in LEVEL_WORDS) return LEVEL_WORDS[field];
@@ -111,7 +98,6 @@ export function parseLogLine(raw: string): ParsedLogLine {
   return { text, segments, level: logLevel(rest), marker: false };
 }
 
-/** Parses each distinct line once; streams re-render the same lines many times. */
 export class LogLineCache {
   private entries = new Map<string, ParsedLogLine>();
 
@@ -133,16 +119,12 @@ export interface LogPart {
   match: boolean;
 }
 
-/**
- * Splits each segment into plain and matching parts. Matches are found in the
- * whole line, case-insensitively, so a match may span a timestamp and message.
- */
 export function highlightSegments(segments: LogSegment[], query: string): LogPart[][] {
   const needle = query.toLowerCase();
   const ranges: [number, number][] = [];
   const line = segments.map((segment) => segment.text).join("");
   const haystack = line.toLowerCase();
-  // Lowercasing can change the length of a few scripts; skip marks rather than misplace them.
+  // Lowercasing changes the length of some scripts.
   if (needle && haystack.length === line.length) {
     for (
       let at = haystack.indexOf(needle);

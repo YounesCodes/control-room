@@ -7,21 +7,8 @@ interface RenderServiceLike {
   handleSelectionChanged?: (...request: SelectionRequest) => void;
 }
 
-/**
- * Holds xterm's selection repaint while a terminal is hidden.
- *
- * xterm refreshes its selection on each scrolled frame, and its DOM renderer
- * answers by rebuilding every row. That path skips the pause xterm applies to
- * hidden terminals. Inside a `display: none` pane every character measures as
- * zero wide, is never cached, and forces a document layout on the next one, so
- * a background terminal that printed steadily stalled the view in front of it.
- * The newest request is kept and `flush` applies it once the terminal is shown,
- * which is also when xterm repaints the rows it skipped.
- *
- * A visible terminal is left exactly as xterm ships. The hook reaches a private
- * xterm service; if that service is missing or shaped differently, nothing is
- * patched.
- */
+// xterm's DOM renderer rebuilds every row on a selection refresh, even in a hidden terminal,
+// where a `display: none` pane measures every character as zero wide and forces a layout.
 export function deferHiddenSelectionRepaint(
   terminal: Terminal,
   isVisible: () => boolean,

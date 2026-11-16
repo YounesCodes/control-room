@@ -14,7 +14,6 @@ describe("release notes parsing", () => {
   });
 
   it("treats a short label ending in a colon as a heading", () => {
-    // The shape generated release notes usually take.
     expect(parseReleaseNotes("Fixed:\n- A crash")).toEqual([
       { kind: "heading", text: "Fixed" },
       { kind: "bullets", items: ["A crash"] },
@@ -34,8 +33,6 @@ describe("release notes parsing", () => {
   });
 
   it("shows a link as text rather than making it clickable", () => {
-    // A clickable target built from remote text is a phishing surface, and the
-    // popover has no business opening a browser on the user's behalf.
     expect(parseReleaseNotes("- See [the docs](https://example.com/x)")).toEqual([
       { kind: "bullets", items: ["See the docs (https://example.com/x)"] },
     ]);
@@ -86,9 +83,6 @@ describe("release notes parsing", () => {
   });
 
   it("never turns release-note text into markup", () => {
-    // The parser only ever emits text. Nothing downstream may pass this to
-    // dangerouslySetInnerHTML, and this locks in that the tags survive as
-    // characters rather than being interpreted or silently dropped.
     const hostile = '<script>alert(1)</script>\n- <img src=x onerror="alert(2)">';
     const blocks = parseReleaseNotes(hostile);
     expect(blocks).toEqual([
@@ -98,18 +92,12 @@ describe("release notes parsing", () => {
   });
 
   it("keeps even a URL crafted to look like markup inert", () => {
-    // Compaction produces text, and text is all it can ever produce: the
-    // result still renders as characters, not elements.
     expect(parseReleaseNotes("https://github.com/a/b/compare/<script>...alert(1)")).toEqual([
       { kind: "paragraph", text: "<script> → alert(1)" },
     ]);
   });
 
   it("renders the notes GitHub actually generates", () => {
-    // The verbatim body of the v0.7.1 release. Generated notes are the real
-    // input to this parser, so their shape is worth pinning: a heading, one
-    // bullet per merged PR with a bare URL, and a bold changelog line — with
-    // the GitHub URLs compacted to short text.
     const generated = [
       "## What's Changed",
       "* fix: streamline terminal creation and clipboard UX by @YounesCodes in https://github.com/YounesCodes/control-room/pull/53",

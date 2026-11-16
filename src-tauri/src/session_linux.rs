@@ -1,6 +1,4 @@
-//! Linux PTYs can stay readable or open after the shell that owned them exits.
-//! Wake the reader at child exit and drain the queued output without waiting on
-//! descendants that still have the slave open.
+//! Linux PTYs can stay readable after the shell that owned them exits.
 
 use std::{
     fs::File,
@@ -71,8 +69,6 @@ impl Read for Output {
             }
         }
         if fds[1].revents != 0 {
-            // Allow buffered terminal output to reach scrollback, while a
-            // surviving writer cannot keep the finished session alive forever.
             self.drain.get_or_insert(64 * 1024);
         }
         if fds[0].revents == 0 {

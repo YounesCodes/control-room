@@ -4,9 +4,7 @@ import { TerminalProcessing } from "./terminal-processing";
 const bytes = (value: string) => new TextEncoder().encode(value);
 
 const prompt = "dev@host:~$ ";
-/** The line the shell leaves the cursor on while its transcript is above. */
 const busyLine = "";
-/** The prompt the shell draws again under the command's transcript. */
 const returnedLine = prompt;
 
 describe("terminal command processing", () => {
@@ -314,8 +312,6 @@ describe("terminal processing with an interactive program", () => {
     expect(changed).toHaveBeenLastCalledWith(true);
   });
 
-  /** Starts an agent from the prompt and lets it take the alternate screen,
-   *  the way a coding agent draws its own composer. */
   function launchAgent() {
     const changed = vi.fn();
     const tracker = new TerminalProcessing(changed);
@@ -362,8 +358,6 @@ describe("terminal processing with an interactive program", () => {
   });
 
   it("never spins for an agent whose screen hides the prompt", () => {
-    // An agent that clears the prompt leaves nothing for the shell to return
-    // to, so waiting on a prompt would spin forever.
     const { changed, tracker } = launchAgent();
     for (let frame = 0; frame < 5; frame++) tracker.output("composer", true);
     tracker.output(prompt);
@@ -389,7 +383,6 @@ describe("terminal processing with an interactive program", () => {
   });
 
   it("keeps an ordinary full-screen program silent until it exits", () => {
-    // Vim and less were already silent while running; they stay silent.
     const changed = vi.fn();
     const tracker = new TerminalProcessing(changed);
     tracker.input(bytes("vim\r"), prompt);
@@ -456,9 +449,7 @@ describe("commands submitted at the shell prompt", () => {
   });
 
   it.each([
-    // Bash: the tty echoes typeahead before readline draws the prompt.
     ["e", `e${prompt}`, `e${prompt}echo READY`, prompt],
-    // cmd.exe: ConPTY holds typeahead until the prompt draws it.
     ["", "C:\\>ec", "C:\\>echo READY", "C:\\>"],
   ])(
     "does not take input typed before the first prompt for the prompt (%j)",
@@ -474,7 +465,6 @@ describe("commands submitted at the shell prompt", () => {
       tracker.output(returned);
       expect(submitted).not.toHaveBeenCalled();
       expect(changed).not.toHaveBeenCalled();
-      // The shell's own prompt is known from the next line on.
       tracker.input(bytes("node"), returned);
       tracker.input(bytes("\r"), `${returned}node`);
       tracker.output(busyLine);

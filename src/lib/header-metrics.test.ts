@@ -35,7 +35,6 @@ describe("header metric values", () => {
     expect(headerMetricValue("diskIo", sample)).toBe("Read 1.0 MiB/s · Write 512 KiB/s");
     expect(headerMetricValue("disk", sample)).toBe("50%");
     expect(headerMetricNumber("diskIo", sample)).toBe(1572864);
-    // Read and Write are labelled in the value itself, so the details add no caption.
     expect(headerMetricDetail("diskIo", sample)).toBeNull();
     expect(headerMetricDetail("cpu", sample)).toBeNull();
     expect(headerMetricDetail("gpu", sample)).toBeNull();

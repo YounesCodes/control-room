@@ -20,7 +20,6 @@ const remoteSource = readFileSync(
   "utf8",
 );
 
-/** Seconds from a `const NAME: Duration = Duration::from_secs(N);` line. */
 function rustTimeoutSeconds(name: string): number {
   const match = remoteSource.match(
     new RegExp(`const ${name}: Duration = Duration::from_secs\\((\\d+)\\)`),
@@ -29,32 +28,23 @@ function rustTimeoutSeconds(name: string): number {
   return Number(match[1]);
 }
 
-/// Room left above Rust's nominal budget for process spawn, the kill, wait and
-/// reader-thread joins `run_ssh` performs after a command timeout, and
-/// scheduling. That cleanup has no bound of its own, so the backstop keeps a
-/// deliberate margin rather than trusting it to be instant.
-const CLEANUP_SLACK_SECONDS = 6;
+const RUN_SSH_CLEANUP_SLACK_SECONDS = 6;
 
 describe("structured discovery timeout budget", () => {
   it("allows both platform discovery attempts plus queueing and cleanup", () => {
     expect(REMOTE_DISCOVERY_TIMEOUT_MS / 1000).toBeGreaterThanOrEqual(
       2 * rustTimeoutSeconds("COMMAND_TIMEOUT") +
         rustTimeoutSeconds("MAX_STRUCTURED_QUEUE_WAIT") +
-        CLEANUP_SLACK_SECONDS,
+        RUN_SSH_CLEANUP_SLACK_SECONDS,
     );
   });
-  // The frontend guard is a backstop, not the policy. If Rust's budget ever
-  // grows past it, every slow inspection reports the generic timeout below
-  // instead of the classified failure Rust produces, and the reason is lost.
-  // `MAX_STRUCTURED_QUEUE_WAIT` is a total queue bound, enforced against one
-  // deadline in `acquire_for`, so this sum is a real maximum.
-  it("clears the queue wait plus command timeout Rust allows, with slack", () => {
+  it("stays above the queue wait plus command timeout Rust allows so its classified failure wins", () => {
     const budgetSeconds =
       rustTimeoutSeconds("MAX_STRUCTURED_QUEUE_WAIT") + rustTimeoutSeconds("COMMAND_TIMEOUT");
 
     expect(budgetSeconds).toBeGreaterThan(0);
     expect(REMOTE_INSPECTION_TIMEOUT_MS / 1000).toBeGreaterThanOrEqual(
-      budgetSeconds + CLEANUP_SLACK_SECONDS,
+      budgetSeconds + RUN_SSH_CLEANUP_SLACK_SECONDS,
     );
   });
 });

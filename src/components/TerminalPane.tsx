@@ -33,7 +33,6 @@ export interface TerminalPaneHandle {
   focus: () => void;
   copySelection: () => void;
   pasteClipboard: () => void;
-  /** Opens Find in terminal, or closes it when it is already open. */
   toggleSearch: () => void;
 }
 
@@ -65,9 +64,8 @@ interface PendingHistory {
 
 const MAX_EARLY_SESSION_EVENTS = 16;
 
-/// One xterm host and one session lifecycle for both kinds of Terminal Session.
-/// Both shell kinds report command activity; only a remote Workspace with a
-/// Saved Connection can record Enhanced History.
+const WEBKIT_SUSPENDED_FRAME_TIMEOUT_MS = 100;
+
 export function TerminalPane({
   ref,
   workspace,
@@ -127,8 +125,6 @@ export function TerminalPane({
   }
   const handleSessionStateRef = useRef<(event: SessionStateEvent) => void>(() => undefined);
   const sendInputRef = useRef<(bytes: Uint8Array) => void>(() => undefined);
-  // A notice from this pane: a failed action, or a warning about input that
-  // could not be sent yet. Session failures arrive as workspace.reason.
   const [localNotice, setLocalNotice] = useState<{
     message: string;
     tone: "error" | "warning";
@@ -237,21 +233,16 @@ export function TerminalPane({
     let bellTimer: number | undefined;
     const theme = buildTerminalTheme(settings);
     const terminal = new Terminal({
-      // SearchAddon uses xterm's decoration API to highlight every match and
-      // report the active result count. xterm guards that API behind this flag.
+      // SearchAddon match decorations require xterm's proposed API.
       allowProposedApi: true,
       convertEol: false,
       cursorBlink: true,
       cursorStyle: "bar",
       macOptionClickForcesSelection: true,
-      // Keep shell prompts and directory names at regular weight, including
-      // ANSI bold sequences, while retaining the configured ANSI colors.
       fontWeightBold: "normal",
       drawBoldTextInBrightColors: false,
       fontFamily: settings.terminalFontFamily,
       fontSize: settings.terminalFontSize,
-      // Search match markers render in this narrow rail, separate from the
-      // terminal text so they never compete with ANSI colors.
       overviewRuler: { width: 8, showTopBorder: false, showBottomBorder: false },
       scrollback: settings.terminalScrollback,
       theme,
@@ -268,9 +259,6 @@ export function TerminalPane({
     searchRef.current = search;
     selectionRepaintRef.current = deferHiddenSelectionRepaint(terminal, () => visibleRef.current);
 
-    // Every fit can change the grid, including font and visibility changes
-    // that do not resize the container. Keep the PTY on that same grid so a
-    // shell's width-dependent prompt output does not wrap onto an extra row.
     const resizeDisposable = terminal.onResize(({ cols, rows }) => {
       const sessionId = sessionIdRef.current;
       if (sessionId) {
@@ -301,7 +289,6 @@ export function TerminalPane({
     terminal.attachCustomKeyEventHandler((event) => {
       const useMetaKey = platformRef.current === "macos";
       if (isControlRoomShortcut(event, useMetaKey ? "meta" : "control")) return false;
-      // Cmd is the copy modifier on macOS, where Ctrl+C always reaches the shell.
       const primary = useMetaKey ? event.metaKey : event.ctrlKey;
       const other = useMetaKey ? event.ctrlKey : event.metaKey;
       if (event.type !== "keydown" || !primary || event.altKey || other) return true;
@@ -312,16 +299,10 @@ export function TerminalPane({
         return false;
       }
       if (key === "v" && event.shiftKey && nativeClipboardRef.current) {
-        // Neither WebKitGTK nor WKWebView maps the shifted shortcut to a native
-        // paste, so this is the only paste xterm sees and nothing is sent twice.
         event.preventDefault();
         pasteClipboard();
         return false;
       }
-      // Elsewhere xterm owns keyboard paste through its textarea's native paste
-      // event. Reading the clipboard here as well would send the same text twice.
-      // Right-click paste still uses `pasteClipboard` because that pointer
-      // gesture never reaches xterm's textarea.
       return true;
     });
 
@@ -333,7 +314,6 @@ export function TerminalPane({
         isCodex: codexMouse.isCodex(),
       });
 
-    // Reserve clipboard clicks before xterm can report a button press to the program.
     const handleMouseDown = (event: MouseEvent) => {
       if (event.button !== 2) return;
       const action = rightClickAction(event);
@@ -344,8 +324,7 @@ export function TerminalPane({
     container.addEventListener("mousedown", handleMouseDown, { capture: true });
 
     const handleMouseMove = (event: MouseEvent) => {
-      // xterm treats hover reports as terminal input, which clears its selection.
-      // Leave button-down moves alone so xterm can finish a drag selection.
+      // xterm reports hover moves as terminal input, which clears its selection.
       if (
         event.buttons === 0 &&
         terminal.modes.mouseTrackingMode === "any" &&
@@ -356,8 +335,7 @@ export function TerminalPane({
     };
     container.addEventListener("mousemove", handleMouseMove, { capture: true });
 
-    // Handle pointer right clicks before xterm moves its textarea for the
-    // browser context menu. xterm already reported any app-owned mousedown.
+    // Runs before xterm moves its textarea for the browser context menu.
     const handleContextMenu = (event: MouseEvent) => {
       const action = rightClickAction(event);
       if (action === "ignore") return;
@@ -379,8 +357,6 @@ export function TerminalPane({
       if (!sessionIdRef.current) return false;
       return processingRef.current?.progress(data) ?? false;
     });
-    // All shells can report command activity. Only remote, opted-in Bash or zsh
-    // sessions record Enhanced History; command state never enables capture.
     const oscDisposable = terminal.parser.registerOscHandler(633, (data) => {
       if (!data.startsWith("ControlRoom;")) {
         if (sessionIdRef.current) titleRef.current?.marker(data);
@@ -508,14 +484,11 @@ export function TerminalPane({
     if (!terminal) return;
     const theme = buildTerminalTheme(settings);
 
-    // SearchAddon selects the active match internally. Make that selection
-    // transparent while searching so it does not recolor ANSI output; the
-    // match's outline and overview-ruler marker carry the search state instead.
+    // SearchAddon selects the active match, which would recolor ANSI output.
     terminal.options.theme =
       searchOpen && searchTerm ? { ...theme, selectionBackground: "transparent" } : theme;
   }, [settings, searchOpen, searchTerm]);
 
-  // What this terminal is attached to: a Saved Connection or a local shell.
   const targetId = workspace.kind === "local" ? workspace.shell.id : workspace.connectionId;
 
   useEffect(() => {
@@ -594,10 +567,6 @@ export function TerminalPane({
       });
     };
 
-    // A local session names a validated shell profile; a remote one names a
-    // Saved Connection. Everything after the start call is the same.
-    // Drain pending writes before resetting, then let the font and grid settle
-    // before the new shell can produce width-dependent output.
     let initialCols = terminal.cols;
     let initialRows = terminal.rows;
     const startupContainer = containerRef.current;
@@ -609,8 +578,6 @@ export function TerminalPane({
       if (disposed || generation !== sessionGenerationRef.current) return null;
       terminal.reset();
       startupPhase("font");
-      // Only the terminal's font can affect its grid. Waiting for every page
-      // font also waits for unrelated interface layout and font loads.
       await document.fonts
         ?.load(`${settings.terminalFontSize}px ${settings.terminalFontFamily}`, "MW")
         .catch(() => undefined);
@@ -625,13 +592,11 @@ export function TerminalPane({
         pass++
       ) {
         startupPhase("layout");
-        // WebKit can suspend animation frames after a native window move or
-        // while occluded. Still measure a stable grid before launching the PTY.
         await new Promise<void>((resolve) => {
           const timeout = window.setTimeout(() => {
             window.cancelAnimationFrame(frame);
             resolve();
-          }, 100);
+          }, WEBKIT_SUSPENDED_FRAME_TIMEOUT_MS);
           const frame = window.requestAnimationFrame(() => {
             window.clearTimeout(timeout);
             resolve();
@@ -654,9 +619,6 @@ export function TerminalPane({
         measuredRows = terminal.rows;
       }
       if (disposed || generation !== sessionGenerationRef.current) return null;
-      // Fractional font metrics can alternate by one cell between layouts.
-      // A grid that fits every measured size avoids both a startup deadlock
-      // and a PTY wider than the terminal when the first prompt arrives.
       if (!settled) terminal.resize(smallestCols, smallestRows);
       startupPhase("native");
       initialCols = terminal.cols;
@@ -684,8 +646,6 @@ export function TerminalPane({
         startupPhase("started");
         ownedSessionId = sessionId;
         sessionIdRef.current = sessionId;
-        // A fit while the start request was pending had no session to resize.
-        // Send the current grid before releasing any queued terminal input.
         if (terminal.cols !== initialCols || terminal.rows !== initialRows) {
           await api.resizeSession(sessionId, terminal.cols, terminal.rows);
           if (disposed || generation !== sessionGenerationRef.current) return;
@@ -693,9 +653,6 @@ export function TerminalPane({
         acceptingInputRef.current = false;
         onSessionRef.current(sessionId);
         if (acknowledgedBytes > 0) flushAcknowledgements();
-        // A local shell is running the moment its process exists. An SSH
-        // session waits for the connected marker instead, because a spawned
-        // ssh has not authenticated yet.
         if (workspace.kind === "local") onStateRef.current("connected", null);
 
         const earlyEvent = earlySessionEventsRef.current.get(sessionId);
@@ -705,12 +662,6 @@ export function TerminalPane({
           if (earlyEvent.state === "disconnected" || earlyEvent.state === "error") return;
         }
 
-        // Queued input goes out through the path a live keystroke takes, so
-        // both are issued in the order they were typed. Awaiting each write
-        // here left the queue draining across await points while the session
-        // id was already published, so a keystroke landing mid-drain took the
-        // direct path and was issued between two queued bytes. In a terminal
-        // that is not a delay, it is different input.
         for (const bytes of pendingInputRef.current.drain()) {
           if (disposed || generation !== sessionGenerationRef.current) break;
           sendInputRef.current(bytes);
@@ -755,10 +706,6 @@ export function TerminalPane({
       fitRef.current?.fit();
       selectionRepaintRef.current?.flush();
     }
-    // Focus on the transition to active only, and never take focus from an
-    // app-owned popover or dialog: React re-runs this effect when a Suspense
-    // boundary settles while the pane is already active, and refocusing then
-    // would yank focus back from a menu the user just opened.
     const focusOwner = document.activeElement;
     const popoverOwnsFocus =
       focusOwner instanceof Element &&
@@ -771,8 +718,6 @@ export function TerminalPane({
     if (findRequest > 0) openSearch();
   }, [findRequest]);
 
-  // Focus once the field has rendered: a shortcut opens Find from an effect,
-  // whose render can land after a timer set alongside it.
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
   useEffect(() => {
     if (searchFocusRequest > 0) searchInputRef.current?.focus();
@@ -805,9 +750,6 @@ export function TerminalPane({
     const options = {
       incremental,
       decorations: {
-        // Keep the terminal's foreground and background colors untouched.
-        // The subtle frame marks every result; the brighter frame marks the
-        // active result, and both also appear in the overview ruler.
         matchBorder: "#92928e",
         matchOverviewRuler: "#92928e",
         activeMatchBorder: "#f2f2ee",
@@ -831,7 +773,6 @@ export function TerminalPane({
   }
 
   const terminalEnded = workspace.state === "disconnected" || workspace.state === "error";
-  // A shell that ended on its own (`exit`, Ctrl-D) is ordinary, not a failure.
   const noticeTone =
     localNotice?.tone ?? (workspace.state === "disconnected" ? "neutral" : "error");
   return (
@@ -848,8 +789,6 @@ export function TerminalPane({
           <span className="terminal-notice-message">
             {localNotice?.message ?? workspace.reason}
           </span>
-          {/* The recovery action rides the notice that names the failure, so
-              an ended session is reconnectable where it died. */}
           {terminalEnded && onReconnect ? (
             <button type="button" className="terminal-notice-action" onClick={onReconnect}>
               <RotateCw size={13} aria-hidden="true" />
@@ -943,8 +882,6 @@ export function TerminalPane({
   );
 }
 
-/// Clipboard refusals surface as a DOMException naming the API call; say what
-/// the user tried and why it did not happen instead.
 function clipboardFailure(action: "copy" | "paste", error: unknown) {
   const denied =
     (error instanceof DOMException && error.name === "NotAllowedError") ||

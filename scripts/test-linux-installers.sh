@@ -1,9 +1,5 @@
 #!/usr/bin/env bash
-# Build the release .deb and AppImage and exercise them on a private X11 display:
-# installed-package smoke test, clean uninstall/reinstall, AppImage launch, and
-# the signed AppImage updater. Needs native Linux support (PR #227) and
-# passwordless sudo for apt. The package installed before the run is restored;
-# without one, the candidate stays installed.
+# Needs passwordless sudo for apt. Restores the package installed before the run.
 set -euo pipefail
 export PATH="$HOME/.cargo/bin:$PATH"
 export GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 LIBGL_ALWAYS_SOFTWARE=1
@@ -23,7 +19,6 @@ packaged_hash() {
 work=$(mktemp -d /tmp/control-room-linux-installers-XXXXXX)
 trap 'rm -rf "$work"' EXIT
 
-# Keep a package that reproduces the current installation before building over it.
 restore=
 if [[ -x /usr/bin/control-room ]]; then
   installed=$(binary_hash /usr/bin/control-room)
@@ -72,7 +67,6 @@ echo '== Signed AppImage updater'
 node scripts/test-updater-lifecycle.mjs
 
 echo '== Installed .deb window, terminal and clipboard smoke test'
-# The smoke test starts its own window manager.
 kill "$wm"
 wait "$wm" 2>/dev/null || true
 sudo -n apt-get install -y --reinstall --allow-downgrades "$work/candidate.deb"

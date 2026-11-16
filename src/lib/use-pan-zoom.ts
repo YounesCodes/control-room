@@ -20,11 +20,6 @@ function clampScale(scale: number) {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale));
 }
 
-/**
- * Excalidraw-style pan and zoom for a transformed canvas: drag to pan, wheel to
- * zoom toward the cursor, and buttons to zoom toward the viewport centre. The
- * caller applies `view` as `translate(x, y) scale(scale)` with origin 0 0.
- */
 export function usePanZoom(viewportRef: RefObject<HTMLElement | null>) {
   const [view, setView] = useState<PanZoomView>({ scale: 1, x: 0, y: 0 });
   const viewRef = useRef(view);
@@ -87,9 +82,7 @@ export function usePanZoom(viewportRef: RefObject<HTMLElement | null>) {
     drag.current = null;
     try {
       event.currentTarget.releasePointerCapture(event.pointerId);
-    } catch {
-      // Pointer capture may already be released; ignore.
-    }
+    } catch {}
   }, []);
 
   const isPanning = useCallback(() => drag.current !== null, []);

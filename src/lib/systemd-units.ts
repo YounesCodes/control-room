@@ -8,8 +8,6 @@ export interface SystemdUnitFilters {
   scope?: SystemdExplorerState["scope"];
 }
 
-// Keep this exclusion narrow: unfamiliar application services belong in the
-// focused view, even when disabled or stopped. Never hide a failed unit.
 export function isFocusedSystemdUnit(unit: SystemdUnit) {
   if (unit.activeState === "failed") return true;
   if (!["service", "timer", "socket", "path"].includes(unit.unitType)) return false;
@@ -52,7 +50,6 @@ export function filterSystemdUnits(units: SystemdUnit[], filters: SystemdUnitFil
   const query = filters.search.trim().toLowerCase();
   return units
     .filter((unit) => {
-      // Searching and explicit type choices always reach the complete inventory.
       if (
         filters.scope === "focused" &&
         !query &&
@@ -124,8 +121,6 @@ export function systemdEdges(details: SystemdInspection[]): SystemdEdge[] {
       ["TriggeredBy", "Triggers", true],
     ] as const) {
       for (const neighbor of (detail.properties[property] ?? "").split(/\s+/).filter(Boolean)) {
-        // Names are validated again before any backend read. Never infer a
-        // dependency from matching basenames, timer/service suffixes or PIDs.
         if (!isSystemdUnitName(neighbor) || neighbor === detail.id) continue;
         const source = reverse ? neighbor : detail.id;
         const target = reverse ? detail.id : neighbor;
@@ -146,7 +141,6 @@ export function isSystemdUnitName(value: string) {
   );
 }
 
-/** A bounded breadth-first neighborhood, expanded only from explicit user choices. */
 export function systemdNeighborhood(
   root: string,
   expanded: string[],

@@ -1,4 +1,3 @@
-// Explicit Linux package lifecycle with isolated user data and package restore.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -20,8 +19,6 @@ let candidateHash,
   changed = false,
   passed = false;
 try {
-  // Prove that the supplied restore package contains the currently installed
-  // executable before allowing apt to replace anything.
   execFileSync("dpkg-deb", ["-x", restore, join(directory, "restore")]);
   assert.equal(
     hash(join(directory, "restore/usr/bin/control-room")),

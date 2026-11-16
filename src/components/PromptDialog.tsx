@@ -25,8 +25,6 @@ export function PromptDialog({
   const [value, setValue] = useState(defaultValue);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus and pre-select after the Modal's own focus effect has run, so the
-  // field is ready to type over (matching the native prompt it replaces).
   useEffect(() => {
     const timer = window.setTimeout(() => {
       inputRef.current?.focus();
@@ -44,7 +42,6 @@ export function PromptDialog({
     <Modal title={title} onClose={onClose} className="prompt-dialog">
       <form className="form-stack" onSubmit={submit}>
         <label>
-          {/* The dialog title already names the field; keep the label for assistive tech. */}
           <span className="sr-only">{label}</span>
           <input
             ref={inputRef}

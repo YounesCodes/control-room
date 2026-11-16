@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 
-/** Native disclosure semantics with one shared reveal motion for inspector sections. */
 export function InspectorDisclosure({
   title,
   children,

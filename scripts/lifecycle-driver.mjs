@@ -17,8 +17,7 @@ async function freePort() {
   return port;
 }
 
-// Published builds have no WDIO plugin or debug diagnostics. Use only the native
-// driver's protocol and the production Tauri bridge already present in the app.
+// Published builds have no WDIO plugin or debug diagnostics.
 export async function withInstalledApp(application, use, { applicationExits = false } = {}) {
   const port = await freePort(),
     nativePort = await freePort();
@@ -49,9 +48,7 @@ export async function withInstalledApp(application, use, { applicationExits = fa
           signal: AbortSignal.timeout(1000),
         });
         if (response.ok) break;
-      } catch {
-        /* Driver is still starting. */
-      }
+      } catch {}
       assert.ok(Date.now() < deadline, `Driver startup timed out: ${diagnostics}`);
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
@@ -97,8 +94,7 @@ export async function withInstalledApp(application, use, { applicationExits = fa
           }),
         ]);
       }
-      // Closing the session only asks the app to quit. An installer or
-      // uninstaller that starts before it has exited refuses to run.
+      // Installers refuse to run while the app is still exiting.
       if (!applicationExits) await applicationExit(application);
     }
   }
@@ -112,9 +108,7 @@ function applicationRunning(application) {
         "-NoProfile",
         "-NonInteractive",
         "-Command",
-        // Match by name, as the NSIS installer does. A process that has ended
-        // but is still held by its driver has no readable path, yet NSIS
-        // still counts it as running.
+        // NSIS matches by name and still counts an ended process its driver holds.
         "@(Get-Process -Name $env:CONTROL_ROOM_LIFECYCLE_PROCESS -ErrorAction SilentlyContinue).Count",
       ],
       {
@@ -151,8 +145,6 @@ async function closeSession(session, applicationExits) {
     await session.deleteSession();
   } catch (error) {
     if (!applicationExits) throw error;
-    // The updater deliberately exits the attached app. The caller must
-    // independently prove replacement and the newly launched process.
     console.log(`Updated app closed its original WebDriver session: ${error.message}`);
   }
 }

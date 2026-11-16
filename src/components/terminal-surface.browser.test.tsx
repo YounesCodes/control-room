@@ -138,8 +138,6 @@ it.each(["local", "remote"])(
     };
     const settle = () =>
       new Promise((resolve) => setTimeout(resolve, TERMINAL_TITLE_DELAY_MS + 50));
-    // Window titles name the host process or a document, never the program:
-    // ConPTY reports ssh.exe before the remote shell starts.
     await output("\x1b]0;C:\\Windows\\System32\\OpenSSH\\ssh.exe\x07\x1b]2;notes.txt - VIM\x07");
     await settle();
     expect(onTitle).not.toHaveBeenCalled();
@@ -203,9 +201,6 @@ it.each(["running", "starting"])(
     );
     finishStart?.();
     await vi.waitFor(() => expect(session.resizeSession).toHaveBeenCalled());
-    // zsh fills the PTY width, then returns to column one and clears that row
-    // before writing the prompt. A stale PTY width wraps the marker onto a line
-    // that the carriage returns and erase sequence can no longer clear.
     const cols = session.resizeSession.mock.calls.at(-1)?.[1] ?? initialCols;
     const output = `\x1b[1m\x1b[7m%\x1b[27m\x1b[1m\x1b[0m${" ".repeat(cols - 1)}\r \r\r\x1b[0m\x1b[27m\x1b[24m\x1b[Jtest@mac ~ % \x1b[K`;
     session.output!.onmessage!(new TextEncoder().encode(output).buffer);
@@ -220,7 +215,6 @@ it.each(["running", "starting"])(
       expect.any(Number),
     );
     expect(session.resizeSession.mock.calls.at(-1)![1]).toBeLessThan(initialCols);
-    // Keep zsh's legitimate marker when command output has no final newline.
     session.output!.onmessage!(new TextEncoder().encode(`\r\npartial${output}`).buffer);
     await expect.element(page.getByText("partial%", { exact: true })).toBeVisible();
   },
@@ -261,14 +255,11 @@ it("tracks agent progress through real xterm parsing on both screens", async () 
       expect(session.acknowledgeSessionOutput.mock.calls.length).toBeGreaterThan(acknowledgements),
     );
   };
-  // An unknown agent can report progress without command-name detection.
-  // Split a sequence across IPC messages to exercise xterm's parser buffering.
   await output("\x1b]9;4;");
   await output("3\x07\x1b[?1049hWorking");
   expect(onProcessing).toHaveBeenLastCalledWith(true);
   await output("\r\x1b[2KStill working");
   expect(onProcessing).toHaveBeenLastCalledWith(true);
-  // A buffer switch alone must not erase a program's explicit progress.
   await output("\x1b[?1049l");
   expect(onProcessing).toHaveBeenLastCalledWith(true);
   await output("\x1b]9;4;4;50\x1b\\Waiting for approval");
@@ -280,8 +271,6 @@ it("tracks agent progress through real xterm parsing on both screens", async () 
   await output("\r\x1b[2K❯ idle redraw");
   expect(onProcessing).toHaveBeenLastCalledWith(false);
 
-  // AntiGravity's main-screen UI erases its footer before repainting it.
-  // Exercise the fallback through keyboard input and the real xterm buffer.
   await output("\x1b]133;A\x07\x1b[2J\x1b[H$ ");
   container.querySelector<HTMLTextAreaElement>("textarea")!.focus();
   await userEvent.keyboard("agy.bat{Enter}");
@@ -361,11 +350,8 @@ it("does not repaint a hidden terminal while it prints, then shows the output", 
   );
   root.render(pane(false));
   await vi.waitFor(() => expect(session.output).not.toBeNull());
-  // xterm learns that it is hidden a frame after it opens.
   for (let frame = 0; frame < 4; frame += 1)
     await new Promise((painted) => requestAnimationFrame(painted));
-  // xterm's DOM renderer measures each character it paints. Hidden, every one
-  // of those measurements forces a document layout and is never cached.
   const measured = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get");
   const lines = Array.from({ length: 80 }, (_, index) => `HIDDEN_OUTPUT ${index}\r\n`).join("");
   session.output!.onmessage!(new TextEncoder().encode(lines).buffer);

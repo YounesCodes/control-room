@@ -1,23 +1,13 @@
-/** Runtime-only activity. Shell commands follow markers or their returning
- * prompt. Interactive programs report progress through OSC 9;4, with a
- * rendered-status fallback for coding agents. No input or output is saved. */
 export class TerminalProcessing {
   private busy = false;
-  /** The last shell prompt rendered where input was typed. */
   private prompt: string | null = null;
   private editing = false;
   private inputLine = "";
-  /** Cursor keys or completion changed the line, so `inputLine` may not be
-   *  what the shell will run. */
   private lineEdited = false;
   private escape = "";
   private pasted = false;
-  /** Input arrived before any prompt was on screen. The echo of that input
-   *  can sit where the prompt is drawn later, so this line's prompt is
-   *  unknown until it is submitted. */
   private typeahead = false;
   private marked = false;
-  /** A program owns the screen, so its prompt is not the shell's. */
   private program = false;
   private agent = false;
   private agentBusy = false;
@@ -26,9 +16,6 @@ export class TerminalProcessing {
   constructor(
     private readonly changed: (busy: boolean) => void,
     private readonly returnedToPrompt: () => void = () => undefined,
-    /** A command line submitted at the shell prompt, only as rendered on
-     *  screen: input the shell does not echo, such as a password, is never
-     *  reported. */
     private readonly submitted: (command: string) => void = () => undefined,
   ) {}
 
@@ -48,14 +35,9 @@ export class TerminalProcessing {
     this.setBusy(false);
   }
 
-  /** `prompt` is the line the cursor rests on before the input is delivered. */
   input(bytes: Uint8Array, prompt: string | null, alternate = false) {
-    // A program's own prompt is not the shell's, so typing into it never reads
-    // as a command. Only the shell's prompt can start a command.
     for (const character of new TextDecoder().decode(bytes)) {
       const byte = character.codePointAt(0)!;
-      // History, completion, and cursor keys can edit the line before any
-      // printable input arrives. Keep the original prompt before that edit.
       if (
         !this.busy &&
         !this.program &&
@@ -88,9 +70,6 @@ export class TerminalProcessing {
         continue;
       }
       if (!this.pasted && (byte === 13 || byte === 10)) {
-        // A newline can submit an empty line. Only infer activity when the
-        // input or the rendered shell-edited line contains something to run.
-        // Marked shells and full-screen programs report their own activity.
         const renderedInput =
           prompt !== null && this.prompt !== null
             ? prompt.startsWith(this.prompt)
@@ -139,9 +118,6 @@ export class TerminalProcessing {
     }
   }
 
-  /** What was typed when the screen shows it, which keeps the word the user
-   *  typed when a shell renders a suggestion after it. Otherwise the rendered
-   *  line after the prompt, which also covers history recall and completion. */
   private visibleCommand(row: string | null, rendered: string): string | null {
     const typed = this.inputLine.trim();
     if (typed && !this.lineEdited && row?.includes(typed.slice(-16))) return typed;
@@ -149,17 +125,11 @@ export class TerminalProcessing {
     return rendered.trim() || null;
   }
 
-  /** The rendered screen after output. `prompt` is the line the cursor rests
-   *  on, or null when the cursor is not on a readable line. `status` may be a
-   *  function: only a coding agent's status area is ever read, so callers on
-   *  the output path need not gather it for every chunk. */
   output(
     prompt: string | null,
     alternate = false,
     status: readonly string[] | (() => readonly string[]) = [],
   ) {
-    // A returning shell prompt also clears progress left behind by a killed
-    // program. Do not require a clean program exit to recover the indicator.
     if (!alternate && samePrompt(this.prompt ?? "", prompt ?? "")) {
       this.returnedToPrompt();
       this.agent = false;
@@ -183,7 +153,6 @@ export class TerminalProcessing {
       return;
     }
     if (alternate) {
-      // The program owns this screen, so nothing it draws is shell activity.
       this.program = true;
       this.stop();
       return;
@@ -191,8 +160,7 @@ export class TerminalProcessing {
     this.program = false;
   }
 
-  /** OSC 133 and VS Code's OSC 633 use A for prompt start, C for command
-   *  execution and D for completion. Do not depend on optional History capture. */
+  // OSC 133 and OSC 633 markers: A prompt start, C command execution, D completion.
   shellMarker(data: string) {
     const marker = data.split(";", 1)[0];
     if (marker !== "A" && marker !== "C" && marker !== "D") return;
@@ -219,13 +187,11 @@ export class TerminalProcessing {
     this.setBusy(busy);
   }
 
-  /** OSC 9 has other uses, including notifications. Consume only progress.
-   * Running and indeterminate spin; clear, failure and pause do not. */
+  // OSC 9 also carries notifications; only 9;4 is progress.
   progress(data: string): boolean {
     const match = /^4;([0-4])(?:;(\d{1,3}))?$/.exec(data);
     if (!match || (match[2] !== undefined && Number(match[2]) > 100)) return false;
-    // Shell startup can clear a terminal's progress before any program runs.
-    // That is not evidence that an interactive program owns the input.
+    // Shells can clear progress at startup before any program runs.
     if (match[1] === "0" && this.progressBusy === null && !this.program) {
       this.setBusy(false);
       return true;
@@ -238,7 +204,6 @@ export class TerminalProcessing {
     return true;
   }
 
-  /** Waiting on the user is not work, so the ring stops with the command. */
   private stop() {
     this.editing = false;
     this.inputLine = "";
@@ -252,17 +217,12 @@ export class TerminalProcessing {
   }
 }
 
-/** Only the executable at a command boundary identifies a coding agent.
- * Arguments mentioning an agent, such as `echo codex`, must stay shell work.
- * Unknown tools can use OSC 9;4 without being added here. */
 function isAgentCommand(command: string): boolean {
   return /^(?:(?:&|call|exec|npx|bunx|uvx)\s+)?["']?(?:[^\s"']*[/\\])?(?:agy|antigravity|codex|claude|pi|opencode|gemini|aider|goose|qwen|amp|droid|kimi|copilot)(?:\.(?:bat|cmd|exe|ps1))?["']?(?:\s|$)/i.test(
     command,
   );
 }
 
-/** Read current UI status, never output frequency. These hints disappear on
- * completion even when the agent keeps its composer open on the main screen. */
 function agentActivity(lines: readonly string[]): boolean | null {
   if (
     lines.some((line) =>
@@ -286,15 +246,12 @@ function agentActivity(lines: readonly string[]): boolean | null {
   if (lines.some((line) => /\?\s+for shortcuts\b|\benter to (?:send|submit)\b/i.test(line)))
     return false;
   // Agents can erase and repaint their footer in separate output messages.
-  // A missing status line is an incomplete frame, not command completion.
   return null;
 }
 
 function samePrompt(previous: string, current: string): boolean {
   if (!previous.trim()) return false;
   if (previous === current) return true;
-  // Directory changes must not leave an ordinary Bash, PowerShell or cmd
-  // session spinning forever. Match the shell's prompt, never a quiet timer.
   if (/^PS .*> $/.test(previous)) return /^PS .*> $/.test(current);
   if (/^[A-Za-z]:\\.*>$/.test(previous)) return /^[A-Za-z]:\\.*>$/.test(current);
   const bash = previous.match(/^([^\s:]+@[^\s:]+:).*[#$] $/);

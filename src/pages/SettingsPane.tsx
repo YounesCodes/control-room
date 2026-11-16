@@ -144,9 +144,7 @@ function TerminalColorPicker({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // React's onChange receives the picker's live input events in WebView2. A
-  // Settings render during that native popup dismisses it, so commit only on
-  // the native change event sent when the picker closes.
+  // In WebView2 a render while the native color picker is open dismisses it.
   useEffect(() => {
     const input = inputRef.current;
     if (!input) return;
@@ -155,8 +153,6 @@ function TerminalColorPicker({
     return () => input.removeEventListener("change", commit);
   }, [onCommit]);
 
-  // defaultValue leaves the picker alone while it is open. Reset colors still
-  // needs to sync a new saved value into that same stable input element.
   useEffect(() => {
     if (inputRef.current && inputRef.current.value !== value) inputRef.current.value = value;
   }, [value]);
@@ -187,24 +183,14 @@ export function SettingsPane({
   settings: AppSettings;
   defaults: AppSettings;
   logTailOptions: number[];
-  /** Every local shell this machine has, the hidden ones included: Settings is
-   *  where they are turned back on, so it cannot be handed a filtered list. */
   localShells: LocalShellProfile[];
-  /** Null until the SSH environment has been read. */
   environment: EnvironmentInfo | null;
-  /** The running version, read from Tauri package metadata rather than any
-   *  constant in this file. */
   appVersion: string | null;
-  /** Runs through the application's single update lifecycle, so a manual check
-   *  and the automatic one can never both be in flight. */
   onCheckForUpdates: () => Promise<ManualCheckResult>;
   onSaved: (settings: AppSettings) => void;
   onClose: () => boolean;
   onDirtyChange: (dirty: boolean) => void;
 }) {
-  /* The list is read from whatever settings the backend sent. An older payload
-     simply has no such key, and Settings has to open on it rather than take the
-     whole window down: absent means nothing is hidden, same as in Rust. */
   const [draft, setDraft] = useState<AppSettings>(() => ({
     ...settings,
     hiddenLocalShells: settings.hiddenLocalShells ?? [],
@@ -293,8 +279,6 @@ export function SettingsPane({
     });
   }
 
-  /* Manual checks stay available with the automatic preference off: turning the
-     schedule off is not the same as refusing to look. */
   async function runManualCheck() {
     setChecking(true);
     setCheckResult(null);
@@ -315,8 +299,6 @@ export function SettingsPane({
     setDraft((current) => ({ ...current, [field]: color.toLowerCase() }));
   }
 
-  /* One row per profile, in the same two groups the launchers use, so the
-     setting and the menu it controls read as the same list. */
   function setOffered(shell: LocalShellProfile, offered: boolean) {
     const remaining = hiddenIds.filter((id) => id !== shell.id);
     setDraft({
@@ -353,9 +335,6 @@ export function SettingsPane({
     onDirtyChange(dirty);
   }, [dirty, onDirtyChange]);
 
-  // A save result describes the draft that was saved. Editing again makes it
-  // stale, so it clears on the next change rather than sitting next to the
-  // button describing an older state.
   useEffect(() => {
     setMessage(null);
     setSaveFailed(false);
@@ -422,8 +401,6 @@ export function SettingsPane({
             >
               {message ?? (dirty ? "Unsaved changes" : "")}
             </p>
-            {/* Outside the form it submits, which is what keeps it on screen
-                while the form itself scrolls. */}
             <button
               className="primary-button settings-save"
               type="submit"
@@ -853,9 +830,6 @@ export function SettingsPane({
                 </small>
               </SettingsSection>
               <SettingsSection id="updates" {...sectionProps}>
-                {/* Control Room updating itself. Named "Control Room updates" rather
-                than "Updates" so it can never be read as updating packages on a
-                Remote Host, which Control Room does not do. */}
                 <dl className="detail-list settings-version">
                   <div>
                     <dt>Current version</dt>

@@ -1,7 +1,5 @@
 import { useId, useRef, useState, type CSSProperties } from "react";
 
-/// Index of `value` in `options`, or of the nearest option when a saved value
-/// is not one of them, so the thumb always rests on a stop.
 export function stepIndex(options: number[], value: number): number {
   const exact = options.indexOf(value);
   if (exact !== -1) return exact;
@@ -12,10 +10,6 @@ export function stepIndex(options: number[], value: number): number {
   return nearest;
 }
 
-/// A slider over a few fixed choices. The native range input keeps keyboard,
-/// pointer, and screen-reader behaviour; the track, stops, and labels are drawn
-/// around it. The emphasized label under the thumb is the visible value; a
-/// separate value bubble would only repeat it.
 export function StepSlider({
   label,
   options,
@@ -27,13 +21,10 @@ export function StepSlider({
   className,
 }: {
   label: string;
-  /** Unit of the bare numbers under the stops, shown in the label: "(lines)". */
   unit?: string;
   options: number[];
   value: number;
-  /** Full value text for screen readers, such as "Every 5 seconds". */
   format: (value: number) => string;
-  /** Short label under each stop; bare numbers when `unit` names them. */
   tick?: (value: number) => string;
   onChange: (value: number) => void;
   className?: string;

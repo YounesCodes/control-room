@@ -48,6 +48,7 @@ export default tseslint.config(
   { ignores: ["dist", "node_modules", "src-tauri/target", "docs", ".claude"] },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
+  { rules: { "no-empty": ["error", { allowEmptyCatch: true }] } },
   {
     files: ["**/*.{ts,tsx}"],
     languageOptions: {

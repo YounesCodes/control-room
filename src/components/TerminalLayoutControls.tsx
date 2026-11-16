@@ -32,7 +32,6 @@ interface Props {
   panes: Record<string, TerminalPaneRect>;
   container: RefObject<HTMLDivElement | null>;
   labels: Record<string, string>;
-  /** Identity marks (shell logo or host OS) shown in the Arrange map. */
   marks?: Record<string, ReactNode>;
   onChange: (layout: TerminalLayout) => void;
   onActivate: (id: string) => void;
@@ -60,7 +59,6 @@ const ARRANGE_MAP_WIDTH = 264;
 const POPOVER_GAP = 6;
 const POPOVER_GUTTER = 8;
 
-/** Inset a surface percentage rectangle so neighboring map tiles keep a gutter. */
 function tileStyle(rect: TerminalPaneRect): CSSProperties {
   return {
     left: `calc(${rect.left}% + 2px)`,
@@ -78,12 +76,6 @@ function arrangeMapHeight(viewport: TerminalLayoutViewport) {
   return Math.round(Math.min(176, Math.max(104, ARRANGE_MAP_WIDTH * ratio)));
 }
 
-/**
- * Each pane carries a small frosted grip in its top-right corner, shown on hover.
- * Dragging it moves the pane; clicking it opens Arrange, a live map of the group where
- * each pane's center swaps and its edges dock, previewed before anything changes.
- * Only the grip captures pointers; selecting terminal text never starts a move.
- */
 export function TerminalLayoutControls({
   layout,
   viewport,
@@ -126,7 +118,6 @@ export function TerminalLayoutControls({
       }
     };
     document.addEventListener("keydown", keydown, true);
-    // Geometry or membership changes invalidate an in-flight preview or an open map.
     const resize = () => {
       cancel();
       setMenu(null);
@@ -140,7 +131,6 @@ export function TerminalLayoutControls({
   useEffect(() => {
     cancel();
   }, [layout, viewport.width, viewport.height]);
-  // Reveal a pane's grip while the pointer is over that pane, without a header strip.
   useEffect(() => {
     const surface = container.current;
     if (!surface) return;
@@ -280,7 +270,7 @@ export function TerminalLayoutControls({
               aria-expanded={menu?.id === id}
               title="Drag to move, click to arrange"
               onClick={(event) => {
-                // Pointer clicks are handled on pointerup so a drag never also opens Arrange.
+                // Keyboard activation has event.detail 0; pointer clicks open Arrange on pointerup.
                 if (event.detail === 0) openArrange(id);
               }}
               onPointerDown={(event) => {
@@ -324,8 +314,6 @@ export function TerminalLayoutControls({
         );
       })}
       {moving && (
-        // One preview of the result replaces per-zone labels: the shape shows where the
-        // pane lands and a single caption names the move.
         <div className="terminal-drop-layer" aria-hidden="true">
           <div
             className="terminal-drop-source"
@@ -399,11 +387,6 @@ interface ArrangeProps {
   onClose: (returnFocus: boolean) => void;
 }
 
-/**
- * Arrange as a map rather than a form: the group in miniature, with this pane marked
- * as the one moving. Pointing at (or focusing) another pane's center or an edge
- * previews the result in place and names it; choosing it applies the move.
- */
 function ArrangePopover({
   source,
   style,

@@ -72,8 +72,7 @@ export async function restartApp(preserve = true) {
   if (!preserve || !directory)
     directory = mkdtempSync(join(process.env.CONTROL_ROOM_E2E_DATA_DIR!, "case-"));
   if (isMac) {
-    // The embedded server creates WebDriver sessions inside one app process;
-    // reloadSession alone cannot prove native restart or database restoration.
+    // reloadSession alone cannot prove a native restart.
     await browser.deleteSession();
     if (macApplication) await stopMacApplication();
     else process.kill(previous.appPid, "SIGTERM");
@@ -127,7 +126,6 @@ export async function restartApp(preserve = true) {
     { timeout: 20_000, timeoutMsg: "The previous native application did not exit" },
   );
   await expect($("aria/Saved connections")).toExist();
-  // First launch offers connection creation automatically. Tests set up their own data.
   if (await $("[role=dialog]").isExisting()) await $("[role=dialog]").$("button=Cancel").click();
   const current = await runtime();
   if (isMac) recordMacApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, current.appPid);
@@ -202,8 +200,6 @@ export async function connectionMenu(name: string) {
   await button.click();
 }
 
-// Offline fixtures cannot discover a platform. Open the default SSH shell
-// before testing workspace data or layout.
 export async function openOfflineConnection(name: string, forceNew = false) {
   if (forceNew) {
     await $('button[aria-label="New terminal"]').click();
@@ -243,27 +239,21 @@ export async function terminalCommand(
 }
 
 export async function typeTerminalText(text: string, scope = ".terminal-workspace-pane.active") {
-  // WebKit action keys drop repeated characters; the embedded driver dispatches
-  // both keydown and input for printable keys,
-  // even when xterm prevents keydown's default. That types lowercase twice.
-  // Element send-keys delivers one input event through the real xterm textarea.
+  // WebKit's driver dispatches keydown and input for printable keys, which xterm types twice.
   if (!isWindows) await $(`${scope} .xterm-helper-textarea`).addValue(text);
   else await browser.keys(text);
 }
 
 export async function focusElement(element: WebdriverIO.Element) {
   // Frameless Linux resize edges can cover a divider at its maximum width.
-  // Keyboard resize tests focus the handle without starting a window edge drag.
   if (!isLinux) await element.click();
-  // Embedded pointer actions emit mouse events without the browser's default
-  // focus action. Explicit focus lets native keyboard resize tests use the handle.
+  // Embedded pointer actions skip the browser's default focus action.
   if (!isWindows) await browser.execute((node: HTMLElement) => node.focus(), element);
 }
 
 export async function pointerClick(element: WebdriverIO.Element) {
   if (isMac) {
-    // Embedded driver 1.5 emits MouseEvents, but no PointerEvents. Exercise the
-    // actual pane activation handler before the driver's ordinary click.
+    // Embedded driver 1.5 emits MouseEvents but no PointerEvents.
     await browser.execute((node: HTMLElement) => {
       const bounds = node.getBoundingClientRect();
       for (const type of ["pointerdown", "pointerup"])
@@ -366,7 +356,6 @@ export async function openScratchpad() {
   await scratchpadNote();
 }
 
-/** The Scratchpad note on show, once loaded; the other note stays mounted but hidden. */
 export async function scratchpadNote() {
   const note = $(".scratchpad-popover-note:not([hidden])");
   const editor = note.$("textarea");
@@ -375,7 +364,6 @@ export async function scratchpadNote() {
   return note;
 }
 
-/** Splitting starts from New terminal: open it and choose a split mode card. */
 export async function openSplitMenu(direction: "vertically" | "horizontally" = "vertically") {
   await browser.waitUntil(() =>
     browser.execute(() => !document.documentElement.dataset.focusTransition),
@@ -388,7 +376,6 @@ export async function openSplitMenu(direction: "vertically" | "horizontally" = "
 }
 
 // WebKitWebDriver returns empty getText for these visible flex tab labels.
-// Keep visibility proof and read the rendered node's text through the DOM property.
 export async function expectNativeText(element: WebdriverIO.Element, text: string) {
   await expect(element).toBeDisplayed();
   if (!isLinux) return expect(element).toHaveText(text);

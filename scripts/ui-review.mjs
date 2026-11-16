@@ -51,8 +51,6 @@ async function lock() {
   }
 }
 
-// Sample the real component's WAAPI animation without slowing product CSS.
-// This proves transition poses, not real-time frame pacing or native behavior.
 async function motion(page, definition, directory) {
   const frames = [];
   const save = async (name, metadata) => {
@@ -144,9 +142,7 @@ ${JSON.stringify(registry, null, 2)}`);
           ].map((name) => [name, path.join(root, "src/test/ui-review/native.ts")]),
         ),
       },
-      // Scan only the fixture page. Vite otherwise crawls every HTML file under
-      // the checkout, and local coverage, build, and worktree output can hold
-      // the first page load past its timeout.
+      // Vite otherwise crawls every HTML file under the checkout.
       optimizeDeps: { entries: ["ui-review/index.html"] },
       logLevel: "error",
       server: { host: "127.0.0.1", port: 0, open: false, hmr: false },
@@ -193,7 +189,6 @@ ${JSON.stringify(registry, null, 2)}`);
           timezoneId: "UTC",
           deviceScaleFactor: 1,
         });
-        // Fixtures may only load from their ephemeral local server.
         await context.route("**/*", (route) =>
           route.request().url().startsWith(origin) ? route.continue() : route.abort(),
         );
@@ -213,12 +208,8 @@ ${JSON.stringify(registry, null, 2)}`);
             ? page.locator(action.selector)
             : page.getByRole(action.role, { name: action.name, exact: true });
           if (action.last) locator = locator.last();
-          // Optional steps cover layout-only controls, such as the compact
-          // navigation toggle that other viewports never render.
           if (action.optional && !(await locator.isVisible())) continue;
           if (action.wait) await locator.first().waitFor();
-          // Hover steps reveal controls that only appear under the pointer,
-          // such as a Saved Connection's actions button.
           else if (action.hover) await locator.hover();
           else if (action.scroll) await locator.scrollIntoViewIfNeeded();
           else if (action.option) await locator.selectOption(action.option);

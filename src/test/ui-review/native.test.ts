@@ -114,7 +114,6 @@ it("shows Docker, Logs, and History with ordinary readings on Pages", async () =
   const history = await fixture("history", "pages");
   expect(await history.invoke("list_connections")).toMatchObject([{ historyEnabled: true }]);
   expect(await history.invoke("get_history")).toHaveLength(5);
-  // History restart enables the integration while the host terminal runs.
   const restart = await fixture("history-restart", "pages");
   expect(await restart.invoke("get_workspace_state")).toMatchObject({
     workspaces: [expect.objectContaining({ view: "history" })],
@@ -123,7 +122,6 @@ it("shows Docker, Logs, and History with ordinary readings on Pages", async () =
   expect(
     await restart.invoke("install_history_integration", { enableCapture: true }),
   ).toMatchObject({ historyEnabled: true });
-  // Other scenarios still fail Docker the way an unreachable host does.
   await expect((await fixture("warnings", "ports")).invoke("list_containers")).rejects.toThrow(
     "Connection timed out",
   );

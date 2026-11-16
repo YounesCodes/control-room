@@ -30,8 +30,6 @@ describe("usePopoverExit", () => {
     const states: string[] = [];
     const view = render(<Probe open onState={(state) => states.push(state)} />);
     view.rerender(<Probe open={false} onState={(state) => states.push(state)} />);
-    // The exit beat: still mounted, flagged closing so the stylesheet can
-    // play popover-out and drop pointer events.
     expect(states.at(-1)).toBe("present closing");
     act(() => {
       vi.advanceTimersByTime(POPOVER_EXIT_MS - 1);

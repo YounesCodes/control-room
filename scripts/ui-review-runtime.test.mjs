@@ -60,7 +60,6 @@ it("rejects concurrent sessions and exits after a browser launch failure without
       error: expect.stringMatching(/Executable doesn.t exist/),
     });
   } finally {
-    // Only remove the generated fixture beneath this checkout's ignored results.
     rmSync(fixture, { recursive: true, force: true });
   }
 }, 45_000);

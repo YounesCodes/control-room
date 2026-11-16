@@ -25,7 +25,6 @@ export type HostOsKind =
   | "amazon"
   | "unknown";
 
-/** Distro marks with their own logo, in the order /etc/os-release IDs map. */
 const DISTRO_KINDS: Record<string, HostOsKind> = {
   debian: "debian",
   ubuntu: "ubuntu",
@@ -54,7 +53,6 @@ const DISTRO_KINDS: Record<string, HostOsKind> = {
   amzn: "amazon",
 };
 
-/** Product names for the marks, so an accessible label says what the host is. */
 const KIND_LABELS: Record<Exclude<HostOsKind, "unknown">, string> = {
   debian: "Debian",
   ubuntu: "Ubuntu",
@@ -140,8 +138,6 @@ export function HostOsIcon({
         "host-os-icon",
         `host-os-${kind}`,
         version ? "host-os-versioned" : "",
-        // Only marks with a brand of their own join the identity reveal; the
-        // generic server glyph stays neutral everywhere.
         kind !== "unknown" ? "identity-mark" : "",
       ]
         .filter(Boolean)

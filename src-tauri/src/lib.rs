@@ -44,9 +44,6 @@ fn database_path(app_data_directory: &std::path::Path, development: bool) -> std
     directory.join("control-room.db")
 }
 
-// Debug windows wear the checkout's branch as their title so parallel dev
-// builds are distinguishable in the taskbar; an unnamed branch falls back
-// to "dev".
 #[cfg(any(debug_assertions, test))]
 fn dev_window_title(branch: &str) -> String {
     let branch = branch.trim();
@@ -97,11 +94,9 @@ pub fn run() {
                 database.save_settings(&settings)?;
             }
             app.manage(database);
-            // macOS creates its window from the test configuration instead.
             #[cfg(all(feature = "desktop-e2e", not(target_os = "macos")))]
             {
-                // Elevated WebView2 ignores environment overrides. Pass the driver's
-                // port and profile through the API in this debug-only test build.
+                // Elevated WebView2 ignores environment overrides.
                 let driver_profile = std::env::var_os("WEBVIEW2_USER_DATA_FOLDER");
                 let mut window =
                     tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
@@ -115,8 +110,6 @@ pub fn run() {
                 {
                     window = window.additional_browser_args(&arguments);
                 }
-                // The test configuration replaces the Linux window, which is
-                // transparent so its corners can be rounded.
                 #[cfg(target_os = "linux")]
                 {
                     window = window.transparent(true);
@@ -220,8 +213,7 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("failed to build Control Room")
         .run(|app, event| {
-            // Native macOS Quit and window destruction can take different
-            // paths. Both must stop owned terminals and log streams.
+            // Native macOS Quit and window destruction take different paths.
             if matches!(&event, tauri::RunEvent::Exit) {
                 app.state::<SessionManager>().close_all();
                 app.state::<StreamManager>().stop_all();
@@ -259,7 +251,6 @@ mod startup_tests {
     fn development_startup_preserves_the_installed_database() {
         let directory = tempfile::tempdir().unwrap();
         let installed_path = database_path(directory.path(), false);
-        // An incompatible database makes accidental reuse fail at the real startup seam.
         let installed = rusqlite::Connection::open(&installed_path).unwrap();
         installed
             .execute_batch("PRAGMA user_version = 999;")

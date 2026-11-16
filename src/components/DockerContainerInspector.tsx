@@ -217,7 +217,6 @@ export function DockerContainerInspector({
     : null;
 
   const details = cache?.value;
-  // `docker exec` needs a running container. The freshest reading decides.
   const running = details ? details.running : summary.state === "running";
 
   return (
@@ -281,8 +280,7 @@ export function DockerContainerInspector({
               <SquareTerminal size={15} /> Open terminal
             </button>
           ) : (
-            // A disabled button receives no pointer events, so its reason sits
-            // on a wrapper the tooltip layer can reach.
+            // Disabled buttons receive no pointer events, so the tooltip sits on a wrapper.
             <span className="detail-action-reason" title="Start the container to open a terminal">
               <button className="secondary-button" type="button" disabled>
                 <SquareTerminal size={15} /> Open terminal

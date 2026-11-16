@@ -20,30 +20,23 @@ const nativeEvents = vi.hoisted(
   () => new Map<string, Set<(event: { payload: unknown }) => void>>(),
 );
 
-/// Records what the pane asked of xterm, so the test can see which handlers a
-/// session installs without rendering a real terminal.
 const xterm = vi.hoisted(() => ({
   initialCols: 100,
   fit: vi.fn(),
+  focus: vi.fn(),
   oscHandlers: 0,
   osc: new Map<number, (data: string) => boolean>(),
   prompt: "$ ",
-  // Whether the program in the pty draws on an alternate screen, such as a
-  // coding agent's own composer rather than the shell's prompt.
   alternate: false,
   writes: [] as string[],
   pastes: [] as string[],
   searchNext: vi.fn(),
   searchPrevious: vi.fn(),
-  // How many matches the next search reports, through onDidChangeResults.
   searchCount: 0,
   searchResults: null as ((event: { resultIndex: number; resultCount: number }) => void) | null,
   terminalOptions: null as Record<string, unknown> | null,
-  // Drives the right-click policy: what is selected, and whether the program in
-  // the pty asked for the mouse.
   selection: "",
   mouseTrackingMode: "none",
-  // The handler xterm calls for typed input, so a test can type.
   onData: null as ((data: string) => void) | null,
   onTitle: null as ((title: string) => void) | null,
   parseWrite: null as (() => void) | null,
@@ -55,6 +48,7 @@ const xterm = vi.hoisted(() => ({
   reset() {
     this.initialCols = 100;
     this.fit.mockReset();
+    this.focus.mockReset();
     this.onData = null;
     this.onTitle = null;
     this.parseWrite = null;
@@ -203,8 +197,6 @@ vi.mock("@xterm/xterm", () => ({
     get buffer() {
       return {
         active: {
-          // A full-screen program owns an alternate buffer with no scrollback
-          // prompt, which is what keeps a coding agent's composer idle.
           type: xterm.alternate ? "alternate" : "normal",
           cursorX: xterm.alternate ? 0 : xterm.prompt.length,
           cursorY: 0,
@@ -227,7 +219,9 @@ vi.mock("@xterm/xterm", () => ({
       const normalized = data.replace(/\r?\n/g, "\r");
       xterm.onData?.(`\u001b[200~${normalized}\u001b[201~`);
     }
-    focus() {}
+    focus() {
+      xterm.focus();
+    }
     dispose() {}
   },
 }));
@@ -352,7 +346,6 @@ describe("TerminalPane sessions", () => {
       ),
     );
     expect(api.startSession).not.toHaveBeenCalled();
-    // A spawned shell is running; there is no authentication to wait for.
     await vi.waitFor(() => expect(onState).toHaveBeenCalledWith("connected", null));
   });
 
@@ -370,7 +363,6 @@ describe("TerminalPane sessions", () => {
       ),
     );
     expect(api.startLocalSession).not.toHaveBeenCalled();
-    // The connected marker comes from the remote shell, not from the start call.
     expect(onState).toHaveBeenCalledWith("connecting", null);
     expect(onState).not.toHaveBeenCalledWith("connected", null);
   });
@@ -550,7 +542,6 @@ describe("TerminalPane sessions", () => {
     renderPane(createLocalWorkspace(shell));
     await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
 
-    // Local shells report command activity without recording command history.
     expect(xterm.oscHandlers).toBe(3);
     xterm.osc.get(633)?.("ControlRoom;start;0;L3RtcA==;cHdk");
     xterm.osc.get(633)?.("ControlRoom;finish;1;0;L3RtcA==");
@@ -574,7 +565,6 @@ describe("TerminalPane sessions", () => {
         expect(kind === "local" ? api.startLocalSession : api.startSession).toHaveBeenCalled(),
       );
       await act(async () => undefined);
-      // A local ssh.exe or shell host reports its own window title first.
       expect(xterm.onTitle).toBeNull();
       act(() => xterm.osc.get(633)?.("E;npm run dev --token private"));
       await vi.waitFor(() => expect(onTitle).toHaveBeenLastCalledWith("npm"));
@@ -626,8 +616,6 @@ describe("TerminalPane sessions", () => {
       xterm.onData?.("sleep 60\r");
     });
     expect(onProcessing).toHaveBeenLastCalledWith(true);
-    // A command that prints nothing is indistinguishable from a program on the
-    // main screen, so the shell's prompt returning still reports completion.
     xterm.prompt = "";
     act(() => channels[0].onmessage?.(new TextEncoder().encode("working").buffer));
     expect(onProcessing).toHaveBeenLastCalledWith(true);
@@ -650,11 +638,9 @@ describe("TerminalPane sessions", () => {
       xterm.onData?.("agent\r");
     });
     expect(onProcessing).toHaveBeenLastCalledWith(true);
-    // The agent takes the alternate screen, so its first frame ends the wait.
     xterm.alternate = true;
     act(() => channels[0].onmessage?.(new TextEncoder().encode("Welcome").buffer));
     expect(onProcessing).toHaveBeenLastCalledWith(false);
-    // Typing into the agent and every spinner tick it redraws stay idle.
     for (let frame = 0; frame < 5; frame++) {
       await act(async () => {
         xterm.onData?.("build the app");
@@ -662,7 +648,6 @@ describe("TerminalPane sessions", () => {
       act(() => channels[0].onmessage?.(new TextEncoder().encode("frame").buffer));
       expect(onProcessing).toHaveBeenLastCalledWith(false);
     }
-    // The agent reports actual work independently of the outer shell.
     act(() => {
       xterm.osc.get(9)?.("4;3");
     });
@@ -762,7 +747,6 @@ describe("TerminalPane sessions", () => {
     expect(document.querySelector(".terminal-toolbar")).toBeNull();
     cleanup();
 
-    // An exited shell keeps its Workspace and reports the original cause.
     renderPane({
       ...running("disconnected"),
       connectRequested: false,
@@ -777,7 +761,6 @@ describe("TerminalPane sessions", () => {
   });
 
   describe("right click", () => {
-    /** The pane attaches its handlers to the container xterm was opened into. */
     function terminalContainer(): HTMLElement {
       const container = document.querySelector(".terminal-container");
       if (!container) throw new Error("terminal container was not rendered");
@@ -785,8 +768,6 @@ describe("TerminalPane sessions", () => {
     }
 
     function rightClick(container: HTMLElement) {
-      // The real gesture is a mousedown first, then contextmenu. xterm reports
-      // the mouse to the program on the mousedown, so the order matters.
       const down = new MouseEvent("mousedown", { button: 2, bubbles: true, cancelable: true });
       container.dispatchEvent(down);
       const menu = new MouseEvent("contextmenu", { button: 2, bubbles: true, cancelable: true });
@@ -815,8 +796,6 @@ describe("TerminalPane sessions", () => {
       expect(clipboard.readText).not.toHaveBeenCalled();
       expect(api.writeSession).not.toHaveBeenCalled();
       expect(menu.defaultPrevented).toBe(true);
-      // The click that copies must not also reach the program in the pty, or a
-      // copy inside tmux would open tmux's own menu at the same time.
       expect(down.defaultPrevented).toBe(true);
     });
 
@@ -829,7 +808,6 @@ describe("TerminalPane sessions", () => {
       await vi.waitFor(() =>
         expect(api.writeSession).toHaveBeenCalledWith("local-session", expect.anything()),
       );
-      // Through the session, not written into the screen buffer.
       const [, bytes] = api.writeSession.mock.calls[0];
       expect(xterm.pastes).toEqual(["ls -la"]);
       expect(new TextDecoder().decode(bytes as Uint8Array)).toBe("\u001b[200~ls -la\u001b[201~");
@@ -864,10 +842,7 @@ describe("TerminalPane sessions", () => {
       expect(clipboard.readText).not.toHaveBeenCalled();
       expect(clipboard.writeText).not.toHaveBeenCalled();
       expect(api.writeSession).not.toHaveBeenCalled();
-      // The menu is still suppressed, which is the whole point: declining the
-      // clipboard must not hand the gesture back to the webview.
       expect(menu.defaultPrevented).toBe(true);
-      // xterm still gets the mousedown, so Vim or tmux receives its click.
       expect(down.defaultPrevented).toBe(false);
     });
 
@@ -884,9 +859,6 @@ describe("TerminalPane sessions", () => {
     });
 
     it("never lets the webview menu open from a pointer right click", async () => {
-      // The reported bug: with the old setting off, right-click fell through to
-      // the webview's own Cut/Copy/Paste menu. Every path prevents it now, and
-      // none of it depends on a preference.
       for (const state of [
         { selection: "text", mouseTrackingMode: "none" },
         { selection: "", mouseTrackingMode: "none" },
@@ -902,8 +874,6 @@ describe("TerminalPane sessions", () => {
     });
 
     it("leaves a context menu the keyboard raised alone", async () => {
-      // The menu key and Shift+F10 raise contextmenu with no button behind it.
-      // Suppressing those would remove a keyboard route for no reason.
       const container = await openTerminal();
 
       const menu = new MouseEvent("contextmenu", { button: 0, bubbles: true, cancelable: true });
@@ -915,22 +885,12 @@ describe("TerminalPane sessions", () => {
     });
   });
 
-  /// What reached `write_session`, in the order the calls were issued.
   function writtenText(): string[] {
     return api.writeSession.mock.calls.map(([, bytes]) =>
       new TextDecoder().decode(bytes as Uint8Array),
     );
   }
 
-  // CR-AUDIT-004 asked whether terminal input can be reordered. It can, in the
-  // frontend, at the one moment the pane has two write paths open at once.
-  //
-  // Input typed before the session exists is queued. When the session starts,
-  // the queue is drained one awaited write at a time, but the session id is
-  // published first, so a keystroke landing mid-drain takes the direct path and
-  // is issued between two queued bytes. In a terminal, order is the whole
-  // contract: `rm -rf x` typed as three queued bytes and one live one is not
-  // the command the user typed.
   it("delivers input typed during the pending drain after the input it queued", async () => {
     let startSession: (started: { sessionId: string }) => void = () => {};
     api.startSession.mockImplementation(
@@ -944,19 +904,14 @@ describe("TerminalPane sessions", () => {
     renderPane(createRemoteWorkspace(connection));
     await vi.waitFor(() => expect(xterm.onData).toBeTruthy());
 
-    // Typed before the session exists, so both are queued.
     xterm.onData?.("a");
     xterm.onData?.("b");
     expect(api.writeSession).not.toHaveBeenCalled();
 
     await vi.waitFor(() => expect(api.startSession).toHaveBeenCalled());
     startSession({ sessionId: "session-1" });
-    // The queue has started going out and none of its writes have come back.
     await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalled());
 
-    // A keystroke now has a live session id and takes the direct path. It has
-    // to land behind everything already queued, whether or not those writes
-    // have been acknowledged yet.
     xterm.onData?.("z");
     for (const resolve of [...writes]) resolve();
     await vi.waitFor(() => expect(writtenText().length).toBe(3));
@@ -964,9 +919,6 @@ describe("TerminalPane sessions", () => {
     expect(writtenText()).toEqual(["a", "b", "z"]);
   });
 
-  /// Terminal bytes are the user's own keystrokes. Nothing between xterm and
-  /// the pty may normalise, re-encode, or drop them, so the exact bytes are
-  /// what the API is called with.
   it("sends terminal input as its exact UTF-8 bytes", async () => {
     api.startSession.mockResolvedValue({ sessionId: "session-1" });
     api.writeSession.mockResolvedValue(undefined);
@@ -974,29 +926,15 @@ describe("TerminalPane sessions", () => {
     await vi.waitFor(() => expect(api.startSession).toHaveBeenCalled());
     await vi.waitFor(() => expect(xterm.onData).toBeTruthy());
 
-    const typed = [
-      "a",
-      "\r",
-      "\n",
-      "", // Ctrl-C, which has to arrive as one byte and not a word
-      "[A", // an arrow key's escape sequence
-      "é",
-      "→",
-      "🙂",
-      " ",
-    ];
+    const typed = ["a", "\r", "\n", "", "[A", "é", "→", "🙂", " "];
     for (const data of typed) xterm.onData?.(data);
     await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalledTimes(typed.length));
 
     expect(writtenText()).toEqual(typed);
-    // And the encoding is UTF-8 rather than UTF-16 code units, which is what
-    // the pty on the other side reads.
     const emoji = api.writeSession.mock.calls.at(-2)?.[1] as Uint8Array;
     expect(Array.from(emoji)).toEqual([0xf0, 0x9f, 0x99, 0x82]);
   });
 
-  /// A large paste is one write, not one per character. Splitting it would put
-  /// the pty's own line discipline between the pieces.
   it("sends a large paste as a single write", async () => {
     const pasted = "echo ".concat("x".repeat(20_000), "\r");
     clipboard.readText.mockResolvedValue(pasted);
@@ -1054,8 +992,6 @@ describe("TerminalPane sessions", () => {
     expect(clipboard.readText).not.toHaveBeenCalled();
     expect(api.writeSession).not.toHaveBeenCalled();
 
-    // xterm emits the browser paste once through the same `onData` path as
-    // ordinary terminal input.
     xterm.onData?.("echo once");
     await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalledTimes(1));
     expect(writtenText()).toEqual(["echo once"]);
@@ -1252,9 +1188,37 @@ describe("TerminalPane sessions", () => {
     expect(onActivity).toHaveBeenCalledWith("output");
   });
 
+  it("focuses on becoming active but never takes focus from an open popover", () => {
+    const workspace = createLocalWorkspace(shell);
+    const props = {
+      platform: "windows" as const,
+      workspace,
+      settings,
+      visible: true,
+      onActivate: () => undefined,
+      onSession: () => undefined,
+      onState: () => undefined,
+    };
+    const popover = document.createElement("button");
+    popover.setAttribute("data-app-popover", "");
+    document.body.append(popover);
+    const { rerender } = render(<TerminalPane {...props} active={false} />);
+
+    popover.focus();
+    rerender(<TerminalPane {...props} active />);
+    expect(xterm.focus).not.toHaveBeenCalled();
+
+    rerender(<TerminalPane {...props} active={false} />);
+    popover.blur();
+    rerender(<TerminalPane {...props} active />);
+    expect(xterm.focus).toHaveBeenCalledTimes(1);
+
+    rerender(<TerminalPane {...props} active settings={{ ...settings }} />);
+    expect(xterm.focus).toHaveBeenCalledTimes(1);
+    popover.remove();
+  });
+
   it("still closes its session when the pane goes away", async () => {
-    // Removing the Stop button must not remove the shutdown it used to reach.
-    // Unmounting is what a closing Workspace does to this pane.
     renderPane({ ...createLocalWorkspace(shell), state: "connected", sessionId: "local-session" });
     await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
 

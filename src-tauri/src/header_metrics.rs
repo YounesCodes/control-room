@@ -1,4 +1,3 @@
-//! Optional, read-only header samples. No history, credentials, or process details leave here.
 use crate::{
     models::{HeaderMetric, HeaderMetrics, SavedConnection},
     remote::{self, RemoteCommandExecutor},
@@ -50,8 +49,7 @@ fn remote_command(metrics: &[HeaderMetric]) -> String {
         command.push_str(r#"df -Pk / 2>/dev/null | awk 'NR==2 {printf "disk_total=%s\ndisk_free=%s\n",$2,$4}'; "#);
     }
     if metrics.contains(&HeaderMetric::DiskIo) {
-        // Whole leaf devices only: partitions and stacked dm/md devices must
-        // not count the same transfer twice. No iostat installation is needed.
+        // Whole leaf devices only: partitions and dm/md devices repeat the same transfer.
         command.push_str(r#"header_io_snapshot() { phase=$1; if test -r /proc/uptime; then awk -v p="$phase" '{printf "io_time_%s=%s\n",p,$1}' /proc/uptime; fi; for d in /sys/block/*; do case "${d##*/}" in loop*|ram*|zram*|fd*|sr*) continue;; esac; test -r "$d/stat" || continue; set -- "$d"/slaves/*; test -e "$1" && continue; awk -v p="$phase" -v name="${d##*/}" 'NF>=7 {printf "io_disk_%s=%s %s %s\n",p,name,$3,$7}' "$d/stat"; done; }; header_io_snapshot 1; sleep 1; header_io_snapshot 2; "#);
     }
     if metrics.contains(&HeaderMetric::Uptime) {
@@ -60,8 +58,6 @@ fn remote_command(metrics: &[HeaderMetric]) -> String {
         );
     }
     if metrics.contains(&HeaderMetric::Gpu) {
-        // timeout bounds a stalled driver query independently of the SSH budget.
-        // If timeout is absent, AMD sysfs can still report without spawning a driver tool.
         command.push_str(r#"if command -v nvidia-smi >/dev/null 2>&1 && command -v timeout >/dev/null 2>&1; then timeout -k 1 2 nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | awk '/^[[:space:]]*[0-9]+([.][0-9]+)?[[:space:]]*$/ {if(!seen || $1>m) m=$1; seen=1} END {if(seen) printf "gpu=%s\n",m}'; fi; for f in /sys/class/drm/card*/device/gpu_busy_percent; do if test -r "$f"; then printf 'gpu_amd=%s\n' "$(cat "$f" 2>/dev/null)"; fi; done; "#);
     }
     command.push_str("true");
@@ -140,9 +136,7 @@ fn parse_remote(text: &str, metrics: &[HeaderMetric]) -> HeaderMetrics {
     result
 }
 
-/// Linux sectors are always 512 bytes, independent of a disk's sector size.
-/// Subtract integer counters before converting to rates, and reject resets,
-/// missing devices, or hot-plug changes rather than presenting a false zero.
+// Linux sectors are always 512 bytes, independent of a disk's sector size.
 fn disk_io_rates(text: &str) -> Option<(f64, f64)> {
     use std::collections::BTreeMap;
     let mut times = [None, None];
@@ -463,7 +457,6 @@ fn local_disk_io() -> Option<(f64, f64)> {
     .enumerate()
     {
         let path = name.encode_utf16().chain(Some(0)).collect::<Vec<_>>();
-        // English names work on localized Windows installations too.
         if unsafe { PdhAddEnglishCounterW(query.0, path.as_ptr(), 0, &mut counters[index]) } != 0 {
             return None;
         }
@@ -479,7 +472,6 @@ fn local_disk_io() -> Option<(f64, f64)> {
     let mut rates = [0.0; 2];
     for (index, counter) in counters.iter().enumerate() {
         let mut value = PDH_FMT_COUNTERVALUE::default();
-        // Byte rates are neither scaled nor capped at 100, unlike percentages.
         if unsafe {
             PdhGetFormattedCounterValue(
                 *counter,
@@ -507,8 +499,6 @@ pub fn collect_local(metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String> 
     if metrics.is_empty() {
         return Ok(empty_sample());
     }
-    // The same fixed, read-only probes work against Linux procfs and sysfs
-    // locally. Use the system tools and the shared parser without an SSH hop.
     let output = crate::ssh::background_command("/bin/sh")
         .args(["-c", &remote_command(metrics)])
         .env("PATH", "/usr/bin:/bin")

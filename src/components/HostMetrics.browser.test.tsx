@@ -90,7 +90,6 @@ it("smooths host percentages, rates, and uptime while keeping evidence exact and
   view.rerender(pane());
   expect(cell("cpu")).toHaveAccessibleName("CPU: 90%");
   expect(cell("diskIo")).toHaveAccessibleName("Disk I/O: Read 4.0 KiB/s · Write 2.0 KiB/s");
-  // The exact reading lives in the accessible name and the readings panel, not a tooltip.
   expect(cell("cpu").hasAttribute("title")).toBe(false);
   const path = cell("cpu").querySelector("path")!.getAttribute("d");
   const duration = parseFloat(getComputedStyle(visual("cpu")).getPropertyValue("--motion-slow"));
@@ -199,8 +198,6 @@ it("anchors rate labels, neighboring values, and percent signs across animated u
       const pending = [...frames.values()];
       frames.clear();
       pending.forEach((callback) => callback(now));
-      // Glyph kerning may move the percent sign's ink by under a pixel (macOS
-      // fonts move it most); the actual layout boxes must stay fixed.
       positions().forEach((position, index) =>
         index === before.length - 1
           ? expect(Math.abs(position - before[index])).toBeLessThan(1)

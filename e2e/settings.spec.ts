@@ -108,7 +108,7 @@ describe("Settings and native window", () => {
         ".host-metric > strong",
         ".host-metrics-status",
       ]) {
-        // Observe the real native request. WebDriver cannot move the OS pointer.
+        // WebDriver cannot move the OS pointer.
         const calls = await browser.execute(async (target) => {
           const internals = (
             window as unknown as {
@@ -291,7 +291,6 @@ describe("Local Terminal Mode desktop", () => {
     await $(".new-terminal-menu").$(`aria/Local terminals: ${localShellLabel}`).click();
     await browser.waitUntil(async () => (await runtime()).sessionIds.length === 2);
     await $("button=Add connection").click();
-    // The new-terminal menu is also a dialog and can still be closing here.
     await expect($(".connection-dialog[role=dialog]")).toBeDisplayed();
     await browser.keys("Escape");
     await browser.waitUntil(

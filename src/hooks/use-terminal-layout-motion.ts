@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef, type RefObject } from "react";
 
-/** Keep terminal dimensions final while animating flat, keyed pane shells. */
 export function useTerminalLayoutMotion(
   container: RefObject<HTMLDivElement | null>,
   topology: string,
@@ -38,7 +37,6 @@ export function useTerminalLayoutMotion(
     const before = previous.current;
     previous.current = { topology, viewportKey, boxes };
     if (!before || before.topology === topology || before.viewportKey !== viewportKey) return;
-    // Switching groups or individual tabs is selection, not a layout edit.
     if (![...boxes.keys()].some((id) => before.boxes.has(id))) return;
     for (const node of nodes) {
       if (typeof node.animate !== "function") continue;
@@ -60,8 +58,7 @@ export function useTerminalLayoutMotion(
       if (JSON.stringify(start) === JSON.stringify(next)) continue;
       const pixels = (box: typeof next) =>
         Object.fromEntries(Object.entries(box).map(([key, value]) => [key, `${value}px`]));
-      // Clip the moving shell around a terminal already sized for its destination.
-      // In particular a new ConPTY must never start at the animation's zero width.
+      // A new ConPTY must never start at the animation's zero width.
       const terminal = node.querySelector<HTMLElement>(":scope > .terminal-pane");
       let release = () => {};
       if (terminal) {

@@ -5,12 +5,10 @@ let animations: Animation[] = [];
 let overlays: HTMLElement[] = [];
 let restoreWorkspace: (() => void) | null = null;
 
-/** Update controls immediately, then move the live workspace without capturing terminal frames. */
 export function transitionFocusMode(direction: "enter" | "exit", update: () => void) {
   const token = ++generation;
   const root = document.documentElement;
   const workspace = document.querySelector<HTMLElement>(".workspace-shell");
-  // Measure the visible position before cancelling an interrupted slide.
   const before = workspace?.getBoundingClientRect();
   animations.forEach((animation) => animation.cancel());
   restoreWorkspace?.();
@@ -24,13 +22,12 @@ export function transitionFocusMode(direction: "enter" | "exit", update: () => v
   const bounds = sidebar?.getBoundingClientRect();
   const departing = sidebar?.cloneNode(true) as HTMLElement | undefined;
 
-  // No capture callback or animation frame may delay the real controls/state.
   flushSync(update);
   delete root.dataset.focusTransition;
   if (!supported || !workspace || !before) return;
   root.dataset.focusTransition = direction;
   const styles = getComputedStyle(root);
-  // Production CSS can shorten 180ms to .18s. WAAPI always takes milliseconds.
+  // Computed styles may serialize 180ms as .18s; WAAPI takes milliseconds.
   const duration = /^(\d*\.?\d+)(ms|s)$/.exec(styles.getPropertyValue("--motion-focus").trim());
   const options = {
     duration: duration ? Number(duration[1]) * (duration[2] === "s" ? 1000 : 1) : 180,
@@ -40,9 +37,6 @@ export function transitionFocusMode(direction: "enter" | "exit", update: () => v
   const animate = (node: HTMLElement, frames: Keyframe[]) =>
     animations.push(node.animate(frames, options));
   const after = workspace.getBoundingClientRect();
-  // Interpolate the real layout box, never scale a bitmap of terminal glyphs.
-  // Fix it to the viewport only for this transition; the grid already owns the
-  // destination, and ResizeObserver keeps the live terminal fitted as it grows.
   const position = workspace.style.position;
   const zIndex = workspace.style.zIndex;
   workspace.style.position = "fixed";

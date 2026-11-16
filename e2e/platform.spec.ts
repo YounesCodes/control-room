@@ -51,8 +51,6 @@ describe("Native client platform", () => {
       expect(environment.sshPath).toBe("/usr/bin/ssh");
       expect(catalog.profiles.every((shell) => !shell.elevated)).toBe(true);
       await expect($("aria/Window controls")).not.toExist();
-      // Overlay chrome keeps the webview as tall as the native window. A
-      // separate system titlebar would reduce its content height.
       const outer = await ipc<{ width: number; height: number }>("plugin:window|outer_size", {
         label: "main",
       });
@@ -105,8 +103,7 @@ describe("Native client platform", () => {
     async () => {
       const original = await browser.getWindowRect();
       const headerFits = async (mode: "normal" | "focus" | "settings") => {
-        // Native NSButtons live outside the DOM. Compare their actual centers
-        // with the HTML header so this also catches a wrong Tauri inset.
+        // Native NSButtons live outside the DOM.
         if (!(await ipc<boolean>("plugin:window|is_fullscreen", { label: "main" }))) {
           const buttons =
             await ipc<

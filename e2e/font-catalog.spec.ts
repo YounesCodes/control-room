@@ -7,7 +7,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 
-// Explicit local check only. Normal desktop tests need no public font service.
 const liveFonts = isLinux || process.env.CONTROL_ROOM_LIVE_FONTS === "1" ? describe : describe.skip;
 
 liveFonts("public font catalog in the native WebView", () => {
@@ -31,7 +30,6 @@ liveFonts("public font catalog in the native WebView", () => {
     await $("aria/Open Settings").click();
     await $(".settings-navigation").$("button=Terminal").click();
     if (isLinux) {
-      // Linux offers installed desktop fonts rather than the online font catalog.
       const settings = await savedSettings();
       const current = $('input[aria-describedby="linux-font-help"]');
       const family = settings.terminalFontFamily === "monospace" ? "serif" : "monospace";

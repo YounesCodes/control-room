@@ -1,6 +1,5 @@
 import type { HostResources } from "../types";
 
-/** How much of a total is in use, with the total kept so the UI can say "of". */
 export interface ResourceUsage {
   usedKib: number;
   totalKib: number;
@@ -9,9 +8,6 @@ export interface ResourceUsage {
 
 const BINARY_UNITS = ["KiB", "MiB", "GiB", "TiB"];
 
-// meminfo counts in KiB. Sizes are rendered in binary units because that is
-// what the kernel reported; converting to decimal GB would quietly restate the
-// number as something the host never said.
 export function formatKib(kib: number | null): string | null {
   if (kib === null || !Number.isFinite(kib) || kib < 0) return null;
   let value = kib;
@@ -24,9 +20,7 @@ export function formatKib(kib: number | null): string | null {
   return `${value.toFixed(digits)} ${BINARY_UNITS[unit]}`;
 }
 
-// Used is total minus available, not total minus free. MemAvailable already
-// discounts page cache and reclaimable slab, so this does not report a healthy
-// host that is caching aggressively as being out of memory.
+// MemAvailable already discounts page cache and reclaimable slab.
 export function memoryUsage(
   resources: Pick<HostResources, "memoryTotalKib" | "memoryAvailableKib"> | null,
 ): ResourceUsage | null {
@@ -45,9 +39,6 @@ function usageFrom(total: number | null, free: number | null): ResourceUsage | n
   return { usedKib, totalKib: total, percent: (usedKib / total) * 100 };
 }
 
-// `uptime -p` writes prose: "up 1 week, 2 days, 2 hours, 55 minutes". At the
-// size a stat value renders that wraps to two lines and buries the number, so
-// only the two largest units survive.
 const UPTIME_UNITS: [RegExp, string][] = [
   [/^years?$/, "y"],
   [/^months?$/, "mo"],
@@ -73,15 +64,9 @@ export function compactUptime(value: string | null, maxParts = 2): string | null
     parts.push(`${amount}${unit[1]}`);
     if (parts.length === maxParts) break;
   }
-  // An unfamiliar shape is shown verbatim rather than dropped.
   return parts.length ? parts.join(" ") : trimmed;
 }
 
-/**
- * Builds the stroke for a sparkline. Samples are plotted against a fixed
- * ceiling rather than the window's own maximum, so a flat idle line stays at
- * the bottom instead of being rescaled to look busy.
- */
 export function sparklinePath(
   values: number[],
   width: number,
@@ -93,7 +78,6 @@ export function sparklinePath(
   return points.map((point, index) => `${index === 0 ? "M" : "L"}${point}`).join(" ");
 }
 
-/** The same shape closed to the baseline, for a fill under the stroke. */
 export function sparklineAreaPath(
   values: number[],
   width: number,

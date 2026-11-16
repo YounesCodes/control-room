@@ -70,7 +70,6 @@ function LogRow({ number, line, query }: LogRowData & { query: string }) {
           part.match ? <mark key={partIndex}>{part.text}</mark> : part.text,
         )
       : segment.text;
-    // Message text stays unwrapped to keep large buffers light.
     return segment.role === "message" ? (
       <Fragment key={index}>{text}</Fragment>
     ) : (
@@ -91,7 +90,6 @@ function LogRow({ number, line, query }: LogRowData & { query: string }) {
   );
 }
 
-/** Rows render in fixed blocks so a flush only re-renders the blocks it changed. */
 const LogChunk = memo(
   function LogChunk({
     rows,
@@ -162,8 +160,7 @@ export function LogsPane({
     windowsHost ? "docker" : (selectedSource?.type ?? "systemd"),
   );
   const [sourceId, setSourceId] = useState(selectedSource?.id ?? (macosHost ? "all" : ""));
-  // launchd services are named domain/label, so a Mac service link is explicit
-  // even though it is not a systemd unit name.
+  // launchd services are named `domain/label`, not systemd unit names.
   const explicitSystemdSource =
     sourceType === "systemd" &&
     selectedSource?.type === "systemd" &&
@@ -182,7 +179,6 @@ export function LogsPane({
   const [unreadLines, setUnreadLines] = useState(0);
   const [wrapLines, setWrapLines] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // journalctl reported that this account cannot see system entries.
   const [journalRestricted, setJournalRestricted] = useState(false);
   const [sudoPurpose, setSudoPurpose] = useState<SudoPurpose | null>(null);
 
@@ -199,9 +195,7 @@ export function LogsPane({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const disposedRef = useRef(false);
   const startingRef = useRef(false);
-  // The newest Start request wins; superseded requests exit after their stop.
   const startRequestRef = useRef(0);
-  // Whether the reader wants a stream running, independent of render timing.
   const wantsStreamRef = useRef(false);
   const earlyStateRef = useRef(new Map<string, StreamStateEvent>());
   const earlyNoticeRef = useRef(new Set<string>());
@@ -418,7 +412,6 @@ export function LogsPane({
   }, []);
 
   async function stop(): Promise<boolean> {
-    // Claim the stream so an overlapping stop or restart never stops it twice.
     const streamId = streamIdRef.current;
     streamIdRef.current = null;
     finishDecoder();
@@ -434,7 +427,6 @@ export function LogsPane({
       await api.stopLogStream(streamId);
     } catch (caught) {
       const message = errorMessage(caught);
-      // The stream already ended; its state event may still be on the way.
       if (!/no longer active/i.test(message)) {
         if (generation === streamGenerationRef.current && streamIdRef.current === null) {
           streamIdRef.current = streamId;
@@ -448,7 +440,6 @@ export function LogsPane({
     return true;
   }
 
-  /** Stops at the reader's request and cancels any Start still in progress. */
   function stopStream() {
     wantsStreamRef.current = false;
     startRequestRef.current += 1;
@@ -466,8 +457,6 @@ export function LogsPane({
     const stopped = await stop();
     if (request !== startRequestRef.current || disposedRef.current) return;
     if (!stopped) return;
-    // A different source or line count starts in an empty view; stop() may have
-    // drained held or partial lines from the previous stream.
     if (fresh) clearBuffers();
     const generation = ++streamGenerationRef.current;
     setError(null);
@@ -556,7 +545,6 @@ export function LogsPane({
 
   const streaming = streamStatus === "running" || streamStatus === "starting";
 
-  /** The view shows one source; a different source starts from an empty view. */
   function showSource(type: LogSourceType, id: string) {
     clearBuffers();
     setError(null);
@@ -584,7 +572,6 @@ export function LogsPane({
     showSource(next, nextId);
   }
 
-  /** Line count and follow changes reread the same source. */
   function changeReadOptions(options: { tail: number; follow: boolean }) {
     if (wantsStreamRef.current)
       void start(null, { type: sourceType, id: sourceId, ...options }, true);
@@ -665,11 +652,8 @@ export function LogsPane({
     macosHost && sourceType === "systemd"
       ? [{ id: "all", name: "All unified logs" }, ...sourceCache.items]
       : sourceCache.items;
-  // Mac hosts can always stream the whole unified log, so a missing service
-  // list does not block the view.
+  // macOS hosts can always stream the whole unified log.
   const sourceListOptional = explicitSystemdSource || (macosHost && sourceType === "systemd");
-  // Until the first list of units or containers arrives, the whole tab is one
-  // skeleton in its own layout: every control acts on a source.
   if (sourceCache.loading && !sourceCache.items.length && !sourceListOptional)
     return (
       <section className="feature-page logs-page">

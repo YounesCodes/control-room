@@ -21,9 +21,7 @@ import type { PersistedWorkspaceState } from "../src/types";
 
 async function revealTabAction(action: WebdriverIO.Element) {
   if (isMac) {
-    // The embedded driver does not update CSS hover through native pointer
-    // movement. Keyboard focus reveals an inactive tab's controls without
-    // selecting its terminal.
+    // The embedded driver does not update CSS hover from native pointer movement.
     await browser.execute((node: HTMLElement) => node.focus(), action);
   } else {
     await action.$("..").moveTo();
@@ -32,7 +30,6 @@ async function revealTabAction(action: WebdriverIO.Element) {
 }
 
 async function renameActive(name: string) {
-  // Focus keeps tab actions revealed if native hover changes during reflow.
   await $(".session-tab-wrap.active .session-tab-main").click();
   const rename = $(".session-tab-wrap.active .session-tab-rename");
   await rename.moveTo();
@@ -42,12 +39,10 @@ async function renameActive(name: string) {
   await $("button=Rename").click();
 }
 
-// Group tools reveal on the active group tab's hover or focus, like Workspace tab tools.
 async function groupTool(selector: string) {
   const tool = $(".session-tab-group.active").$(selector);
   if (isMac) {
-    // The embedded driver does not update CSS hover through native pointer
-    // movement. Keyboard focus reveals the same tools.
+    // The embedded driver does not update CSS hover from native pointer movement.
     await browser.execute((node: HTMLElement) => node.focus(), await tool);
   } else {
     await $(".session-tab-group.active .session-tab-group-main").moveTo();
@@ -161,8 +156,7 @@ describe("Native PTY and Workspace lifecycle", () => {
   it("dispatches permitted native dragging from the Focus Mode top strip", async () => {
     await openLocal();
     await $("aria/Focus terminal").click();
-    // WebDriver input is confined to WebView2. Observe the real native call
-    // and its result rather than treating synthetic motion as OS movement.
+    // WebDriver input is confined to WebView2.
     await browser.execute(() => {
       const probeWindow = window as unknown as {
         __TAURI_INTERNALS__: { convertFileSrc: (command: string, protocol: string) => string };

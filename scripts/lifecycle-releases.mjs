@@ -17,9 +17,6 @@ export function releaseAsset(release, platform, architecture = process.arch) {
   return assets[0];
 }
 
-// The newest stable release that is not newer than the candidate. Between a
-// release and the next version bump the branch shares the published version;
-// that release is what users have installed, so it is the upgrade source.
 export function previousRelease(releases, candidateVersion, from) {
   const parse = (version) => /^v?(\d+)\.(\d+)\.(\d+)$/.exec(version)?.slice(1).map(Number);
   const candidate = parse(candidateVersion);

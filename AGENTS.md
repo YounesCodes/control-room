@@ -18,6 +18,7 @@ Find nearby tests and existing implementation before changing a feature contract
 ## Working agreements
 
 - Inspect the current diff and preserve existing user changes. Avoid unrelated redesign or cleanup.
+- Do not add code comments. Put a non-obvious fact in a name, type, constant, test, or lint message instead. Exceptions: tool directives, license notices, Rust doc comments on public items, and a short note on an external constraint the code cannot express.
 - Add or update focused tests for behavior changes, including parser, argument construction, persistence, and lifecycle regressions where relevant.
 - Keep `docs/` accurate when behavior or project boundaries change. Update `DESIGN.md` only when the app-wide design language changes, such as the palette, surfaces, type, motion, or a pattern several screens share. Feature-specific behavior belongs in code, tests, and `docs/`, never in `DESIGN.md`.
 - Avoid adding or upgrading dependencies unless required by the task.

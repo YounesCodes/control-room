@@ -1,16 +1,3 @@
-// Verifies a Tauri updater signature against the public key committed in
-// src-tauri/tauri.conf.json.
-//
-// This answers the one question a release cannot answer in time: whether the
-// private key held in CI is actually the pair of the public key built into the
-// application. A mismatch produces a release that publishes perfectly and is
-// then rejected by every installed copy, which is only discoverable after the
-// damage is done. Checking it here costs a second.
-//
-// Only public material is read. The private key is never touched.
-//
-//   node scripts/verify-updater-signature.mjs <signed-file> <signature-file>
-
 import { createHash, createPublicKey, verify } from "node:crypto";
 import { readFileSync } from "node:fs";
 
@@ -35,7 +22,6 @@ function decodeBase64(text, label) {
   return bytes;
 }
 
-/** Minisign keys and signatures are base64 of a small text file. */
 function decodeContainer(base64Text, label) {
   if (typeof base64Text !== "string") fail(`${label} is not text`);
   const bytes = decodeBase64(base64Text.trim(), label);
@@ -70,9 +56,6 @@ const algorithm = signatureBlob.subarray(0, 2).toString("latin1");
 const signatureKeyId = signatureBlob.subarray(2, 10);
 const rawSignature = signatureBlob.subarray(10);
 
-// The decisive check. Key ids are derived from the pair, so a signature made by
-// a different private key carries a different id and is caught here with a far
-// clearer message than a generic verification failure.
 if (!publicKeyId.equals(signatureKeyId)) {
   fail(
     `signature was made by a different key\n` +
@@ -82,9 +65,7 @@ if (!publicKeyId.equals(signatureKeyId)) {
   );
 }
 
-// "ED" is minisign's prehashed variant, which is what the Tauri signer emits:
-// the Ed25519 signature covers BLAKE2b-512 of the file, not the file itself.
-// "Ed" is the legacy variant that signs the bytes directly.
+// Tauri signs with minisign's prehashed ED variant: Ed25519 over BLAKE2b-512 of the file.
 const contents = readFileSync(signedPath);
 let message;
 if (algorithm === "ED") {
@@ -103,8 +84,7 @@ if (!verify(null, message, publicKey, rawSignature)) {
   fail("the signature does not verify against the committed public key");
 }
 
-// Match the updater's Minisign verifier: the second signature authenticates
-// the payload signature together with the exact trusted comment bytes.
+// Minisign's global signature covers the payload signature plus the trusted comment bytes.
 const globalMessage = Buffer.concat([
   rawSignature,
   Buffer.from(signatureLines[2].slice("trusted comment: ".length), "utf8"),

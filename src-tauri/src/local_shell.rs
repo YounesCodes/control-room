@@ -1,4 +1,3 @@
-//! Allowlisted local shell discovery and PTY command construction.
 use crate::models::LocalShellKind;
 #[cfg(not(windows))]
 use crate::models::{AdministratorTerminalStatus, LocalShellCatalog};

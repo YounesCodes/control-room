@@ -61,8 +61,6 @@ describe("sudo elevation", () => {
   });
 
   it("says an allowance without passwordless sudo still runs unelevated", () => {
-    // The confusing case is a permission the account cannot act on, so the note
-    // has to name the fallback rather than imply the reads are elevated.
     expect(elevationCapabilityNote(false)).toContain("connecting account");
   });
 

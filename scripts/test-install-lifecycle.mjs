@@ -181,8 +181,6 @@ try {
     return seedLifecycleData(invoke, session);
   });
   const oldSchema = inspectDatabase();
-  // The version alone cannot prove replacement when the branch still carries
-  // the published version number.
   assert.notEqual(
     install(candidate),
     publishedHash,
@@ -211,10 +209,8 @@ try {
 
   uninstall();
   installed = false;
-  // This directory was absent before the run and contains only this fixture's data.
   assert.equal(readFileSync(join(dataRoot, ".lifecycle-fixture"), "utf8"), directory);
   rmSync(dataRoot, { recursive: true });
-  // Keep the fixture claimable: a later failure must still be cleanable.
   mkdirSync(dataRoot, { recursive: true });
   writeFileSync(join(dataRoot, ".lifecycle-fixture"), directory);
   install(candidate);
@@ -280,7 +276,7 @@ function uninstall() {
   if (process.platform === "win32") {
     const matches = readdirSync(installRoot).filter((name) => /^uninstall.*\.exe$/i.test(name));
     assert.equal(matches.length, 1, "Expected the installed NSIS uninstaller");
-    // Disable NSIS's temporary self-copy so the process we wait for owns removal.
+    // _?= disables NSIS's temporary self-copy, so the waited process owns removal.
     execFileSync(join(installRoot, matches[0]), ["/S", `_?=${installRoot}`], {
       stdio: "inherit",
       timeout: 180000,

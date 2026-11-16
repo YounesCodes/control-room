@@ -1,4 +1,3 @@
-// Use registered production IPC commands, never direct writes to the database.
 import assert from "node:assert/strict";
 
 export async function seedLifecycleData(invoke, session) {

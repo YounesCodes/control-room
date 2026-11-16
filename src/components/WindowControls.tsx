@@ -13,9 +13,7 @@ interface WindowControlsProps {
 }
 
 export function WindowControls({ platform, windowActions }: WindowControlsProps) {
-  // macOS overlays native traffic lights on the app's existing top row. Windows
-  // keeps the existing custom controls because its window remains undecorated.
-  // macOS draws native traffic lights. Windows and Linux windows are undecorated.
+  // macOS draws native traffic lights; Windows and Linux windows are undecorated.
   if (platform !== "windows" && platform !== "linux") return null;
   const appWindow = windowActions ?? getCurrentWindow();
 
@@ -52,8 +50,7 @@ export function WindowControls({ platform, windowActions }: WindowControlsProps)
   );
 }
 
-// GTK undecorated windows lack a native resize border. Keep the existing
-// titlebar and let the window manager handle drags from the outside edges.
+// GTK undecorated windows have no native resize border.
 const resizeEdges = [
   "North",
   "South",

@@ -1,6 +1,3 @@
-//! Native clipboard access for desktops whose webview cannot serve the
-//! terminal's shifted copy and paste shortcuts on its own.
-
 #[cfg(target_os = "linux")]
 mod imp {
     use tauri::{AppHandle, async_runtime::channel};
@@ -42,8 +39,7 @@ mod imp {
     }
 }
 
-/// WKWebView answers a scripted clipboard read with a Paste confirmation that
-/// blocks the page. The system pasteboard tools read and write it directly.
+// WKWebView answers a scripted clipboard read with a blocking Paste confirmation.
 #[cfg(target_os = "macos")]
 mod imp {
     use std::{

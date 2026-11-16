@@ -40,10 +40,7 @@ describe("ErrorBoundary", () => {
 
     const alert = screen.getByRole("alert");
     expect(alert.textContent).toContain("Something went wrong");
-    // The message has to be on the screen, not only in the console: this view
-    // is what the user sees when devtools are closed.
     expect(alert.textContent).toContain("settings pane exploded");
-    // A crash says nothing about stored data, and must not claim it was lost.
     expect(alert.textContent).toContain("were not changed");
     expect(screen.getByRole("button", { name: /Reload/ })).toBeTruthy();
     expect(screen.getByTestId("window-controls")).toBeTruthy();

@@ -42,9 +42,6 @@ const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_STRUCTURED_OPERATIONS_PER_CONNECTION: usize = 2;
 const MAX_STRUCTURED_QUEUE_WAIT: Duration = Duration::from_secs(4);
 const STREAM_DIAGNOSTIC_LIMIT: usize = 64 * 1024;
-/// journalctl's stderr hint (under LC_ALL=C) when the account may only read
-/// its own entries. A followed journal never exits, so exit diagnostics would
-/// never show it; the stream reports it as soon as it appears.
 const JOURNAL_RESTRICTED_HINT: &[u8] = b"not seeing messages from other users and the system";
 pub const JOURNAL_RESTRICTED_NOTICE: &str = "journal-restricted";
 const MAX_FIREWALL_RULES: usize = 200;
@@ -55,11 +52,6 @@ const MAX_CONNECTION_REMOTES: usize = 20;
 #[derive(Default)]
 pub struct RemoteOperationLimiter {
     hosts: Arc<Mutex<HashMap<String, Arc<HostOperationLimit>>>>,
-    /// Test-only seam. Runs between looking a connection's limit up in the map
-    /// and claiming a slot on it, which is the one interleaving in here that
-    /// cannot be reached by ordinary scheduling pressure on demand. The field
-    /// does not exist outside `cfg(test)`, so production has neither the hook
-    /// nor the branch that reads it.
     #[cfg(test)]
     after_host_lookup: Option<Arc<dyn Fn() + Send + Sync>>,
 }
@@ -72,24 +64,11 @@ struct HostOperationLimit {
 
 #[derive(Default)]
 struct HostSlots {
-    /// Permits currently held for this connection.
     active: usize,
-    /// Callers that have taken this limit out of the map and have not yet
-    /// either claimed a slot or given up.
-    ///
-    /// Looking the limit up and claiming a slot on it are two steps, and
-    /// without this the entry could be evicted in between: a caller holding an
-    /// `Arc` to an evicted limit finds it idle and claims a slot, while the
-    /// next request for the same connection creates a second limit and admits
-    /// two more. Three reads then run against a host whose cap is two. The
-    /// count is registered while the map lock is held, so a release that runs
-    /// afterwards sees the arrival and leaves the entry alone.
     arriving: usize,
 }
 
 impl HostSlots {
-    /// Whether the limit can be forgotten: nothing holds a slot and nothing is
-    /// on its way to one.
     fn is_forgettable(&self) -> bool {
         self.active == 0 && self.arriving == 0
     }
@@ -114,24 +93,15 @@ impl RemoteOperationLimiter {
         let connection_id = connection_id.to_owned();
         let mut hosts = self.hosts.lock();
         let host = hosts.entry(connection_id.clone()).or_default().clone();
-        // Registered under the map lock, before anything can evict the entry.
         host.slots.lock().arriving += 1;
         drop(hosts);
         #[cfg(test)]
         if let Some(hook) = &self.after_host_lookup {
             hook();
         }
-        // One deadline for the whole attempt, so `maximum_wait` is the total
-        // time spent queued rather than the time between two wake-ups. Waking
-        // early is normal here: a permit is released, and another waiter can
-        // take the freed slot first. Waiting again for a fresh `maximum_wait`
-        // each time left total queue time unbounded, which let the frontend
-        // backstop fire before Rust could report why the operation failed.
         let deadline = Instant::now() + maximum_wait;
         let mut slots = host.slots.lock();
         while slots.active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION {
-            // A deadline already in the past returns `timed_out` immediately,
-            // so a spent budget never starts another wait.
             if host.available.wait_until(&mut slots, deadline).timed_out()
                 && slots.active >= MAX_STRUCTURED_OPERATIONS_PER_CONNECTION
             {
@@ -173,8 +143,6 @@ impl RemoteOperationLimiter {
         }
     }
 
-    /// Wakes everything queued on one connection without freeing a slot, so a
-    /// test can reproduce the wake-up that finds the queue still full.
     #[cfg(test)]
     fn wake_waiters(&self, connection_id: &str) {
         if let Some(host) = self.hosts.lock().get(connection_id) {
@@ -185,13 +153,10 @@ impl RemoteOperationLimiter {
 
 #[cfg(test)]
 impl RemoteOperationPermit {
-    /// How many permits are live on the limit this one was issued against.
     fn live_on_its_limit(&self) -> usize {
         self.host.slots.lock().active
     }
 
-    /// Whether two permits are counted against the same limit. Two live permits
-    /// for one connection that answer `false` here are not bounded by anything.
     fn shares_a_limit_with(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.host, &other.host)
     }
@@ -316,9 +281,6 @@ impl RemoteCommandExecutor {
     }
 }
 
-/// One bounded, unelevated read of what the host offers. It stays unelevated
-/// on purpose: the account identity and default shell it reports have to be
-/// the connecting account's, not root's.
 fn capability_command() -> &'static str {
     r#"LC_ALL=C; printf 'hostname=%s\n' "$(hostname 2>/dev/null)"; if test -r /etc/os-release; then . /etc/os-release; printf 'os_id=%s\n' "$ID"; printf 'os_like=%s\n' "$ID_LIKE"; printf 'os_name=%s\n' "$NAME"; printf 'os_version=%s\n' "$VERSION_ID"; fi; printf 'kernel=%s\n' "$(uname -r 2>/dev/null)"; printf 'architecture=%s\n' "$(uname -m 2>/dev/null)"; uptime_value=$(uptime -p 2>/dev/null || true); if test -z "$uptime_value" && test -r /proc/uptime; then uptime_value=$(awk '{seconds=int($1); days=int(seconds/86400); hours=int((seconds%86400)/3600); minutes=int((seconds%3600)/60); if(days>0) printf "up %d days, ",days; else printf "up "; if(hours>0) printf "%d hours, ",hours; printf "%d minutes",minutes}' /proc/uptime); fi; printf 'uptime=%s\n' "$uptime_value"; account_name=$(id -un 2>/dev/null); default_shell=$(getent passwd "$account_name" 2>/dev/null | cut -d: -f7); if test -z "$default_shell" && test -r /etc/passwd; then default_shell=$(awk -F: -v account="$account_name" '$1==account {print $7; exit}' /etc/passwd); fi; printf 'default_shell=%s\n' "$default_shell"; if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then printf 'passwordless_sudo=true\n'; else printf 'passwordless_sudo=false\n'; fi; command -v systemctl >/dev/null 2>&1 && printf 'systemd_available=true\n' || printf 'systemd_available=false\n'; command -v journalctl >/dev/null 2>&1 && printf 'journald_available=true\n' || printf 'journald_available=false\n'; if command -v docker >/dev/null 2>&1; then printf 'docker_available=true\n'; printf 'docker_version=%s\n' "$(docker version --format '{{.Server.Version}}' 2>/dev/null || docker --version 2>/dev/null)"; if docker info >/dev/null 2>&1; then printf 'docker_accessible=true\n'; printf 'running_container_count=%s\n' "$(docker ps -q | wc -l)"; printf 'total_container_count=%s\n' "$(docker ps -aq | wc -l)"; else printf 'docker_accessible=false\n'; if sudo -n docker info >/dev/null 2>&1; then printf 'docker_accessible_with_sudo=true\n'; printf 'running_container_count=%s\n' "$(sudo -n docker ps -q | wc -l)"; printf 'total_container_count=%s\n' "$(sudo -n docker ps -aq | wc -l)"; fi; fi; else printf 'docker_available=false\n'; printf 'docker_accessible=false\n'; fi; if command -v systemctl >/dev/null 2>&1; then printf 'running_service_count=%s\n' "$(systemctl list-units --type=service --state=running --no-legend --no-pager 2>/dev/null | wc -l)"; fi"#
 }
@@ -349,14 +311,10 @@ fn distribution_family(os_id: Option<&str>, os_like: Option<&str>) -> Option<Str
 /// hoping the next request arrives on schedule. Everything is a plain read: no
 /// process list, no command lines, no per-process accounting.
 pub(crate) fn resource_command() -> &'static str {
-    // Guest counters are already included in user/nice. Sum only through steal,
-    // and avoid awk's platform-dependent integer printf range for long uptimes.
+    // /proc/stat guest counters are already included in user and nice; awk's integer printf range is platform-dependent.
     r#"LC_ALL=C; if test -r /proc/stat; then awk '/^cpu /{t=0; for(n=2;n<=9 && n<=NF;n++) t+=$n; printf "cpu_total_1=%.0f\ncpu_idle_1=%.0f\n", t, $5+$6}' /proc/stat; sleep 0.25; awk '/^cpu /{t=0; for(n=2;n<=9 && n<=NF;n++) t+=$n; printf "cpu_total_2=%.0f\ncpu_idle_2=%.0f\n", t, $5+$6}' /proc/stat; fi; printf 'cores=%s\n' "$(nproc 2>/dev/null || grep -c '^processor' /proc/cpuinfo 2>/dev/null)"; if test -r /proc/loadavg; then printf 'load=%s\n' "$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null)"; fi; if test -r /proc/meminfo; then awk '/^MemTotal:|^MemAvailable:|^SwapTotal:|^SwapFree:/{key=tolower(substr($1,1,length($1)-1)); printf "%s=%s\n", key, $2}' /proc/meminfo; fi"#
 }
 
-/// Busy share over the window. Returns `None` unless both reads landed and the
-/// counters actually moved, because a zero-width window would otherwise report
-/// a confident 0% on a host that was never measured.
 fn cpu_percent_from(values: &HashMap<String, String>) -> Option<f64> {
     let read = |key: &str| values.get(key)?.parse::<u64>().ok();
     let total_1 = read("cpu_total_1")?;
@@ -367,7 +325,6 @@ fn cpu_percent_from(values: &HashMap<String, String>) -> Option<f64> {
     if total_delta == 0 {
         return None;
     }
-    // A counter reset mid-window would otherwise produce a negative busy share.
     let idle_delta = idle_2.saturating_sub(idle_1).min(total_delta);
     let busy = (total_delta - idle_delta) as f64 / total_delta as f64 * 100.0;
     Some((busy * 10.0).round() / 10.0)
@@ -609,9 +566,7 @@ fn run_process(
     let stdout_first_byte = first_byte_tx.clone();
     let stdout_reader = thread::spawn(move || read_limited(stdout, stdout_first_byte));
     let stderr_reader = thread::spawn(move || read_limited(stderr, first_byte_tx));
-    // Input may exceed the OS pipe capacity, and an SSH peer can stop reading
-    // it. Write on a worker so the same deadline still applies while sending.
-    // Drain both output pipes concurrently to avoid a full-pipe deadlock.
+    // Pipes have bounded capacity and an SSH peer can stop reading, so write and drain on workers.
     let child_stdin = child.stdin.take().expect("stdin was piped");
     let input_writer = stdin.map(|bytes| spawn_input_writer(child_stdin, bytes));
     let status = match child.wait_timeout(timeout) {
@@ -728,9 +683,7 @@ fn log_operation_timing(
 fn classify_failure(code: i32, stderr: &[u8]) -> String {
     let stderr = String::from_utf8_lossy(stderr).trim().to_string();
     let lower = stderr.to_ascii_lowercase();
-    // PowerShell serializes thrown errors as CLIXML under EncodedCommand.
-    // These Windows inspection messages have known recovery steps; keep the
-    // serialization, duplicate stack context, and XML out of the UI.
+    // PowerShell serializes thrown errors as CLIXML under -EncodedCommand.
     if lower.contains("docker cli was not found on this windows host.") {
         return "Docker is not installed on this host.".into();
     }
@@ -914,12 +867,6 @@ fn parse_listening_sockets(text: &str) -> Result<Vec<ListeningSocket>, String> {
             [] => (None, None, "unavailable"),
             [(pid, name)] => (Some(name.clone()), Some(*pid), "known"),
             entries => {
-                // Several PIDs hold the same listening socket — the common
-                // prefork/worker pattern (nginx, apache-prefork, php-fpm,
-                // postgres). The process name stays an unambiguous kernel fact
-                // when every holder shares it, so keep it for display and
-                // filtering; the owning PID (and any systemd correlation) is
-                // genuinely ambiguous and is withheld.
                 let first_name = &entries[0].1;
                 if entries.iter().all(|(_, name)| name == first_name) {
                     (Some(first_name.clone()), None, "ambiguous")
@@ -985,17 +932,6 @@ fn parse_process_evidence(value: &str) -> Vec<(u32, String)> {
     evidence
 }
 
-/// Drops systemd's own claim on a socket-activated listener.
-///
-/// systemd holds the listening file descriptor for every socket unit it
-/// activates, so `ss` reports both pid 1 and the real service on one socket.
-/// That second claim describes how the service was started, not who is serving,
-/// and treating it as a rival owner hides the answer on exactly the listeners
-/// that matter most: ssh, docker, and anything else started from a `.socket`.
-///
-/// Only pid 1 named `systemd` is dropped, and only when another holder remains,
-/// so a socket waiting on activation with no service behind it yet still reports
-/// systemd as its owner.
 fn without_activation_supervisor(evidence: Vec<(u32, String)>) -> Vec<(u32, String)> {
     if evidence.len() < 2 {
         return evidence;
@@ -1012,14 +948,6 @@ fn without_activation_supervisor(evidence: Vec<(u32, String)>) -> Vec<(u32, Stri
     }
 }
 
-/// The unit types the Systemd view actually lists, kept in step with
-/// `systemd_unit_list_command`.
-///
-/// `validate_systemd_unit_id` accepts every canonical unit type because
-/// journal reads legitimately reference `.target`, `.device`, and `.scope`.
-/// Ports needs the narrower set: correlating a listener to `init.scope` or
-/// `user.slice` would offer a click-through to a unit the Systemd view never
-/// shows, landing the user on an empty panel.
 fn is_navigable_systemd_unit(unit: &str) -> bool {
     [".service", ".timer", ".mount", ".socket"]
         .iter()
@@ -1064,9 +992,7 @@ pub fn list_firewall(
 }
 
 fn firewall_status_command() -> &'static str {
-    // Both front-ends only perform query operations. UFW requires root on the
-    // common distributions. firewalld may allow unprivileged D-Bus reads, but
-    // the same sudo retry covers hosts whose policy denies them.
+    // UFW requires root on common distributions; policy can deny firewalld's unprivileged D-Bus reads.
     r#"env LC_ALL=C sh -c '
 if command -v ufw >/dev/null 2>&1; then
   printf "__CR_FW_BACKEND__\tufw\n"
@@ -1224,8 +1150,6 @@ fn parse_firewalld_status(text: &str, collected_at: String) -> FirewallStatus {
         backend: Some("firewalld".into()),
         available: true,
         active,
-        // firewalld policies depend on zones, interfaces, and sources. A
-        // single global incoming default would be false precision.
         default_incoming: None,
         rules,
         packet_filter: None,
@@ -1296,9 +1220,7 @@ pub fn list_connections(
 }
 
 fn connections_command() -> &'static str {
-    // One bounded, read-only snapshot of currently established TCP connections.
-    // Process ownership is only visible for the caller's own processes without
-    // privilege; peers without ownership still contribute to the counts.
+    // Without privilege, ss shows process ownership only for the caller's own processes.
     r#"env LC_ALL=C sh -c 'ss -H -tnp state established 2>/dev/null | head -n 4000; printf "\n__CONTROL_ROOM_PROCESS_UNITS__\n"; ps -eo pid=,unit=,comm= 2>/dev/null || true'"#
 }
 
@@ -1444,13 +1366,7 @@ pub(crate) fn validate_stable_container_id(value: &str) -> Result<&str, String> 
 }
 
 fn docker_container_inspect_command(container_id: &str) -> String {
-    // Emit the raw container JSON and parse it in Rust. A `docker inspect
-    // --format` template cannot read optional nested fields such as
-    // `.State.Health` safely: on a container with no healthcheck the field is
-    // absent, and Docker's raw-JSON fallback runs the template with
-    // `missingkey=error`, so even an `{{if .State.Health}}` guard fails with
-    // "map has no entry for key". The container id is validated to 64 hex
-    // characters before it reaches this command, so it carries no shell syntax.
+    // docker inspect --format fails on absent optional fields such as .State.Health (missingkey=error).
     format!("docker inspect --type container -- '{container_id}'")
 }
 
@@ -1498,7 +1414,6 @@ pub(crate) fn parse_container_details(text: &str) -> Result<DockerContainerDetai
         .and_then(Value::as_object)
     {
         for (container_port, bindings) in entries {
-            // An exposed-but-unpublished port maps to a null binding list.
             let Some(bindings) = bindings.as_array() else {
                 continue;
             };
@@ -2192,7 +2107,6 @@ swapfree=1048576\n";
     #[test]
     fn reads_cpu_busy_share_from_the_two_proc_stat_samples() {
         let resources = parse_host_resources(RESOURCE_OUTPUT);
-        // 200 jiffies elapsed, 150 of them idle, so a quarter was busy.
         assert_eq!(resources.cpu_percent, Some(25.0));
         assert_eq!(resources.core_count, Some(4));
         assert_eq!(resources.load1, Some(0.15));
@@ -2216,7 +2130,6 @@ printf 'cpu 4294967296 10 20 4294967296 10 20 30 40 100 20\n' > "$fixture"
         );
         let mut process = background_command(bash.program());
         process.args(["--noprofile", "--norc", "-c", &script]);
-        // This verifies counter arithmetic, not Git Bash startup under parallel tests.
         let output = run_process(process, "cpu_fixture", None, COMMAND_TIMEOUT)
             .unwrap()
             .success_text()
@@ -2233,7 +2146,6 @@ printf 'cpu 4294967296 10 20 4294967296 10 20 30 40 100 20\n' > "$fixture"
         );
     }
 
-    // A host that exposes no /proc/stat must not read as an idle one.
     #[test]
     fn reports_an_unmeasured_cpu_as_missing_rather_than_zero() {
         let resources = parse_host_resources("cores=2\nmemtotal=100\n");
@@ -2280,8 +2192,6 @@ printf 'cpu 4294967296 10 20 4294967296 10 20 30 40 100 20\n' > "$fixture"
         assert_eq!(parse_host_resources(text).cpu_percent, None);
     }
 
-    // Counters reset when a container is restarted under it. Clamping keeps the
-    // busy share inside 0 to 100 rather than emitting a negative width bar.
     #[test]
     fn clamps_a_counter_reset_rather_than_reporting_negative_load() {
         let text = "cpu_total_1=100\ncpu_idle_1=90\ncpu_total_2=300\ncpu_idle_2=1000\n";
@@ -2336,10 +2246,6 @@ printf 'cpu 4294967296 10 20 4294967296 10 20 30 40 100 20\n' > "$fixture"
 
     #[test]
     fn ports_only_offers_navigation_to_units_the_systemd_view_lists() {
-        // Real output: pid 1 runs under init.scope, and desktop or login
-        // sessions run under session-N.scope. The shared validator accepts
-        // those, which would have turned them into click-throughs to a unit
-        // the Systemd view never lists.
         let text = concat!(
             "tcp LISTEN 0 4096 0.0.0.0:22 0.0.0.0:* ",
             "users:((\"sshd\",pid=1276,fd=3))
@@ -2362,7 +2268,6 @@ __CONTROL_ROOM_PROCESS_UNITS__
 
         let activated = sockets.iter().find(|s| s.port == 2375).expect("port 2375");
         assert_eq!(activated.process_name.as_deref(), Some("systemd"));
-        // The owner is still reported; only the dead navigation target is not.
         assert_eq!(activated.systemd_unit, None);
 
         assert!(is_navigable_systemd_unit("ssh.service"));
@@ -2370,7 +2275,6 @@ __CONTROL_ROOM_PROCESS_UNITS__
         assert!(!is_navigable_systemd_unit("init.scope"));
         assert!(!is_navigable_systemd_unit("user.slice"));
         assert!(!is_navigable_systemd_unit("multi-user.target"));
-        // The shared validator itself still accepts these for journal reads.
         assert!(validate_systemd_unit_id("init.scope").is_ok());
         assert!(validate_systemd_unit_id("multi-user.target").is_ok());
     }
@@ -2433,9 +2337,6 @@ __CONTROL_ROOM_PROCESS_UNITS__
 
     #[test]
     fn socket_activated_sshd_is_owned_by_sshd_not_by_systemd() {
-        // Real output from an Ubuntu 24.04 host read as root. ssh.socket means
-        // pid 1 holds the listening fd alongside sshd. Before this rule the two
-        // names disagreed and port 22 reported no owner at all.
         let text = concat!(
             "tcp LISTEN 0 4096 0.0.0.0:22 0.0.0.0:* ",
             "users:((\"sshd\",pid=1276,fd=3),(\"systemd\",pid=1,fd=94))
@@ -2451,15 +2352,11 @@ __CONTROL_ROOM_PROCESS_UNITS__
         assert_eq!(ssh.ownership, "known");
         assert_eq!(ssh.process_id, Some(1276));
         assert_eq!(ssh.process_name.as_deref(), Some("sshd"));
-        // A single owning PID is what unlocks systemd navigation, so the unit
-        // has to come through with it.
         assert_eq!(ssh.systemd_unit.as_deref(), Some("ssh.service"));
     }
 
     #[test]
     fn a_socket_waiting_on_activation_still_reports_systemd() {
-        // Nothing has been started behind this socket yet, so pid 1 is the only
-        // holder and is the honest answer rather than an artifact to drop.
         let text = concat!(
             "tcp LISTEN 0 4096 0.0.0.0:2375 0.0.0.0:* ",
             "users:((\"systemd\",pid=1,fd=120))
@@ -2475,8 +2372,6 @@ __CONTROL_ROOM_PROCESS_UNITS__
 
     #[test]
     fn dropping_the_supervisor_does_not_invent_an_owner_for_real_rivals() {
-        // Two genuinely different services on one socket stay ambiguous. The
-        // rule removes systemd's activation claim, not disagreement.
         let text = concat!(
             "tcp LISTEN 0 4096 0.0.0.0:8080 0.0.0.0:* ",
             "users:((\"nginx\",pid=900,fd=6),(\"haproxy\",pid=901,fd=7),(\"systemd\",pid=1,fd=9))
@@ -2492,9 +2387,6 @@ __CONTROL_ROOM_PROCESS_UNITS__
 
     #[test]
     fn an_unelevated_read_reports_no_owner_at_all() {
-        // The same host read without elevation: ss prints no users:(...) column,
-        // so every listener is unattributed. This is the one case sudo does fix,
-        // and the Ports banner has to tell it apart from the cases sudo cannot.
         let text = concat!(
             "tcp LISTEN 0 4096 0.0.0.0:22 0.0.0.0:*
 ",
@@ -2509,8 +2401,6 @@ __CONTROL_ROOM_PROCESS_UNITS__
 
     #[test]
     fn a_process_merely_named_systemd_is_not_the_supervisor() {
-        // systemd-resolve is a service like any other. Only pid 1 itself is the
-        // activation supervisor.
         let text = concat!(
             "udp UNCONN 0 0 127.0.0.53:53 0.0.0.0:* ",
             "users:((\"systemd-resolve\",pid=673,fd=14),(\"unbound\",pid=674,fd=3))
@@ -2525,8 +2415,6 @@ __CONTROL_ROOM_PROCESS_UNITS__
 
     #[test]
     fn shared_name_multiprocess_listener_keeps_the_process_name_but_not_ownership() {
-        // A prefork/worker server (nginx master + workers) reports one socket
-        // held by several PIDs that all share a process name.
         let sockets = parse_listening_sockets(
             "tcp LISTEN 0 511 0.0.0.0:443 0.0.0.0:* users:((\"nginx\",pid=742,fd=6),(\"nginx\",pid=743,fd=6),(\"nginx\",pid=744,fd=6))\n\
              __CONTROL_ROOM_PROCESS_UNITS__\n\
@@ -2535,10 +2423,7 @@ __CONTROL_ROOM_PROCESS_UNITS__
         .unwrap();
 
         assert_eq!(sockets.len(), 1);
-        // Process name is an unambiguous kernel fact and must survive for
-        // display and filtering.
         assert_eq!(sockets[0].process_name.as_deref(), Some("nginx"));
-        // The owning PID and systemd correlation are genuinely ambiguous.
         assert_eq!(sockets[0].ownership, "ambiguous");
         assert_eq!(sockets[0].process_id, None);
         assert_eq!(sockets[0].systemd_unit, None);
@@ -2579,7 +2464,6 @@ __CONTROL_ROOM_PROCESS_UNITS__
         assert_eq!(status.rules[0].port, Some(22));
         assert_eq!(status.rules[0].protocol.as_deref(), Some("tcp"));
         assert_eq!(status.rules[0].from, "Anywhere");
-        // A bare port keeps no protocol; a private source is preserved verbatim.
         assert_eq!(status.rules[1].port, Some(443));
         assert_eq!(status.rules[1].protocol, None);
         assert_eq!(status.rules[2].from, "192.168.0.0/16");
@@ -2655,11 +2539,7 @@ esac
         let script = capability_command();
         assert!(script.contains("passwordless_sudo=true"));
         assert!(script.contains("passwordless_sudo=false"));
-        // The probe must tolerate a host with no sudo at all rather than
-        // reporting a "command not found" failure as "no passwordless sudo".
         assert!(script.contains("command -v sudo >/dev/null 2>&1 && sudo -n true"));
-        // Identity has to come from the connecting account. Elevating the whole
-        // script would report root as the default shell on every host.
         assert!(script.contains("account_name=$(id -un"));
         assert!(!script.contains("sudo -n id"));
         assert!(!script.contains("sudo -n getent"));
@@ -2669,8 +2549,6 @@ esac
     fn docker_reachable_only_under_sudo_is_recorded_separately() {
         let script = capability_command();
         assert!(script.contains("docker_accessible_with_sudo=true"));
-        // The sudo fallback runs only after the direct probe failed, so a host
-        // the account can already reach never spends a second round trip.
         let direct = script.find("docker_accessible=true").expect("direct probe");
         let fallback = script
             .find("docker_accessible_with_sudo=true")
@@ -2694,8 +2572,6 @@ esac
             command,
             "if sudo -n true 2>/dev/null; then sudo -n -- ss -H -lntupO; else ss -H -lntupO; fi"
         );
-        // The fallback matters: an account without passwordless sudo still gets
-        // the unelevated read instead of a sudo error.
         assert!(!command.contains("sudo -S"));
     }
 
@@ -2780,7 +2656,6 @@ esac
         assert_eq!(overview.total_established, 4);
         assert!(!overview.truncated);
         assert_eq!(overview.groups.len(), 2);
-        // Busiest listener first.
         let https = &overview.groups[0];
         assert_eq!(https.local_port, 443);
         assert_eq!(https.systemd_unit.as_deref(), Some("nginx.service"));
@@ -2788,7 +2663,6 @@ esac
         assert_eq!(https.remote_address_count, 2);
         assert_eq!(https.remotes[0].address, "203.0.113.9");
         assert_eq!(https.remotes[0].count, 2);
-        // Mixed PIDs behind one service leave no single PID.
         assert_eq!(https.process_id, None);
         let ssh = &overview.groups[1];
         assert_eq!(ssh.local_port, 22);
@@ -2837,8 +2711,6 @@ esac
     #[test]
     fn parses_unhealthy_compose_container_details_without_sensitive_values() {
         let id = "a".repeat(64);
-        // Raw `docker inspect` output. The parser must surface only approved
-        // fields even though Env, host mount Source, and health Log are present.
         let json = r#"[{
             "Id":"__ID__","Name":"/gateway-1","Image":"sha256:abc",
             "Config":{
@@ -2887,7 +2759,6 @@ esac
         );
         assert_eq!(details.published_ports[0].host_port, 443);
 
-        // Env, host mount source, and health-check logs are never exposed.
         let serialized = serde_json::to_string(&details).unwrap();
         assert!(!serialized.contains("should-not-surface"));
         assert!(!serialized.contains("/host/secret"));
@@ -2898,9 +2769,6 @@ esac
     #[test]
     fn parses_stopped_non_compose_container_without_health_or_bindings() {
         let id = "b".repeat(64);
-        // A container with no healthcheck has no `State.Health` key at all, and
-        // an exposed-but-unpublished port maps to a null binding list. Both must
-        // parse cleanly rather than fail.
         let json = r#"[{
             "Id":"__ID__","Name":"/job","Image":"sha256:def",
             "Config":{"Image":"job:1","Labels":{}},
@@ -2935,7 +2803,6 @@ esac
         let command = docker_container_inspect_command(&id);
         assert!(command.starts_with("docker inspect --type container -- "));
         assert!(command.ends_with(&format!("'{id}'")));
-        // No Go template projection: raw JSON is fetched once and filtered in Rust.
         assert!(!command.contains("--format"));
         assert!(!command.contains("{{"));
         for mutation in [" start ", " stop ", " restart ", " rm ", " exec "] {
@@ -2951,8 +2818,6 @@ esac
         assert!(command.contains(&format!(
             "docker exec -it -e TERM=xterm-256color '{id}' sh -c '{CONTAINER_SHELL_SCRIPT}'"
         )));
-        // bash when the image has it, otherwise sh, and no quotes that could
-        // close the surrounding argument.
         assert!(CONTAINER_SHELL_SCRIPT.contains("exec bash"));
         assert!(CONTAINER_SHELL_SCRIPT.contains("exec sh"));
         assert!(!CONTAINER_SHELL_SCRIPT.contains(['\'', '"']));
@@ -2961,7 +2826,6 @@ esac
             assert!(!command.contains(mutation));
         }
 
-        // A short ID, a name, or shell syntax never reaches the host.
         for rejected in [
             "short",
             "web",
@@ -2981,7 +2845,6 @@ esac
         assert!(command.contains("if docker version >/dev/null 2>&1; "));
         assert!(command.contains(&direct));
         assert!(command.contains(&elevated));
-        // Never `sudo -n`: the prompt belongs in the interactive terminal.
         assert!(!command.contains("sudo -n"));
     }
 
@@ -3112,7 +2975,6 @@ esac
 
     #[test]
     fn restricted_journal_hint_is_reported_once_while_the_stream_runs() {
-        /// Delivers a few bytes per read, as SSH does, so the hint spans reads.
         struct Trickle(Cursor<Vec<u8>>);
         impl Read for Trickle {
             fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
@@ -3206,19 +3068,12 @@ esac
             .err()
             .expect("the third operation should time out");
 
-        // The message names the bound callers actually get, which is always
-        // `MAX_STRUCTURED_QUEUE_WAIT`. Only tests shorten the wait.
         assert_eq!(error, "Remote operation queue was busy for 4 seconds");
         drop(first);
         drop(second);
         assert_eq!(limiter.tracked_connections(), 0);
     }
 
-    /// `MAX_STRUCTURED_QUEUE_WAIT` is a total budget, not a gap between
-    /// wake-ups. Waiting again for a full budget after every notification left
-    /// queue time unbounded, so a caller could sit here far longer than the
-    /// frontend backstop allows and lose Rust's real error. Waking the queue
-    /// repeatedly while both slots stay held reproduces exactly that.
     #[test]
     fn waking_a_queued_operation_does_not_extend_its_deadline() {
         const WAIT: Duration = Duration::from_millis(200);
@@ -3238,9 +3093,6 @@ esac
             }
         });
 
-        // Wake far longer than one budget, at a gap well under it. The old
-        // implementation restarted the wait on every notification and only
-        // expired once these stopped.
         let churn_until = Instant::now() + WAIT * 8;
         while Instant::now() < churn_until && !finished.load(Ordering::SeqCst) {
             thread::sleep(WAIT / 5);
@@ -3249,8 +3101,6 @@ esac
 
         let (timed_out, elapsed) = waiter.join().unwrap();
         assert!(timed_out, "the queued operation should have timed out");
-        // Generous against CI scheduling, still far below the old behaviour,
-        // which could not finish before the churn window closed at 8 budgets.
         assert!(
             elapsed < WAIT * 4,
             "queue wait was not bounded by its deadline: {elapsed:?}"
@@ -3284,8 +3134,6 @@ esac
         assert_eq!(limiter.tracked_connections(), 0);
     }
 
-    /// A connection that timed out must not stay in the map once its permits
-    /// are released, and reusing the id afterwards must not leak an entry.
     #[test]
     fn the_limiter_forgets_a_connection_after_a_timeout_and_a_success() {
         const WAIT: Duration = Duration::from_millis(50);
@@ -3304,9 +3152,6 @@ esac
         assert_eq!(limiter.tracked_connections(), 0);
     }
 
-    /// The cap is per connection, so a host being read hard must not stall a
-    /// read of a different host. A single global limit would pass every other
-    /// limiter test and fail this one.
     #[test]
     fn a_saturated_connection_does_not_delay_a_different_one() {
         const WAIT: Duration = Duration::from_millis(50);
@@ -3319,14 +3164,12 @@ esac
             "connection-a is saturated"
         );
 
-        // Another connection is unaffected, and gets its own full allowance.
         let third = limiter.acquire_for("connection-b", Duration::ZERO).unwrap();
         let fourth = limiter.acquire_for("connection-b", Duration::ZERO).unwrap();
         assert!(!third.shares_a_limit_with(&first));
         assert!(limiter.acquire_for("connection-b", WAIT).is_err());
         assert_eq!(limiter.tracked_connections(), 2);
 
-        // Draining one leaves the other exactly as it was.
         drop(third);
         drop(fourth);
         assert_eq!(limiter.tracked_connections(), 1);
@@ -3337,8 +3180,6 @@ esac
         assert_eq!(limiter.tracked_connections(), 0);
     }
 
-    /// Every Structured Operation takes and releases a permit, so a Workspace
-    /// left open for a day runs thousands of these. Nothing may accumulate.
     #[test]
     fn repeated_operations_leave_no_trace_of_the_connections_they_used() {
         let limiter = RemoteOperationLimiter::default();
@@ -3357,27 +3198,10 @@ esac
         }
     }
 
-    /// CR-AUDIT-003. Looking a connection's limit up in the map and claiming a
-    /// slot on it are two steps, and the entry can be dropped from the map in
-    /// between.
-    ///
-    /// A caller reads the map, gets the limit both live permits are counted
-    /// against, and is descheduled. Both permits are released. The second
-    /// release sees the count at zero, finds its own limit still in the map,
-    /// and removes it. The caller resumes holding an `Arc` to a limit nothing
-    /// else can reach, finds it idle, and claims a slot on it. The next request
-    /// for the same connection finds no entry and creates a second limit, which
-    /// admits two more.
-    ///
-    /// Three Structured Operations then run against one host with a cap of two,
-    /// and the cap is what keeps a bounded read from becoming load on someone's
-    /// machine. The hook only decides *when* the caller resumes; the window it
-    /// pauses in is ordinary scheduling.
     #[test]
     fn a_connection_cannot_exceed_its_operation_limit_across_a_map_eviction() {
         const WAIT: Duration = Duration::from_secs(5);
 
-        // The hook pauses exactly one lookup, the third caller's.
         let armed = Arc::new(AtomicBool::new(false));
         let (reached_lookup, lookup_reached) = mpsc::channel();
         let (release_lookup, lookup_released) = mpsc::channel::<()>();
@@ -3401,20 +3225,14 @@ esac
             move || limiter.acquire_for("connection-a", WAIT).unwrap()
         });
 
-        // The third caller now holds the same limit the two permits are counted
-        // against, and has not yet claimed a slot on it.
         lookup_reached.recv_timeout(WAIT).unwrap();
 
-        // The release path runs while that caller is still in the window. It
-        // sees no permits held, and used to evict the entry on that alone.
         drop(first);
         drop(second);
 
         release_lookup.send(()).unwrap();
         let third = queued.join().unwrap();
 
-        // A fresh request for the same connection. If the third permit is
-        // counted against an evicted limit, this one starts from zero.
         let fourth = limiter.acquire_for("connection-a", WAIT).unwrap();
 
         assert!(
@@ -3434,10 +3252,6 @@ esac
         );
     }
 
-    /// Unit names a Remote Host printed. The Systemd view lists what it was
-    /// told, and opening a Log Stream sends that name back as the thing to
-    /// read, so a host that answers with a name of its own choosing is
-    /// choosing part of the next command.
     const HOSTILE_UNIT_NAMES: [&str; 20] = [
         "nginx.service; reboot",
         "nginx.service && reboot",
@@ -3461,25 +3275,13 @@ esac
         "nginx.unknown",
     ];
 
-    /// The full chain for a host-controlled identifier: the host prints it, a
-    /// parser reads it, the model carries it, the user opens its logs, and a
-    /// command is built around it. The guard sits at the parser and again at
-    /// the request, and this pins both ends at once.
-    ///
-    /// Parser tests and command-builder tests each cover half of this. Neither
-    /// says that the value one produces is a value the other accepts.
     #[test]
     fn a_unit_name_a_host_invented_never_reaches_a_journal_command() {
         for unit in HOSTILE_UNIT_NAMES {
-            // The listing parser filters on the unit type rather than the
-            // character class, so a name like this can reach the Systemd view
-            // and be clicked. The view repeats what the host said.
             let listed = parse_systemd_units(&format!(
                 "Id={unit}\nDescription=x\nLoadState=loaded\nActiveState=active\nSubState=running\nUnitFileState=enabled\n"
             ));
 
-            // Listed or not, opening its logs is refused, so it never becomes
-            // part of a command. This is the door the whole chain rests on.
             assert!(
                 validate_systemd_unit_id(unit).is_err(),
                 "the log request accepted {unit:?} (listed: {})",
@@ -3488,10 +3290,6 @@ esac
         }
     }
 
-    /// The command puts the identifier inside single quotes, so the property
-    /// that matters is that nothing the validator accepts can leave them. A
-    /// value with a quote in it would end the quoted word and turn the rest
-    /// into shell syntax.
     #[test]
     fn every_accepted_unit_id_stays_one_quoted_word_in_its_journal_command() {
         let accepted = [
@@ -3511,16 +3309,9 @@ esac
             "proc-sys-fs-binfmt_misc.automount",
             "systemd-ask-password-wall.path",
             "a.service",
-            // A unit name may start with a hyphen, and one that does is safe
-            // here for the same reason a hyphenated username is safe after
-            // ssh's `-l`: it sits inside the quoted argument of `-u`, and
-            // getopt consumes that entry whatever it looks like. Refusing
-            // these would make the validator the thing that blocks real units.
             "--user.service",
             "-u.service",
         ];
-        // The longest name the validator allows, so the bound is exercised by
-        // the same property rather than only by a length check.
         let longest = format!("{}.service", "n".repeat(255 - ".service".len()));
 
         for unit in accepted
@@ -3542,8 +3333,6 @@ esac
                 command.contains(&format!("-u '{unit}'")),
                 "the unit is not the quoted argument of -u: {command}"
             );
-            // Two quotes in the whole command, which are the ones this builder
-            // wrote around the identifier.
             assert_eq!(
                 command.matches('\'').count(),
                 2,
@@ -3552,8 +3341,6 @@ esac
         }
     }
 
-    /// The same chain for containers. A container's own name is chosen by
-    /// whoever ran it, and Docker's listing repeats it back.
     #[test]
     fn a_container_id_a_host_invented_never_reaches_a_docker_command() {
         for container in [
@@ -3598,10 +3385,6 @@ esac
         }
     }
 
-    /// The tail count is a fixed list the Settings page offers, not a number
-    /// the caller picks, so the request takes exactly that list and the
-    /// neighbours of each entry are refused. An unbounded tail is what turns a
-    /// bounded read into a transfer.
     #[test]
     fn a_log_tail_is_one_of_the_counts_the_app_offers() {
         assert!(!LOG_TAIL_OPTIONS.is_empty());

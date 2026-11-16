@@ -1,4 +1,3 @@
-//! Keep AppKit's real window buttons centered on the overlay header.
 use std::{
     cell::{Cell, RefCell},
     collections::HashMap,
@@ -26,9 +25,6 @@ thread_local! {
     static ALIGNING: Cell<bool> = const { Cell::new(false) };
 }
 
-// The webview has a one-point border and a 42-point header whose bottom border
-// leaves 41 points of content. The native desktop test compares this center
-// with the rendered header in normal, Settings, and Focus modes.
 const HEADER_CENTER_Y: f64 = 21.5;
 
 pub(crate) fn watch(window: &tauri::Window) {
@@ -225,8 +221,6 @@ pub(crate) fn lifecycle_probe(window: &tauri::Window) -> Result<LifecycleProbe, 
     after.y += 7.0;
     close.setFrameOrigin(after);
     let unobserved_delta = close.frame().origin.y - before.y;
-    // Keep the hidden test window safe even if a close-notification regression
-    // leaves tokens behind. The measurements above still expose that failure.
     remove_observers("native-chrome-lifecycle-probe");
     Ok(LifecycleProbe {
         windows_before,
@@ -282,7 +276,7 @@ fn align_on_main_thread(address: usize) -> Result<(), String> {
     // runs only on the main thread and will-close removes it before teardown.
     let native = unsafe { &*(address as *const NSWindow) };
     if native.styleMask().contains(NSWindowStyleMask::FullScreen) {
-        // AppKit owns the separate fullscreen titlebar. Align again on restore.
+        // AppKit owns the separate fullscreen titlebar.
         return Ok(());
     }
     let content = native.contentView().ok_or("Missing native content view")?;
@@ -313,9 +307,7 @@ fn align_on_main_thread(address: usize) -> Result<(), String> {
         if delta.abs() < 0.01 {
             continue;
         }
-        // Tauri's inset preserves each button's current Y. Correct that native
-        // frame, which differs between macOS releases, without replacing its
-        // size, horizontal spacing, action, or hover/hit behavior.
+        // Tauri's inset keeps each button's Y, which differs between macOS releases.
         // SAFETY: AppKit's standard window button has an NSView parent; both
         // views stay retained and all access is on the main thread.
         let parent = unsafe { button.superview() }.ok_or("Missing native button parent")?;

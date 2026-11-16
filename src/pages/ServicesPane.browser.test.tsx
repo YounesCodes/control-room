@@ -189,8 +189,6 @@ it.each([360, 1280])("slides the relationship category selection fill at %ipx", 
             animation instanceof CSSTransition &&
             (animation.effect as KeyframeEffect).target === group,
         );
-    // Pause each slide as it starts: a slow runner can otherwise finish it
-    // before the test samples the midpoint.
     const hold = () => {
       for (const animation of slides()) animation.pause();
     };
@@ -293,7 +291,6 @@ it.each([360, 1280])("slides and resizes the view selection fill at %ipx", async
   aligned(explorer);
   await page.getByRole("button", { name: "Dependency graph worker.service" }).click();
   await settleMotion();
-  // The slide can start after the settle check on a slow runner.
   await waitFor(() => aligned(relationships));
   await page.viewport(width === 360 ? 1280 : 360, 800);
   await waitFor(() => aligned(relationships));
@@ -681,7 +678,6 @@ it("keeps the scope switch accessible at narrow widths and preserves complete gr
   const selectedFill = getComputedStyle(scope, "::before");
   const duration = parseFloat(selectedFill.transitionDuration);
   expect(duration).toBe(0.18);
-  // Sample the rendered fill between the two options, including reversal.
   screen.getByRole("button", { name: "All units" }).click();
   const slide = await waitFor(() => {
     const transition = scope
@@ -731,7 +727,6 @@ it("glides one shared service highlight and retargets it during rapid switching"
   expect(Math.abs(new DOMMatrix(getComputedStyle(marker).transform).m42 - middle)).toBeLessThan(1);
   retargeted.finish();
   await settleMotion();
-  // The glide can start after the first settle check on slower runners.
   await waitFor(() => expect(new DOMMatrix(getComputedStyle(marker).transform).m42).toBe(44));
   expect(marker.getBoundingClientRect().height).toBeCloseTo(44, 2);
   expect(getComputedStyle(marker).borderRadius).not.toBe("0px");
@@ -740,7 +735,6 @@ it("glides one shared service highlight and retargets it during rapid switching"
   row.focus();
   await userEvent.keyboard("{ArrowDown}");
   await settleMotion();
-  // The glide can start after the first settle check on slower runners.
   await waitFor(() => expect(new DOMMatrix(getComputedStyle(marker).transform).m42).toBe(88));
   expect(document.activeElement?.getAttribute("aria-pressed")).toBe("true");
   expect(getComputedStyle(document.activeElement!).outlineStyle).toBe("none");
@@ -1237,7 +1231,6 @@ it("refits and zooms in both directions on show more and show less, including in
   const beforeExpansion = focused.getBoundingClientRect();
   const contained = async () => {
     await settleMotion();
-    // The refit can begin after the first settle check on slower runners.
     await waitFor(
       () => {
         const bounds = graph.getBoundingClientRect();
@@ -1255,8 +1248,6 @@ it("refits and zooms in both directions on show more and show less, including in
     );
     await settleMotion();
   };
-  // A direct click renders the expansion before the refit camera can move,
-  // which a driver round trip on a slow runner cannot guarantee.
   screen.getByRole("button", { name: /Show more/ }).click();
   const firstFrame = focused.getBoundingClientRect();
   expect(
@@ -1464,7 +1455,6 @@ it.each(["After", "Before"])(
     await page.getByRole("button", { name: "Ordering", exact: true }).click();
     await waitFor(() => expect(document.querySelectorAll(".systemd-graph-node")).toHaveLength(7));
     await settleMotion();
-    // The recentering camera can start after the settle check on slow runners.
     await waitFor(
       () => {
         const plot = screen
@@ -1824,7 +1814,6 @@ it("supports focused expansion, camera controls, pointer refocusing and focus re
     expect(within(graph).getByRole("button", { name: /^storage.target/ })).toBeTruthy(),
   );
   await settleMotion();
-  // Slow runners can start the refit camera after the expansion settles.
   await waitFor(
     () => {
       const bounds = graph.getBoundingClientRect();
@@ -2007,7 +1996,6 @@ it.each([360, 960, 1400])(
     expect(inspector.getBoundingClientRect().height).toBeLessThan(450);
     expect(screen.queryByText("Condition passed")).toBeNull();
     expect(inspector.querySelectorAll("details[open]")).toHaveLength(0);
-    // Contrast is measured on the settled panel, not mid-fade.
     await entrance.finished;
     expect((await audit()).violations).toEqual([]);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);

@@ -45,12 +45,10 @@ describe("TooltipLayer", () => {
     fireEvent.focusIn(settings);
     fireEvent.blur(window);
     expect(screen.queryByRole("tooltip")).toBeNull();
-    // Switching back to the app restores focus without any key or pointer input.
     fireEvent.focus(window);
     fireEvent.focusIn(settings);
     expect(screen.queryByRole("tooltip")).toBeNull();
 
-    // The next focus the user moves still shows help.
     fireEvent.keyDown(document, { key: "Tab" });
     fireEvent.focusIn(search);
     expect(screen.getByRole("tooltip").textContent).toBe("Search");

@@ -41,8 +41,7 @@ describe("Resizable panels in the native app", () => {
       ipc<boolean>(isMac ? "plugin:window|is_fullscreen" : "plugin:window|is_maximized", {
         label: "main",
       });
-    // The normal Mac traffic-light action enters full screen. Windows uses
-    // maximize; AppKit's optional zoom has different standard-frame semantics.
+    // The Mac traffic-light action enters full screen; AppKit zoom has different standard-frame semantics.
     if (isMac) await browser.fullscreenWindow();
     else await $("aria/Maximize or restore window").click();
     await browser.waitUntil(expanded);

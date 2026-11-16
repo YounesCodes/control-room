@@ -215,8 +215,6 @@ describe("Settings actions", () => {
     expect((enabled as HTMLInputElement).checked).toBe(false);
     await userEvent.click(enabled);
     await userEvent.click(screen.getByRole("checkbox", { name: "GPU" }));
-    // The slider steps over 2, 5, 10, and 30 seconds; the third stop is 10.
-    // The label names the unit, so the stops can show bare numbers.
     const refresh = screen.getByRole("slider", { name: "Host metrics refresh interval (seconds)" });
     expect(refresh.getAttribute("aria-valuetext")).toBe("Every 5 seconds");
     fireEvent.change(refresh, { target: { value: "2" } });
@@ -358,8 +356,6 @@ describe("Settings actions", () => {
   it("keeps Back and Save reachable without scrolling to the end of the form", () => {
     renderPane();
 
-    // Both live in the header, above the scrolling region, so neither depends
-    // on how far down the form the reader has gone.
     const header = screen.getByRole("banner");
     expect(header.contains(screen.getByRole("button", { name: "Close Settings" }))).toBe(true);
     expect(header.contains(saveButton())).toBe(true);
@@ -394,8 +390,6 @@ describe("Settings actions", () => {
     expect(props.onSaved).toHaveBeenCalled();
     expect(await screen.findByText("Settings saved.")).toBeTruthy();
 
-    // The result described the draft that was saved, so editing again retires it
-    // rather than leaving a stale "saved" beside a form that has since moved on.
     await user.type(fontSize, "0");
     expect(screen.queryByText("Settings saved.")).toBeNull();
   });
@@ -504,7 +498,6 @@ describe("Settings actions", () => {
     const preference = screen.getByLabelText("Automatically check for updates") as HTMLInputElement;
     expect(preference.checked).toBe(false);
 
-    // Turning the schedule off is not the same as refusing to look.
     fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
     await user.click(screen.getByRole("button", { name: /Check for updates/ }));
     expect(onCheckForUpdates).toHaveBeenCalledTimes(1);
@@ -540,8 +533,6 @@ describe("Settings actions", () => {
 
   it("keeps app updates verbally distinct from Remote Host packages", () => {
     renderPane();
-    // AGENTS.md rules out remote package management entirely, so this section
-    // must not read as if it could update anything on a Linux host.
     expect(screen.getByText("Control Room updates")).toBeTruthy();
     expect(screen.queryByText(/Remote Host packages/i)).toBeNull();
   });
@@ -558,7 +549,6 @@ describe("Settings actions", () => {
 
     expect(await screen.findByText("Settings file is read only")).toBeTruthy();
     expect(props.onSaved).not.toHaveBeenCalled();
-    // Still dirty, so the reader can correct the problem and try again.
     expect(saveButton().disabled).toBe(false);
   });
 
@@ -569,8 +559,6 @@ describe("Settings actions", () => {
     expect(screen.getByText("Local terminals")).toBeTruthy();
     expect(screen.getByLabelText("Offer PowerShell 7")).toBeTruthy();
     expect(screen.getByLabelText("Offer Git Bash")).toBeTruthy();
-    // The administrator row is a separate entry with its own label, because the
-    // launcher offers it as one.
     expect(screen.getByText("Run as administrator")).toBeTruthy();
     expect(screen.getByLabelText("Offer PowerShell 7, run as administrator")).toBeTruthy();
   });
@@ -615,7 +603,6 @@ describe("Settings actions", () => {
     expect(screen.queryByRole("button", { name: /Show all/ })).toBeNull();
     await user.click(toggle);
     expect((screen.getByLabelText("Offer Git Bash") as HTMLInputElement).checked).toBe(true);
-    // Still a draft: every other Settings change is confirmed the same way.
     expect(saveButton().disabled).toBe(false);
     expect(screen.getByText("Unsaved changes")).toBeTruthy();
     await user.click(saveButton());

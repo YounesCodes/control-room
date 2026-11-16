@@ -29,8 +29,6 @@ describe("titlebar update indicator", () => {
     const { container } = render(
       <UpdateIndicator state={{ status: "idle" }} onDownload={vi.fn()} onRestart={vi.fn()} />,
     );
-    // Not a hidden node, not an empty wrapper: an up-to-date titlebar is the
-    // titlebar that existed before this feature.
     expect(container.innerHTML).toBe("");
   });
 
@@ -46,7 +44,6 @@ describe("titlebar update indicator", () => {
     const button = screen.getByRole("button", { name: "Update available: Control Room 0.7.0" });
     expect(button.textContent).toBe("");
     expect(button.title).toBe("Update available");
-    // The control must not participate in window dragging.
     expect(button.closest("[data-tauri-drag-region]")).toBeNull();
   });
 
@@ -84,7 +81,6 @@ describe("titlebar update indicator", () => {
     expect(within(panel).getByText("Local terminals")).toBeTruthy();
     expect(within(panel).getByText("Added")).toBeTruthy();
 
-    // Opening the details must not have started anything.
     expect(onDownload).not.toHaveBeenCalled();
     expect(onRestart).not.toHaveBeenCalled();
 
@@ -110,7 +106,6 @@ describe("titlebar update indicator", () => {
     await user.click(screen.getByRole("button", { name: /Update available/ }));
     const panel = screen.getByRole("dialog");
 
-    // The tag is present as text, and no element was created from it.
     expect(within(panel).getByText('<img src=x onerror="window.__pwned = true">')).toBeTruthy();
     expect(panel.querySelector("img")).toBeNull();
     expect((window as unknown as { __pwned?: boolean }).__pwned).toBeUndefined();
@@ -135,8 +130,6 @@ describe("titlebar update indicator", () => {
     expect(
       within(panel).getByText("The update signature did not verify, so it was not installed."),
     ).toBeTruthy();
-    // Retrying the download is allowed; installing the rejected bytes is not
-    // offered anywhere.
     expect(within(panel).queryByRole("button", { name: /install/i })).toBeNull();
     expect(within(panel).getByRole("button", { name: /Try again/ })).toBeTruthy();
   });
@@ -168,8 +161,6 @@ describe("titlebar update indicator", () => {
     await user.click(screen.getByRole("button", { name: /Restart to update/ }));
     expect(screen.getByRole("dialog")).toBeTruthy();
 
-    // Installing replaces this process; a panel describing an offer that has
-    // been accepted has nothing left to say.
     rerender(
       <UpdateIndicator
         state={{ status: "installing", info }}
@@ -218,8 +209,6 @@ describe("what's new dialog", () => {
         onDismiss={vi.fn()}
       />,
     );
-    // Never "nothing changed": that would be a claim about a release Control
-    // Room cannot read.
     expect(screen.getByText("Control Room was updated to v0.7.0.")).toBeTruthy();
   });
 

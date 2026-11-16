@@ -355,7 +355,6 @@ describe("resizable connection panels in Chromium", () => {
         .toBeVisible();
       const section = document.querySelector<HTMLElement>(selector)!;
       if (selector === ".workspace-navigation") {
-        // The default split fits every capability, so shrink it to overflow.
         await page.getByRole("separator", { name: "Resize Hosts and Capabilities" }).click();
         await userEvent.keyboard("{End}");
       }

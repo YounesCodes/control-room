@@ -11,15 +11,11 @@ export interface WindowCornerState {
   fullscreen: boolean;
 }
 
-/// Windows 11 rounds the undecorated window itself. Linux draws the corners in
-/// the page, which needs a compositor to show the desktop through them and
-/// must stay square while the window fills the screen.
+// Windows 11 rounds undecorated windows itself; page-drawn Linux corners need a compositor.
 export function roundedWindowCorners({ composited, maximized, fullscreen }: WindowCornerState) {
   return composited && !maximized && !fullscreen;
 }
 
-/// Only Linux registers the compositor command, so other platforms stop at the
-/// first call and keep their native frame.
 export function useRoundedWindowCorners() {
   useEffect(() => {
     const root = document.documentElement;
@@ -36,7 +32,6 @@ export function useRoundedWindowCorners() {
       if (disposed || typeof composited !== "boolean") return;
       const appWindow = getCurrentWindow();
       const readSize = async () => {
-        // Resizes arrive in bursts; only the newest answer decides the shape.
         const current = ++generation;
         const [maximized, fullscreen] = await Promise.all([
           appWindow.isMaximized(),

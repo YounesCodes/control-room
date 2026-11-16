@@ -25,8 +25,6 @@ const api = vi.hoisted(() => ({
   scratchpadNote: vi.fn(),
   saveScratchpadNote: vi.fn(),
   writeSession: vi.fn(),
-  // Control Room's own updater. Mounted once by App, so every test that renders
-  // App reaches it.
   currentAppVersion: vi.fn(),
   checkForUpdate: vi.fn(),
   pendingUpdateNotice: vi.fn(),
@@ -42,9 +40,6 @@ vi.mock("./components/WindowControls", () => ({
   WindowControls: () => <div data-testid="window-controls" />,
 }));
 
-/// Stands in for the real terminal. It reports which target it was handed and
-/// whether it was asked to start, and lets a test drive the session state the
-/// way a live session would.
 vi.mock("./components/TerminalPane", () => ({
   TerminalPane: ({
     workspace,
@@ -155,10 +150,6 @@ async function openLocalShell(user: ReturnType<typeof userEvent.setup>, label: s
   await user.click(await screen.findByRole("button", { name: `Local terminals: ${label}` }));
 }
 
-/// Clicks a Saved Connection in the sidebar. Its row also carries an actions
-/// button, so this takes the first match, which is the row itself.
-/// Opens the New terminal chooser and picks one target by its accessible name,
-/// which is prefixed with the group so "PowerShell 7" cannot be ambiguous.
 async function openNewTerminal(user: ReturnType<typeof userEvent.setup>, target: string) {
   await user.click(await screen.findByRole("button", { name: /New terminal/ }));
   await user.click(await screen.findByRole("button", { name: target }));
@@ -169,7 +160,6 @@ async function openConnection(user: ReturnType<typeof userEvent.setup>, name: st
   await user.click(within(sidebar).getAllByRole("button", { name: new RegExp(name) })[0]);
 }
 
-/** Splitting starts from New terminal: open it and choose Split right. */
 async function openSplit(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole("button", { name: "New terminal" }));
   await user.click(await screen.findByRole("button", { name: /^Split right,/ }));
@@ -431,7 +421,6 @@ describe("Local Terminal", () => {
 
     expect(screen.getByRole("button", { name: "Local terminals: PowerShell 7" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Local terminals: Git Bash" })).toBeTruthy();
-    // Windows PowerShell and Command Prompt were not detected on this machine.
     expect(
       screen.queryByRole("button", { name: "Local terminals: Windows PowerShell" }),
     ).toBeNull();
@@ -558,7 +547,6 @@ describe("Local Terminal", () => {
     expect(terminal.dataset.target).toBe("powershell-7");
     expect(terminal.dataset.connectRequested).toBe("true");
     expect(screen.getByRole("button", { name: /Close PowerShell 7 Workspace/ })).toBeTruthy();
-    // No Saved Connection was invented for it: the sidebar list is still empty.
     expect(screen.getByText("No connections yet")).toBeTruthy();
   });
 
@@ -589,7 +577,6 @@ describe("Local Terminal", () => {
     );
 
     await user.click(within(dialog).getByRole("button", { name: "Paste into terminal" }));
-    // Raw bytes with no trailing newline: the note is typed, never executed.
     await waitFor(() =>
       expect(api.writeSession).toHaveBeenCalledWith(
         `${workspaceId}-session`,
@@ -631,7 +618,6 @@ describe("Local Terminal", () => {
       expect(screen.queryByRole("button", { name: view })).toBeNull();
     }
 
-    // Opening the Saved Connection brings them back.
     await openConnection(user, "prod-web");
     expect(await screen.findByRole("button", { name: "Systemd" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Overview" })).toBeNull();
@@ -659,14 +645,11 @@ describe("Local Terminal", () => {
 
     await openLocalShell(user, "PowerShell 7");
     const localTerminal = await screen.findByTestId(/^terminal-/);
-    // The local shell reports itself running, exactly as a live session would.
     await user.click(within(localTerminal).getByText("report connected"));
 
     expect(api.refreshCapabilities).not.toHaveBeenCalled();
     expect(api.cachedCapabilities).not.toHaveBeenCalledWith("powershell-7");
 
-    // A Remote Host reporting the same state does discover its capabilities,
-    // which is what makes the silence above a decision rather than an accident.
     await openConnection(user, "prod-web");
     const remoteTerminal = screen.getAllByTestId(/^terminal-/)[1];
     await user.click(within(remoteTerminal).getByText("report connected"));
@@ -693,7 +676,6 @@ describe("Local Terminal", () => {
     const host = connection("11111111-1111-4111-8111-111111111111", "prod-web");
     const other = connection("22222222-2222-4222-8222-222222222222", "database");
 
-    /** Every target of the chooser, by tab close label, in tab order. */
     function openTabs(): string[] {
       return screen
         .getAllByRole("button", { name: /^Close .* Workspace$/ })
@@ -708,12 +690,10 @@ describe("Local Terminal", () => {
       await openLocalShell(user, "PowerShell 7");
       await user.click(await screen.findByRole("button", { name: /New terminal/ }));
 
-      // Both kinds, whatever is active, under headings that say which is which.
       expect(screen.getByRole("button", { name: "Saved Connections: prod-web" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "Saved Connections: database" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "Local terminals: PowerShell 7" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "Local terminals: Git Bash" })).toBeTruthy();
-      // Only shells this machine actually has: the fixture reports two.
       expect(screen.queryByRole("button", { name: "Local terminals: Command Prompt" })).toBeNull();
     });
 
@@ -730,7 +710,6 @@ describe("Local Terminal", () => {
         "powershell-7",
         host.id,
       ]);
-      // The Workspace it was opened from stays exactly where it was.
       expect(openTabs()).toEqual(["Close PowerShell 7 Workspace", "Close prod-web Workspace"]);
       expect(terminals[1].dataset.kind).toBe("remote");
     });
@@ -783,7 +762,6 @@ describe("Local Terminal", () => {
       await openConnection(user, "prod-web");
       await openNewTerminal(user, "Saved Connections: prod-web");
 
-      // Not a focus change: picking what is already open still opens another.
       const terminals = await screen.findAllByTestId(/^terminal-/);
       expect(terminals).toHaveLength(2);
       expect(openTabs()).toEqual(["Close prod-web Workspace", "Close prod-web 2 Workspace"]);
@@ -799,8 +777,6 @@ describe("Local Terminal", () => {
       api.listConnections.mockResolvedValue([host]);
       render(<App />);
 
-      // Opened from a local Workspace with nothing remote in sight: the control
-      // used to be limited to repeating whatever was active.
       await openLocalShell(user, "Git Bash");
       const control = await screen.findByRole("button", { name: /New terminal/ });
       expect(control.hasAttribute("disabled")).toBe(false);
@@ -830,7 +806,6 @@ describe("Local Terminal", () => {
       await openLocalShell(user, "Git Bash");
       await user.click(await screen.findByRole("button", { name: /New terminal/ }));
 
-      // Opens on the first target rather than on whatever is focusable first.
       expect(document.activeElement).toBe(
         screen.getByRole("button", { name: "Saved Connections: prod-web" }),
       );
@@ -857,8 +832,6 @@ describe("Local Terminal", () => {
 
     const terminals = await screen.findAllByTestId(/^terminal-/);
     expect(terminals.map((terminal) => terminal.dataset.target)).toEqual(["git-bash", "git-bash"]);
-    // Duplicating is still available, it is just chosen now rather than being
-    // the only thing the control could do.
     expect(screen.getByRole("button", { name: /Close Git Bash 2 Workspace/ })).toBeTruthy();
   });
 
@@ -872,7 +845,6 @@ describe("Local Terminal", () => {
     await openNewTerminal(user, "Saved Connections: prod-web");
 
     expect(screen.queryByRole("group", { name: "Group 1" })).toBeNull();
-    // Outside Focus Mode, New terminal only opens tabs.
     await user.click(screen.getByRole("button", { name: "New terminal" }));
     expect(screen.queryByRole("button", { name: /^Split right/ })).toBeNull();
     await user.keyboard("{Escape}");
@@ -1042,7 +1014,6 @@ describe("Local Terminal", () => {
     await user.click(screen.getByRole("button", { name: "Rename" }));
     expect(screen.getByLabelText("Close Logs العربية Workspace")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Open Group 1 3 terminals" })).toBeTruthy();
-    // A blank label restores the shell name; it does not rename the group.
     await user.click(screen.getByLabelText("Rename Logs العربية Workspace"));
     await user.clear(screen.getByRole("textbox", { name: /Workspace label/ }));
     await user.click(screen.getByRole("button", { name: "Rename" }));
@@ -1136,6 +1107,34 @@ describe("Local Terminal", () => {
     expect(terminal.dataset.connectRequested).toBe("true");
   });
 
+  it("keeps a restored Workspace whose shell the user turned off", async () => {
+    api.settingsContract.mockResolvedValue({
+      current: { ...settings, hiddenLocalShells: ["powershell-7"] },
+      defaults: settings,
+      logTailOptions: [50, 100, 200, 500, 1000],
+    });
+    api.workspaceState.mockResolvedValue({
+      workspaces: [
+        {
+          id: "workspace-local",
+          label: null,
+          connectionId: null,
+          localShellId: "powershell-7",
+          view: "terminal",
+          historyPaused: false,
+        },
+      ],
+      activeWorkspaceId: "workspace-local",
+      terminalLayout: { kind: "leaf", workspaceId: "workspace-local" },
+    });
+    render(<App />);
+
+    const terminal = await screen.findByTestId("terminal-workspace-local");
+
+    expect(terminal.dataset.target).toBe("powershell-7");
+    expect(terminal.dataset.connectRequested).toBe("true");
+  });
+
   it("stops one local shell without touching the others", async () => {
     const user = userEvent.setup();
     render(<App />);
@@ -1143,7 +1142,6 @@ describe("Local Terminal", () => {
     await openLocalShell(user, "PowerShell 7");
     await openLocalShell(user, "Git Bash");
     const [powershellTerminal, bashTerminal] = screen.getAllByTestId(/^terminal-/);
-    // Both shells report a live session.
     for (const terminal of [powershellTerminal, bashTerminal]) {
       await user.click(within(terminal).getByText("report session"));
     }
@@ -1151,7 +1149,6 @@ describe("Local Terminal", () => {
     expect(powershellTerminal.dataset.session).not.toBe("null");
 
     await user.click(screen.getByRole("button", { name: /Close Git Bash Workspace/ }));
-    // A running shell is confirmed in local words before it is stopped.
     expect(screen.getByText("Stop the local shell and close “Git Bash”?")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Stop & close" }));
 
@@ -1160,7 +1157,6 @@ describe("Local Terminal", () => {
     expect(api.closeSession).toHaveBeenCalledWith(
       `${bashTerminal.dataset.testid!.slice(9)}-session`,
     );
-    // The other local terminal is untouched.
     expect(screen.getByTestId(powershellTerminal.dataset.testid!)).toBeTruthy();
   });
 
@@ -1195,7 +1191,6 @@ describe("Local Terminal", () => {
 
     await openLocalShell(user, "PowerShell 7");
 
-    // Saving is debounced, so this waits for the write that carries the tab.
     await waitFor(() => {
       const [state] = api.saveWorkspaceState.mock.calls.at(-1) as [PersistedWorkspaceState];
       expect(state.workspaces).toHaveLength(1);
@@ -1229,7 +1224,6 @@ describe("Local Terminal", () => {
       ),
     );
 
-    // The popup keeps the global note separate from the terminal note.
     await user.click(screen.getByRole("button", { name: "Global note for all connections" }));
     expect(await screen.findByLabelText("Global note")).toBeTruthy();
     await user.keyboard("{Escape}");

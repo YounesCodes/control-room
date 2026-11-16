@@ -7,7 +7,6 @@ import { systemdStateLabel } from "../lib/systemd-units";
 const ROW_HEIGHT = 44;
 const OVERSCAN = 6;
 
-/** Keep the inventory scrollable and keyboard navigable without mounting every unit. */
 export function SystemdInventory({
   units,
   selectedId,
@@ -91,7 +90,6 @@ export function SystemdInventory({
     if (!element) return;
     const style = getComputedStyle(element);
     const interrupted = scopeAnimation.current?.playState === "running";
-    // Retarget from the rendered pose when the user switches back mid-reveal.
     const from = {
       opacity: interrupted ? style.opacity : style.getPropertyValue("--scope-opacity").trim(),
       transform: interrupted

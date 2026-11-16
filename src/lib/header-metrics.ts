@@ -2,7 +2,6 @@ import type { HeaderMetric, HeaderMetrics } from "../types";
 import { formatKib, memoryUsage } from "./host-resources";
 
 export const DEFAULT_HEADER_METRICS: HeaderMetric[] = ["cpu", "ram", "gpu", "diskIo", "uptime"];
-/** Keep the header's display order and ignore retired metrics in older settings. */
 export function displayedHeaderMetrics(metrics: HeaderMetric[] = DEFAULT_HEADER_METRICS) {
   return DEFAULT_HEADER_METRICS.filter((metric) => metrics.includes(metric));
 }
@@ -88,7 +87,6 @@ export function headerMetricNumber(
   return number != null && Number.isFinite(number) && number >= 0 && number <= 100 ? number : null;
 }
 
-/** Only measured CPU, RAM, and GPU points are drawn, on a fixed 0–100 scale. */
 export function metricTrend(metric: HeaderMetric, samples: HeaderMetrics[]): string | null {
   if (metric !== "cpu" && metric !== "ram" && metric !== "gpu") return null;
   const values = samples.slice(-20).map((sample) => headerMetricNumber(metric, sample));
@@ -126,9 +124,6 @@ export function headerMetricValue(metric: HeaderMetric, sample: HeaderMetrics | 
       return formatUptime(sample?.uptimeSeconds);
   }
 }
-/// Extra facts that a reading's value cannot show on its own: used and total
-/// capacity. Other metrics are clear from their label and value, so they have
-/// no caption.
 export function headerMetricDetail(
   metric: HeaderMetric,
   sample: HeaderMetrics | null,

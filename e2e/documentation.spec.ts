@@ -6,7 +6,6 @@ describe("Documentation in the native app", () => {
     const docs = $("aria/Open documentation");
     await expect(docs).toBeDisplayed();
     await expect(docs).toHaveAttribute("title", "Documentation (opens in your browser)");
-    // Observe the UI's native request lifecycle without replacing its IPC implementation.
     await browser.execute(() => {
       const button = document.querySelector('[aria-label="Open documentation"]')!;
       const host = window as unknown as { documentationStarted: boolean };

@@ -82,9 +82,6 @@ export interface RemoteShellCatalog {
   capabilities?: HostCapabilities | null;
 }
 
-/// One bounded sample of current load. Every field is nullable because a host
-/// may expose part of /proc and not the rest, and a missing reading is shown as
-/// missing rather than as zero, which would read as an idle host.
 export interface HostResources {
   sampledAt: string;
   cpuPercent: number | null;
@@ -291,7 +288,6 @@ export interface HistoryInput {
   shell: string;
 }
 
-// "disk" remains readable in older settings and is filtered out before display or sampling.
 export type HeaderMetric = "cpu" | "ram" | "gpu" | "disk" | "diskIo" | "uptime";
 
 export interface HeaderMetrics {
@@ -326,22 +322,12 @@ export interface AppSettings {
   defaultLogTail: number;
   globalHistoryEnabled: boolean;
   globalSudoEnabled: boolean;
-  /** Checks GitHub Releases for a newer Control Room. This updates the app
-   *  itself and never touches a Remote Host. Off still leaves the manual check
-   *  in Settings working. */
   automaticUpdateChecks: boolean;
-  /** Local Shell Profile ids turned off in Settings, so the Local terminal,
-   *  New terminal, and Split launchers stop offering them. Presentation only:
-   *  the shell stays installed and a Workspace already using it keeps running
-   *  and restoring. A profile missing from this list is offered. */
   hiddenLocalShells: string[];
   localTerminalMode: boolean;
   defaultLocalShellId: string | null;
 }
 
-/** An update Control Room could install, as reported by the signed updater
- *  feed. Deliberately narrow: no URL and no signature reach the frontend,
- *  because it has no decision to make with either. */
 export interface AppUpdateInfo {
   currentVersion: string;
   version: string;
@@ -349,7 +335,6 @@ export interface AppUpdateInfo {
   publishedAt: string | null;
 }
 
-/** The one-time notice shown after an update has actually been installed. */
 export interface PendingUpdateNotice {
   version: string;
   notes: string | null;
@@ -363,8 +348,6 @@ export interface UpdateFailure {
   message: string;
 }
 
-/** Download progress. `total` stays null when the endpoint reports no content
- *  length, rather than being faked as zero. */
 export type UpdateProgress =
   | { event: "started"; contentLength: number | null }
   | { event: "progress"; downloaded: number; total: number | null }
@@ -386,10 +369,6 @@ export interface EnvironmentInfo {
   inAppUpdates?: boolean;
 }
 
-/// The allowlisted local shells Control Room can host. The id, including its fixed
-/// administrator variant, is the whole vocabulary the frontend may send back
-/// to Rust: there is no executable path, argument, or command string on this
-/// side of the boundary.
 export type LocalShellKind =
   | "powershell-7"
   | "windows-powershell"
@@ -440,7 +419,6 @@ export interface LogSourceSelection {
   id: string;
 }
 
-/// What every Workspace has, whatever its terminal is attached to.
 interface WorkspaceBase {
   id: string;
   label: string | null;
@@ -453,18 +431,12 @@ interface WorkspaceBase {
   restored?: boolean;
 }
 
-/// The container a Container Terminal runs in. The ID is the full Docker ID
-/// the backend validates and execs into; name and image only label the tab.
 export interface ContainerTerminalTarget {
   id: string;
   name: string;
   image: string;
 }
 
-/// A Workspace on a Remote Host. Inspection caches, Enhanced History, and the
-/// Saved Connection snapshot live here and nowhere else. With `container` set
-/// it is a Container Terminal: a shell inside that container on this host,
-/// terminal-only like a local Workspace.
 export interface RemoteWorkspace extends WorkspaceBase {
   kind: "remote";
   connectionId: string;
@@ -482,8 +454,6 @@ export interface RemoteWorkspace extends WorkspaceBase {
   logSource: LogSourceSelection | null;
 }
 
-/// A Workspace on a local shell. It is terminal-only: there is no
-/// Saved Connection, no remote inspection pages, and no History. Optional header metrics read local system usage.
 export interface LocalWorkspace extends WorkspaceBase {
   kind: "local";
   shell: LocalShellProfile;
@@ -491,12 +461,8 @@ export interface LocalWorkspace extends WorkspaceBase {
 
 export type Workspace = RemoteWorkspace | LocalWorkspace;
 
-/// The fields a caller may patch without knowing which kind of Workspace it
-/// holds. Remote-only fields are patched through the remote-only updater.
 export type WorkspacePatch = Partial<Omit<WorkspaceBase, "id">>;
 
-/// One restored tab. Exactly one target is set; a payload written before Local
-/// Terminal existed carries only `connectionId`.
 interface PersistedWorkspace {
   id: string;
   label: string | null;
@@ -504,7 +470,6 @@ interface PersistedWorkspace {
   localShellId: string | null;
   remoteShell?: RemoteShellProfile | null;
   container?: ContainerTerminalTarget | null;
-  /** Older app versions persisted the standalone Scratchpad page. */
   view: WorkspaceView | "scratchpad";
   historyPaused: boolean;
 }
@@ -549,7 +514,6 @@ export interface SessionStateEvent {
     | "process"
     | "remote-exit"
     | "user-disconnect"
-    // Local sessions: the shell exited on its own, or the user stopped it.
     | "local-exit"
     | "user-stop";
   reason: string | null;
@@ -561,7 +525,6 @@ export interface StreamStateEvent {
   reason: string | null;
 }
 
-/** A running stream's stderr changed what its output means. */
 export interface StreamNoticeEvent {
   streamId: string;
   notice: "journal-restricted";

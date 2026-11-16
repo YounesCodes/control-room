@@ -26,8 +26,7 @@ describe("Focus Mode live layout in the native WebView", () => {
           const start = performance.now();
           let sampledMidpoint = false;
           function frame() {
-            // Slow runners can paint less often than the 180ms slide lasts, so
-            // also measure the live box at the slide's midpoint directly.
+            // Slow runners can paint less often than the 180ms slide lasts.
             const slide = workspace.getAnimations()[0];
             if (!sampledMidpoint && slide) {
               sampledMidpoint = true;
@@ -99,9 +98,7 @@ describe("Focus Mode live layout in the native WebView", () => {
       for (let i = 0; i < 8; i++)
         document.querySelector<HTMLButtonElement>(".app-focus-toggle")!.click();
     });
-    // Hosted Mac runners paint only a few frames a second, and the last slide
-    // once outlasted the wait below. Finish it as the earlier step does; the
-    // cleanup that follows a finished slide still runs and is checked.
+    // Hosted Mac runners paint only a few frames a second.
     await browser.execute(() =>
       document
         .getAnimations()

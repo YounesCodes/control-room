@@ -1,4 +1,3 @@
-//! Windows shell discovery, including Sudo for Windows profiles.
 use super::*;
 use crate::models::{AdministratorTerminalStatus, LocalShellCatalog, LocalShellProfile};
 use std::{
@@ -38,16 +37,10 @@ impl ShellEnvironment {
     }
 }
 
-/// The fixed arguments each shell is started with. They are constants, never
-/// user input: a startup argument is not something the frontend may choose.
 fn fixed_arguments(kind: LocalShellKind) -> &'static [&'static str] {
     match kind {
-        // Both PowerShells are interactive by default; the banner is the only
-        // thing worth suppressing, since Control Room already names the shell.
         LocalShellKind::PowerShell7 | LocalShellKind::WindowsPowerShell => &["-NoLogo"],
         LocalShellKind::CommandPrompt => &[],
-        // Git Bash is `bash.exe` itself, as a login shell so the user's profile
-        // scripts run, and interactive so it behaves like a terminal shell.
         LocalShellKind::GitBash => &["--login", "-i"],
         LocalShellKind::Zsh
         | LocalShellKind::Bash
@@ -57,9 +50,7 @@ fn fixed_arguments(kind: LocalShellKind) -> &'static [&'static str] {
     }
 }
 
-/// `TERM` is set only where the shell reads it. The PowerShells and the command
-/// processor use the Windows console API instead, and inventing a value for them
-/// would describe an environment they do not have.
+// The PowerShells and cmd use the Windows console API, not TERM.
 fn terminal_type(kind: LocalShellKind) -> Option<&'static str> {
     match kind {
         LocalShellKind::GitBash => Some("xterm-256color"),
@@ -71,18 +62,12 @@ pub(super) fn configure_terminal_environment(command: &mut CommandBuilder, kind:
     if let Some(terminal) = terminal_type(kind) {
         command.env("TERM", terminal);
     }
-    // OpenTUI's alternate-screen cleanup can close the enclosing ConPTY pipes
-    // when OpenCode exits, leaving Bash alive with no usable terminal. Its
-    // main-screen mode returns to the same shell without breaking those pipes.
-    // Keep this local to Git Bash and honor an explicit inherited preference.
+    // OpenTUI's alternate-screen cleanup can close the ConPTY pipes when OpenCode exits.
     if kind == LocalShellKind::GitBash && command.get_env("OTUI_USE_ALTERNATE_SCREEN").is_none() {
         command.env("OTUI_USE_ALTERNATE_SCREEN", "0");
     }
 }
 
-/// Every place a shell may legitimately live, most specific first. Nothing here
-/// depends on a listing or a registry read, so the same input always produces
-/// the same candidates.
 fn candidate_programs(kind: LocalShellKind, environment: &ShellEnvironment) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
     match kind {
@@ -97,9 +82,7 @@ fn candidate_programs(kind: LocalShellKind, environment: &ShellEnvironment) -> V
                 candidates.push(local.join("Microsoft").join("WindowsApps").join("pwsh.exe"));
             }
         }
-        // The built-in shell has one canonical path. Searching PATH for
-        // `powershell.exe` could pick up a shim and report it as the Windows
-        // PowerShell that ships with the OS.
+        // PATH can hold a powershell.exe shim.
         LocalShellKind::WindowsPowerShell => {
             if let Some(system_root) = &environment.system_root {
                 candidates.push(
@@ -129,9 +112,7 @@ fn candidate_programs(kind: LocalShellKind, environment: &ShellEnvironment) -> V
                         .join("bash.exe"),
                 );
             }
-            // A Git install that is only on PATH is found through its own
-            // directory. `bash.exe` is never taken from PATH directly, because
-            // `System32\bash.exe` is the WSL launcher, which is out of scope.
+            // System32\bash.exe is the WSL launcher.
             for entry in &environment.path_entries {
                 if !entry.to_string_lossy().to_lowercase().contains("git") {
                     continue;
@@ -165,8 +146,6 @@ pub fn resolve(
         kind,
         program,
         arguments: fixed_arguments(kind),
-        // A local shell starts where the user's own shell would, not in the
-        // directory Control Room happens to be installed in.
         working_directory: environment
             .user_profile
             .as_ref()
@@ -295,8 +274,6 @@ fn read_sudo_mode(policy: bool) -> Option<u32> {
     let value = "Enabled\0".encode_utf16().collect::<Vec<_>>();
     let mut mode = 0_u32;
     let mut size = std::mem::size_of::<u32>() as u32;
-    // The OS owns this machine-level setting. Control Room reads one DWORD and
-    // never changes it; Windows Settings remains the only configuration UI.
     let result = unsafe {
         RegGetValueW(
             HKEY_LOCAL_MACHINE,
@@ -499,7 +476,6 @@ mod tests {
 
     #[test]
     fn bash_is_never_taken_from_the_wsl_launcher_on_path() {
-        // System32\bash.exe starts WSL, which this feature does not cover.
         let exists = installed(&[r"C:\Windows\System32\bash.exe"]);
         let environment = ShellEnvironment {
             program_files: Vec::new(),
@@ -577,8 +553,6 @@ mod tests {
         let prompt =
             command_for(&resolve(LocalShellKind::CommandPrompt, &environment(), &exists).unwrap());
         let bash = command_for(&resolve(LocalShellKind::GitBash, &environment(), &exists).unwrap());
-        // Only the variables Control Room sets itself; the rest of the user's
-        // Windows environment is inherited untouched.
         let overrides = |command: &CommandBuilder| {
             command
                 .iter_extra_env_as_str()
@@ -596,8 +570,6 @@ mod tests {
             expected.insert(0, ("OTUI_USE_ALTERNATE_SCREEN".into(), "0".into()));
         }
         assert_eq!(overrides(&bash), expected);
-        // No Windows Terminal variable is invented for a shell Control Room
-        // hosts itself.
         assert!(
             !overrides(&bash)
                 .iter()
@@ -680,8 +652,6 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn the_command_processor_resolves_on_this_machine() {
-        // cmd.exe ships with every supported Windows install, so this is the one
-        // resolution that can be asserted against the real environment.
         let shell = resolve_installed("command-prompt").unwrap();
         assert!(shell.program.ends_with("cmd.exe"));
         assert!(

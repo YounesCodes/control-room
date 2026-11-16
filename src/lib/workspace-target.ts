@@ -19,16 +19,10 @@ export function isLocalWorkspace(workspace: Workspace): workspace is LocalWorksp
 
 export type ContainerWorkspace = RemoteWorkspace & { container: ContainerTerminalTarget };
 
-/// A Container Terminal: a shell inside one container on a Remote Host. It
-/// belongs to its host's Saved Connection but is terminal-only.
 export function isContainerWorkspace(workspace: Workspace): workspace is ContainerWorkspace {
   return isRemoteWorkspace(workspace) && !!workspace.container;
 }
 
-/// What a Workspace is attached to. Tabs on the same target are numbered
-/// against each other, so a second PowerShell 7 reads as "PowerShell 7 2"
-/// exactly as a second Workspace on one Saved Connection does. A container is
-/// its own target, so its terminal is never numbered against the host's.
 export function workspaceTargetKey(workspace: Workspace): string {
   if (isContainerWorkspace(workspace))
     return `container:${workspace.connectionId}:${workspace.container.id}`;
@@ -37,8 +31,6 @@ export function workspaceTargetKey(workspace: Workspace): string {
     : `local:${workspace.shell.id}`;
 }
 
-/// The host a Container Terminal runs on, shown beside the container's name
-/// wherever the name alone would not say which host it is.
 export function workspaceHostContext(workspace: Workspace): string | null {
   return isContainerWorkspace(workspace) ? workspace.connectionSnapshot.displayName : null;
 }
@@ -54,8 +46,6 @@ export function workspaceTargetName(workspace: Workspace): string {
       : workspace.shell.label;
 }
 
-/// A local shell runs and stops; a remote session connects and disconnects.
-/// The lifecycle is identical, so only the words differ.
 export function terminalStateLabel(workspace: Workspace): string {
   if (workspace.restored && !workspace.connectRequested) {
     return isRemoteWorkspace(workspace) ? "not connected" : "not started";
@@ -73,7 +63,6 @@ export function terminalStateLabel(workspace: Workspace): string {
   }
 }
 
-/// A new Workspace on a Remote Host, asked to connect.
 export function createRemoteWorkspace(
   connection: SavedConnection,
   remoteShell?: RemoteShellProfile | null,
@@ -103,8 +92,6 @@ export function createRemoteWorkspace(
   };
 }
 
-/// A new Container Terminal on a Remote Host, asked to connect. It starts in
-/// its terminal and has no inspection pages of its own.
 export function createContainerWorkspace(
   connection: SavedConnection,
   container: ContainerTerminalTarget,
@@ -115,9 +102,6 @@ export function createContainerWorkspace(
   };
 }
 
-/// A new Workspace on a local shell, asked to start. It carries no
-/// Saved Connection, no inspection caches, and no History state, because a
-/// local shell has none of those.
 export function createLocalWorkspace(shell: LocalShellProfile): LocalWorkspace {
   return {
     kind: "local",

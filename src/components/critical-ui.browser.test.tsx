@@ -304,8 +304,6 @@ describe("critical UI in Chromium", () => {
     const panel = container!.firstElementChild as HTMLElement;
     const fade = panel.animate([{ opacity: 0.7 }, { opacity: 1 }], 160);
     fade.pause();
-    // A paused fade never finishes, so the helper must not wait on it; this is
-    // the color axe sampled in the original flake.
     expect(document.getAnimations().filter((a) => a.playState === "running")).toEqual([]);
     expect((await axe.run(panel, { runOnly: ["color-contrast"] })).violations).not.toEqual([]);
     fade.play();
@@ -408,8 +406,6 @@ describe("critical UI in Chromium", () => {
 
     await main.hover();
     await vi.waitFor(() => expect(Number(getComputedStyle(rename).opacity)).toBeGreaterThan(0.9));
-    // The action space opens with a short transition; wait for the label to
-    // hand over its width rather than catching it mid-drag.
     await vi.waitFor(() =>
       expect(label.getBoundingClientRect().width).toBeLessThan(initialLabelWidth - 40),
     );
@@ -580,10 +576,6 @@ describe("critical UI in Chromium", () => {
     const picker = page.getByRole("button", { name: "All terminals", exact: true });
     const menu = page.getByRole("menu", { name: "All terminals menu" });
 
-    // Selecting an item starts the menu's 110 ms exit while the fading element
-    // stays mounted. The strip must still own exactly one control named
-    // "All terminals" in that window, so a second rapid interaction — the
-    // native selector used by the E2E suite — resolves unambiguously.
     await picker.click();
     await userEvent.keyboard("{Home}{Enter}");
     expect(document.querySelectorAll('[aria-label="All terminals"]')).toHaveLength(1);
@@ -591,15 +583,12 @@ describe("critical UI in Chromium", () => {
     await expect.element(menu).toBeVisible();
     expect(document.querySelectorAll('[aria-label="All terminals"]')).toHaveLength(1);
 
-    // Keyboard navigation still lands on the active item after the reopen.
     await expect.element(menu.getByRole("menuitem", { name: /^Terminal 1 / })).toHaveFocus();
     await userEvent.keyboard("{End}");
     await expect.element(menu.getByRole("menuitem", { name: /^Terminal 20 / })).toHaveFocus();
     await userEvent.keyboard("{Escape}");
     await expect.element(picker).toHaveFocus();
 
-    // Trigger-only toggling across the exit window reuses one menu and keeps
-    // keyboard focus moving back into it after the reopen.
     await picker.click();
     await expect.element(menu).toBeVisible();
     await picker.click();
@@ -672,7 +661,6 @@ describe("critical UI in Chromium", () => {
       .getByRole("button", { name: "Add connection" })
       .element() as HTMLButtonElement;
     await userEvent.unhover(button);
-    // A pointer left over from an earlier test unwinds hover transitions here.
     await expect.poll(() => getComputedStyle(button).backgroundColor).toBe("rgb(23, 23, 23)");
     await Promise.all(
       button
@@ -685,8 +673,6 @@ describe("critical UI in Chromium", () => {
       return [rect.x, rect.y, rect.width, rect.height];
     };
     const initialPosition = position();
-    // The rail's persistent action reads as clickable without dominating the
-    // sidebar the way a filled accent button did.
     expect(atRest.backgroundColor).toBe("rgb(23, 23, 23)");
     expect(atRest.borderTopWidth).toBe("1px");
     expect(atRest.borderTopColor).toBe("rgb(52, 52, 52)");
@@ -700,7 +686,6 @@ describe("critical UI in Chromium", () => {
       expect(hovered.borderTopColor).toBe("rgb(69, 69, 69)");
       expect(getComputedStyle(plus).transform).toBe("matrix(1, 0, 0, 1, 1, 0)");
     });
-    // Hover feedback animates in place: the button's box never moves.
     const bounds = button.getBoundingClientRect();
     expect(bounds.width).toBeGreaterThan(180);
     expect(position()).toEqual(initialPosition);
@@ -850,8 +835,7 @@ describe("critical UI in Chromium", () => {
           return [rect.x, rect.y, rect.width, rect.height, button.x, button.width];
         };
         const initial = bounds();
-        // Save feedback must not shift the layout. WebKit can measure the
-        // relabeled button up to a pixel differently, which is not a shift.
+        // WebKit can measure the relabeled button up to a pixel differently.
         const expectStable = () =>
           bounds().forEach((value, index) =>
             expect(Math.abs(value - initial[index])).toBeLessThanOrEqual(1),
@@ -999,7 +983,6 @@ describe("critical UI in Chromium", () => {
     await expect
       .element(page.getByRole("group", { name: "Local terminal", exact: true }))
       .toBeVisible();
-    // Audit settled colors; a slower runner can still be fading the results in.
     await Promise.all(
       container!
         .getAnimations({ subtree: true })
@@ -1011,8 +994,6 @@ describe("critical UI in Chromium", () => {
   });
 
   it("rounds the open dropdown and preserves option selection and keyboard dismissal", async () => {
-    // Default log tail became a stepped slider; the narrow category picker is
-    // the Settings dropdown that remains on every machine.
     await page.viewport(768, 640);
     mount(<SettingsFixture />);
     const select = page.getByRole("combobox", { name: "Settings category" });
@@ -1102,7 +1083,6 @@ describe("critical UI in Chromium", () => {
     const refreshLabel = slider.querySelector(".step-slider-label")!.getBoundingClientRect();
     expect(control.left - refreshLabel.right).toBeGreaterThanOrEqual(12);
     expect(control.left - refreshLabel.right).toBeLessThanOrEqual(24);
-    // The label lines up with the track, and the tick labels sit clear below the thumb.
     const track = slider.querySelector(".step-slider-track")!.getBoundingClientRect();
     expect(
       Math.abs((refreshLabel.top + refreshLabel.bottom) / 2 - (track.top + track.bottom) / 2),
@@ -1326,8 +1306,6 @@ it("makes newly enabled Scratchpad actions fully readable without an opacity fad
   const control = button.element() as HTMLButtonElement;
   expect(getComputedStyle(control).opacity).toBe("0.4");
   control.disabled = false;
-  // Freeze any real opacity transition at its first frame. A fast runner must
-  // catch the same unreadable enabled state as the hosted accessibility check.
   void getComputedStyle(control).opacity;
   for (const animation of control.getAnimations()) {
     if (animation instanceof CSSTransition && animation.transitionProperty === "opacity") {

@@ -63,7 +63,6 @@ export class BoundedLogBuffer {
     return this.totalBytes + this.partialBytes;
   }
 
-  /** One-based number of the oldest retained line since the last clear. */
   get firstLineNumber(): number {
     return this.dropped + 1;
   }

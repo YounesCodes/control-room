@@ -1,11 +1,3 @@
-//! Native client-platform integration.
-//!
-//! Callers use one small contract. Each client platform owns executable
-//! discovery, home-directory conventions, and process flags here rather than
-//! spreading target checks through session and remote code. Windows and macOS
-//! also keep their local shell allowlists here; Linux discovers shells in
-//! `local_shell_linux.rs`.
-
 #[cfg(target_os = "macos")]
 pub(crate) mod macos_window;
 
@@ -23,8 +15,7 @@ use crate::models::LocalShellProfile;
 #[cfg(target_os = "macos")]
 #[path = "macos.rs"]
 mod imp;
-// The macOS implementation uses only portable Rust APIs. Compile and run its
-// contract tests on Windows too, while macOS CI still verifies the real target.
+// Portable Rust, so its contract tests also run on Windows.
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
 #[path = "unsupported.rs"]
 mod imp;

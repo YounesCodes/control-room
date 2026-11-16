@@ -55,7 +55,6 @@ export interface DockerPortLink {
   container: DockerContainer;
 }
 
-/** Published host-port to container-port mappings, for the Docker topology view. */
 export function dockerPortLinks(containers: DockerContainer[]): DockerPortLink[] {
   const links = containers.flatMap((container) =>
     publishedBindings(container).map((binding) => ({
@@ -91,7 +90,7 @@ export function resolveSocketContainer(
   return { container: matches[0], composeProject: matches[0].composeProject };
 }
 
-/** macOS reports launchd services as `domain/label`; systemd unit IDs never contain a slash. */
+// macOS reports launchd services as `domain/label`; systemd unit IDs never contain a slash.
 export function serviceOwnerLabels(id: string | null | undefined, macosHost = false) {
   return macosHost || !!id?.includes("/")
     ? { kind: "Launchd service", open: "Open service", logs: "View logs" }
@@ -104,7 +103,6 @@ export function socketScope(socket: ListeningSocket) {
   return "Specific address";
 }
 
-/** Where a socket accepts connections, derived purely from its bind address. */
 export function socketExposure(address: string): Exposure {
   if (["*", "0.0.0.0", "::"].includes(address)) return "all-interfaces";
   if (address === "::1" || address.startsWith("127.")) return "local-only";
@@ -118,29 +116,16 @@ export function exposureLabel(exposure: Exposure): string {
   return "Specific address";
 }
 
-/**
- * Why some listeners have no recorded owner. The two causes need different
- * answers: one is a privilege wall, the other is a fact about the host that no
- * amount of privilege changes.
- */
 export interface OwnerGapNotice {
   message: string;
-  /** True only when running the same read as root could actually help. */
   offerSudo: boolean;
 }
 
-/**
- * `elevated` says whether the read that produced these sockets already ran as
- * root. Without it the pane would keep blaming a privilege wall for listeners
- * that were read as root and still have no single owner.
- */
 export function ownerGapNotice(
   sockets: Pick<ListeningSocket, "ownership">[],
   elevated: boolean,
 ): OwnerGapNotice | null {
   const unattributed = sockets.some((socket) => socket.ownership === "unavailable");
-  // Several processes hold one listening socket, the prefork and worker pattern.
-  // The owning PID is genuinely ambiguous, so root sees exactly what you see.
   const ambiguous = sockets.some((socket) => socket.ownership === "ambiguous");
 
   if (!unattributed && !ambiguous) return null;
@@ -177,7 +162,6 @@ export interface SocketOwner {
   label: string;
 }
 
-/** The primary owner node label for a socket: container, then service, then process. */
 export function socketOwner(
   socket: ListeningSocket,
   container: SocketContainerOwner | null,
@@ -202,11 +186,6 @@ const OWNER_KIND_ORDER: Record<OwnerKind, number> = {
   unknown: 3,
 };
 
-/**
- * Group listeners by their owning container, service, or process so the
- * architecture view shows one boundary per owner (like a service box in an
- * AWS-style diagram) instead of one scattered node per port.
- */
 export function groupSocketsByOwner(
   sockets: ListeningSocket[],
   containers: DockerContainer[],
@@ -263,10 +242,6 @@ function isPrivateSource(value: string): boolean {
   );
 }
 
-/**
- * Firewall disposition for one listener. This is deliberately separate from where the socket binds: a broad bind does not imply
- * Internet reachability, and a firewall rule does not change the binding.
- */
 export function firewallForSocket(
   firewall: FirewallStatus | null,
   socket: ListeningSocket,
@@ -308,9 +283,6 @@ export function firewallForSocket(
       : { state: "no-rule", label: `${backend}: no matching numeric port rule` };
   }
 
-  // A firewalld rule belongs to a zone, not directly to a bind address. Ports
-  // does not collect interface membership, so keep the rule as policy evidence
-  // without claiming that it governs this listener.
   if (firewall.backend === "firewalld") {
     return {
       state: "unknown",

@@ -177,7 +177,6 @@ export async function focusNativeApp() {
   requireMacDesktop();
   const pid = (await runtime()).appPid;
   if (windows) powershell("focus", String(pid));
-  // The app activates itself; no other process needs permission to raise it.
   else if (mac) await ipc("plugin:window|set_focus", { label: "main" });
   else {
     const id = execFileSync(
@@ -189,8 +188,7 @@ export async function focusNativeApp() {
       .split("\n")[0];
     execFileSync("xdotool", ["windowactivate", "--sync", id], { timeout: 5000 });
   }
-  // On Windows the WebView child can own focus while the Tauri window reports
-  // false. The helper verifies the OS foreground root instead.
+  // On Windows the WebView child can own focus while the Tauri window reports false.
   if (!windows)
     await browser.waitUntil(() => ipc<boolean>("plugin:window|is_focused", { label: "main" }));
 }
@@ -206,15 +204,11 @@ export async function openNativeShell() {
   await $('button[aria-label="New terminal"]').click();
   await $(`.new-terminal-menu [aria-label="Local terminals: ${shell.label}"]`).click();
   await $(".terminal-workspace-pane.active .xterm-screen").waitForDisplayed();
-  // The pane renders before its session registers, and specs compare the
-  // session list against one read right after this returns.
   await browser.waitUntil(async () => (await runtime()).sessionIds.length > sessions, {
     timeoutMsg: "The native shell's session did not start",
   });
   await focusNativeApp();
 }
-/** Native shell programs started from cmd.exe, to tell a program that never
- * started from one that is running but silent. */
 function windowsShellPrograms() {
   try {
     return execFileSync(
@@ -232,7 +226,6 @@ function windowsShellPrograms() {
   }
 }
 export async function typeNativeCommand(command: string, marker: string, timeout?: number) {
-  // Typing before the shell reads input leaves the echo to shell startup timing.
   await browser.waitUntil(
     () =>
       browser.execute(() =>
@@ -249,7 +242,7 @@ export async function typeNativeCommand(command: string, marker: string, timeout
   await $(".terminal-workspace-pane.active .xterm-helper-textarea").addValue(command);
   await nativeKey("enter");
   const now = new Date();
-  // Local time, as Win32_Process reports CreationDate.
+  // Win32_Process reports CreationDate in local time.
   const typed = `${now.toTimeString().slice(0, 8)}.${String(now.getMilliseconds()).padStart(3, "0")}`;
   try {
     await terminalContains(marker, undefined, timeout);

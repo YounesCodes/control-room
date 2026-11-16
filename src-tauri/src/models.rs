@@ -370,7 +370,6 @@ pub enum HeaderMetric {
     Cpu,
     Ram,
     Gpu,
-    // Retained for compatibility with saved selections from older builds.
     Disk,
     #[serde(rename = "diskIo")]
     DiskIo,
@@ -477,7 +476,6 @@ pub enum LocalShellKind {
 }
 
 impl LocalShellKind {
-    // Windows discovery walks the whole vocabulary; the others list their own shells.
     #[cfg(windows)]
     pub const ALL: [LocalShellKind; 9] = [
         LocalShellKind::PowerShell7,

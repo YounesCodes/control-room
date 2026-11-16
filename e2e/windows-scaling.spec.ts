@@ -10,7 +10,6 @@ import {
   windowsScale,
 } from "./native-input";
 
-// OS display scaling is Windows-only. This never substitutes CSS zoom for DPI.
 const windowsCase = process.platform === "win32" ? it : it.skip;
 describe("Windows native display scale and window restore", function () {
   this.timeout(180000);
@@ -39,7 +38,6 @@ describe("Windows native display scale and window restore", function () {
             throw new Error(
               `The 150% fixture needs a larger native display mode; advertised modes: ${JSON.stringify(modes)}`,
             );
-          // Use a tested session-only mode, without changing the registry.
           windowsResolution(mode);
         }
         await openNativeShell();

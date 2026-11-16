@@ -8,8 +8,7 @@ if (!["win32", "darwin", "linux"].includes(process.platform)) {
 const configuration = JSON.parse(
   readFileSync(new URL("../src-tauri/tauri.e2e.conf.json", import.meta.url), "utf8"),
 );
-// Tauri config overlays replace the windows array. Keep test isolation while
-// preserving production window chrome for each platform.
+// Tauri config overlays replace the whole windows array.
 configuration.app.windows[0].decorations = process.platform === "darwin";
 if (process.platform === "darwin") {
   const macConfiguration = JSON.parse(
@@ -22,8 +21,7 @@ if (process.platform === "darwin") {
     trafficLightPosition,
   });
   configuration.app.windows[0].create = true;
-  // Automation relaunches the app outside Launch Services. Keep WKWebView's
-  // rendering callbacks running while the OS changes native window activation.
+  // Automation relaunches the app outside Launch Services, which throttles WKWebView rendering.
   configuration.app.windows[0].backgroundThrottling = "disabled";
 }
 const cli = fileURLToPath(new URL("../node_modules/@tauri-apps/cli/tauri.js", import.meta.url));

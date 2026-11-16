@@ -64,7 +64,6 @@ describe("parseLogLine", () => {
     expect(logLevel("2026/11/01 09:58:12 [error] 12#0: upstream timed out")).toBe("error");
     expect(logLevel(" sshd: info: retrying after failure")).toBeNull();
     expect(logLevel(" worker: error: job 7 failed")).toBe("error");
-    // Ordinary words are not stated levels; the message words decide.
     expect(logLevel("Information about the failed job")).toBe("error");
     expect(logLevel("anonymous usage and error information")).toBe("error");
   });

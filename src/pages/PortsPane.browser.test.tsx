@@ -256,10 +256,7 @@ const manySockets: CachedList<ListeningSocket> = {
   error: null,
 };
 
-/** A person's press: pointerdown focuses the chip, the camera may move while
- *  the button is held, and the mouseup lands on whatever sits under the same
- *  cursor position afterwards. Dispatched by hand on purpose — Playwright
- *  locator clicks retry until the canvas holds still, which hides the bug. */
+// Playwright locator clicks retry until the canvas holds still.
 async function handClick(target: HTMLElement, pressAt?: { x: number; y: number }) {
   const bounds = target.getBoundingClientRect();
   const x = pressAt?.x ?? bounds.left + bounds.width / 2;
@@ -357,7 +354,6 @@ for (const width of [960, 1600]) {
     expect(document.activeElement).toBe(inspector);
 
     expect(getComputedStyle(inspector).animationName).toBe("port-inspector-in");
-    // Related connection evidence belongs to the selected listening endpoint.
     expect(screen.getAllByRole("button", { name: /12 established/ })).toHaveLength(1);
     await page.getByText("12 established · Remote endpoints", { exact: true }).click();
     expect(within(screen.getByRole("complementary")).getByText("203.0.113.9")).toBeTruthy();
@@ -689,9 +685,6 @@ it("commits the selection when pressing a chip beside the inspector panel", asyn
   await waitFor(() => expect(document.querySelector(".arch-focusing")).toBeNull());
   await waitFor(() => expectNodeBesideInspector(current.element()));
 
-  // Some card pokes out from under the panel, so its visible sliver is where
-  // a person presses. Reveal motion used to fire on the mousedown focus and
-  // jump the canvas away before the mouseup landed, losing the switch.
   const panelLeft = screen.getByRole("complementary").getBoundingClientRect().left;
   const pressed = [...document.querySelectorAll<HTMLButtonElement>(".arch-chip")].find((chip) => {
     const bounds = chip.getBoundingClientRect();
@@ -717,7 +710,6 @@ it("commits the selection when pressing another chip mid-glide", async () => {
   await current.click();
   await waitFor(() => expectNodeBesideInspector(current.element()));
 
-  // The second press lands while the camera is still gliding toward 9090.
   await handClick(screen.getByRole("button", { name: /9090.*Listening/ }) as HTMLButtonElement);
   const pressed = screen.getByRole("button", {
     name: /3000.*Listening/,
@@ -744,8 +736,6 @@ it("reveals chips for keyboard focus without selecting them", async () => {
     const focused = document.activeElement;
     if (!(focused instanceof HTMLElement) || !focused.classList.contains("arch-chip")) break;
     focusedChips += 1;
-    // Keyboard focus must always land on a revealed chip; mouse focus must
-    // never move the camera, so this walk only passes with both halves.
     await waitFor(() => {
       const bounds = focused.getBoundingClientRect();
       expect(bounds.left).toBeGreaterThanOrEqual(viewport.left + 20);
@@ -780,13 +770,11 @@ it("keeps warning retry actions below long messages without splitting their labe
       const warning = button.closest(".reading-warning")!;
       const message = warning.querySelector(".reading-warning-detail")!.getBoundingClientRect();
       const bounds = button.getBoundingClientRect();
-      // One line of label, below the whole reason and inside the row.
       expect(bounds.height).toBeLessThanOrEqual(30);
       expect(button.scrollWidth).toBeLessThanOrEqual(button.clientWidth);
       expect(bounds.top).toBeGreaterThanOrEqual(message.bottom + 4);
       expect(bounds.left).toBeCloseTo(message.left, 0);
       expect(bounds.right).toBeLessThanOrEqual(warning.getBoundingClientRect().right);
-      // The reason is readable muted text, not amber like the warning icon.
       expect(getComputedStyle(warning.querySelector(".reading-warning-detail")!).color).toBe(
         "rgb(173, 173, 170)",
       );

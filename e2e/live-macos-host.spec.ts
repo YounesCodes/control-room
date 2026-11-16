@@ -78,8 +78,7 @@ describe("macOS SSH host journeys against a real Mac", () => {
     await expect(heading).toHaveAttribute("title", expect.stringContaining(caps.dockerContext!));
     const chip = $(`.docker-page .arch-chip*=${containers[0].name}`);
     await chip.waitForExist({ timeout: 30_000 });
-    // Graph chips select on pointer press; the embedded driver sends no
-    // PointerEvents, so activate the chip the way keyboard users do.
+    // The embedded driver sends no PointerEvents.
     await browser.execute((node: HTMLElement) => node.click(), await chip);
     await $("aside[aria-label='Container details']").waitForDisplayed();
     await $("aside[aria-label='Container details']").$("button*=View logs").click();

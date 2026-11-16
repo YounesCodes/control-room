@@ -14,7 +14,6 @@ export function terminalGroupForWorkspace(
   return groups.find((group) => getTerminalLayoutIds(group.layout).includes(workspaceId)) ?? null;
 }
 
-/** Name new groups by their lowest free number; members and order change after creation. */
 export function nextTerminalGroupName(groups: TerminalGroup[]): string {
   const names = new Set(groups.map((group) => group.name.trim().toLocaleLowerCase()));
   for (let number = 1; ; number += 1) {

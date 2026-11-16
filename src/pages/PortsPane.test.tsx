@@ -476,7 +476,6 @@ describe("PortsPane", () => {
     const row = screen.getByText("Listening ports").closest("li")!;
     expect(within(row).getByText("Unavailable")).toBeTruthy();
     expect(within(row).getByText("Listener permission denied")).toBeTruthy();
-    // Every action reads "Retry"; its accessible name says which read it repeats.
     expect(within(row).getByRole("button", { name: "Retry ports" }).textContent).toBe("Retry");
   });
 

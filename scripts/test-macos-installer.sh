@@ -1,10 +1,6 @@
 #!/bin/bash
-# Build the release .app and DMG, install the app from the DMG into a private
-# folder, launch it on the logged-in desktop and check its window and database.
-# Needs native macOS support (PR #65) and a disposable account: the release app
-# uses the account's real data folder, which must not exist beforehand.
-# Production WKWebViews cannot be driven without Accessibility approval, so this
-# does not click through the UI.
+# Needs a disposable account: the release app uses the account's real data folder.
+# Production WKWebViews cannot be driven without Accessibility approval.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 version=$(node -p 'require("./package.json").version')
@@ -50,8 +46,7 @@ mkdir -p "$data"
 touch "$data/.installer-fixture"
 "$app/Contents/MacOS/control-room" > "$work/app.log" 2>&1 &
 pid=$!
-# Count the app's ordinary on-screen windows. A compiled probe starts instantly;
-# the Swift interpreter can take longer than the whole check.
+# A compiled probe starts faster than the Swift interpreter.
 cat > "$work/windows.c" <<'C'
 #include <CoreGraphics/CoreGraphics.h>
 #include <stdio.h>

@@ -22,8 +22,6 @@ export function removeConnectionWorkspaces(
   activeWorkspaceId: string | null,
   terminalGroups: TerminalGroup[],
 ): RemovedConnectionWorkspaces {
-  // Deleting a Saved Connection touches its own Workspaces only. Local
-  // Workspaces have no connection to lose and stay open.
   const belongsToConnection = (workspace: Workspace) =>
     isRemoteWorkspace(workspace) && workspace.connectionId === connectionId;
   const removed = workspaces.filter(belongsToConnection);

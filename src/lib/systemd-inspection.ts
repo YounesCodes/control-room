@@ -57,7 +57,6 @@ async function read(
   return promise;
 }
 
-/** Only explicitly selected or expanded units are read, with at most two reads in flight. */
 export function useSystemdReads(
   connection: string,
   units: string[],
@@ -75,8 +74,6 @@ export function useSystemdReads(
   }>({ connection, section, scope, values: {} });
   useEffect(() => {
     let cancelled = false;
-    // Retire in-flight reads as well as cached values when a Saved Connection
-    // changes target, including when it changes back during a queued SSH read.
     if (scopes.has(connection) && scopes.get(connection) !== scope)
       invalidateSystemdReads(connection);
     scopes.set(connection, scope);

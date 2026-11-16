@@ -18,7 +18,6 @@ export interface PortOverviewItem {
   sockets: ListeningSocket[];
   bindings: DockerPortLink[];
   connections: ConnectionSummary[];
-  /** Presentation relationship only; does not establish service/container ownership. */
   relatedTo?: string;
 }
 
@@ -40,7 +39,6 @@ function ownerKey(
   return "unknown:" + fallback;
 }
 
-/** Consolidate presentation only. Every socket, mapping and peer summary is retained. */
 export function buildPortOverview(
   sockets: ListeningSocket[],
   containers: DockerContainer[],
@@ -97,7 +95,6 @@ export function buildPortOverview(
           binding.hostAddress === socket.localAddress.replace(/^\[|\]$/g, ""),
       ),
     );
-    // An ambiguous mapping never becomes ownership evidence.
     const entry =
       candidates.length === 1
         ? candidates[0]
@@ -196,7 +193,6 @@ export function buildPortOverview(
     )
       continue;
     const visible = { ...entry, sockets: boundSockets, bindings: published };
-    // Service identity is explicit; process identity includes PID; unknown owners stay separate.
     const key =
       entry.owner.kind === "container"
         ? "container:" + entry.bindings[0].container.id
@@ -210,7 +206,6 @@ export function buildPortOverview(
     if (group) group.items.push(visible);
     else groups.set(key, { key, owner: entry.owner, items: [visible] });
   }
-  // Keep worker/peer records close to a unique related listener without merging evidence.
   const listeningGroups = [...groups.values()].filter((group) =>
     group.items.some((item) => item.sockets.length),
   );

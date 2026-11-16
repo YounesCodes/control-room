@@ -77,13 +77,8 @@ export function PortsPane({
   const connectionsVisible =
     kind === "all" || kind === "connections" || (kind === "overview" && showConnections);
   const [portsSudo, setPortsSudo] = useState(false);
-  // Whether the read behind the current list actually ran as root. A permission
-  // the account cannot use does not elevate anything, so this is not the same
-  // as the setting being on.
   const [portsElevated, setPortsElevated] = useState(false);
 
-  // Firewall and established connections are host-live data: kept in component
-  // state only and never persisted to the Workspace.
   const [firewall, setFirewall] = useState<FirewallStatus | null>(null);
   const [firewallError, setFirewallError] = useState<string | null>(null);
   const [firewallSudo, setFirewallSudo] = useState(false);
@@ -91,8 +86,6 @@ export function PortsPane({
   const [connectionsLoading, setConnectionsLoading] = useState(false);
   const [connectionsError, setConnectionsError] = useState<string | null>(null);
 
-  // An allowance only elevates an account sudo does not question. Without the
-  // capability the read runs unelevated no matter what the switches say.
   const elevationInEffect =
     elevationAllowed(globalSudoEnabled, connection.sudoEnabled) &&
     capabilities?.passwordlessSudo === true;
@@ -189,8 +182,6 @@ export function PortsPane({
     };
   }, [connection.id]);
 
-  // Changing the elevation allowance changes what a read can see, so the cached
-  // list from the other side of that change is stale by definition.
   const firstElevationRef = useRef(true);
   useEffect(() => {
     if (firstElevationRef.current) {
@@ -209,7 +200,6 @@ export function PortsPane({
   }
 
   useEffect(() => {
-    // The credential modal owns outside clicks and Escape until it closes.
     if (!tools || firewallSudo || portsSudo) return;
     const panel = toolsRef.current?.querySelector<HTMLElement>(".ports-tools-panel");
     (panel?.querySelector<HTMLElement>("input, select") ?? panel)?.focus();
@@ -293,8 +283,6 @@ export function PortsPane({
       source: "Firewall status",
       state: "Unavailable",
       detail: firewallError,
-      // A busy queue or timeout is worth retrying as is; only a permission
-      // error is worth a sudo password.
       action: firewallOffersSudo
         ? {
             label: "Retry with sudo",
@@ -380,8 +368,6 @@ export function PortsPane({
                   : undefined
         }
         sockets={cache.items}
-        // A remote Docker context publishes ports on another machine, so its
-        // mappings must not be attributed to this host's listeners.
         containers={capabilities?.dockerRemote ? [] : containersCache.items}
         firewall={firewall}
         capabilities={capabilities}
@@ -400,9 +386,7 @@ export function PortsPane({
               ? "Connections unavailable"
               : cache.loading
                 ? "Reading listening ports…"
-                : // An empty graph after a failed read is missing data, not a
-                  // filter result. The overview says so too when nothing loaded.
-                  cache.error && (kind === "listeners" || !cache.items.length)
+                : cache.error && (kind === "listeners" || !cache.items.length)
                   ? "Listening ports unavailable"
                   : kind === "connections" && !connections?.groups.length
                     ? "No established connections"

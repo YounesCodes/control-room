@@ -452,7 +452,6 @@ describe("LogsPane reading aids", () => {
     const log = await streamJournal();
     expect(log.tabIndex).toBe(0);
     expect(log.getAttribute("aria-live")).toBe("off");
-    // Line numbers are CSS-generated, so copied text and reading order hold only host output.
     expect(log.querySelector(".log-line")?.textContent).toBe(
       "[systemd ssh.service] stream started",
     );
@@ -682,7 +681,6 @@ describe("LogsPane source switching", () => {
     fireEvent.change(unitSelect(), { target: { value: "cron.service" } });
     fireEvent.change(unitSelect(), { target: { value: "backup.service" } });
     await waitFor(() => expect(pending.length).toBeGreaterThan(0));
-    // Resolve the newest request first, then the older one.
     await act(async () => {
       for (const resolve of [...pending].reverse()) resolve();
     });
@@ -1010,7 +1008,6 @@ describe("LogsPane source discovery", () => {
     expect(screen.queryByRole("combobox", { name: "Unit" })).toBeNull();
     expect(screen.getByRole("status").textContent).toBe("Finding available log sources…");
 
-    // A refresh with sources already known keeps the picker usable.
     view.rerender(<LogsPane {...props} servicesCache={{ ...servicesCache, loading: true }} />);
     expect(screen.getByRole("combobox", { name: "Unit" })).toBeTruthy();
     expect(screen.queryByText("Finding available log sources…")).toBeNull();

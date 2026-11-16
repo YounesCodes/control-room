@@ -37,9 +37,7 @@ export function writeScratchpadDraft(
 export function clearScratchpadDraft(scope: ScratchpadScope, ownerId: string): void {
   try {
     window.localStorage.removeItem(scratchpadDraftKey(scope, ownerId));
-  } catch {
-    // SQLite remains authoritative; a storage-disabled WebView simply has no fallback draft.
-  }
+  } catch {}
 }
 
 export function registerScratchpadQuiesce(
