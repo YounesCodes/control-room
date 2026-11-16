@@ -45,7 +45,7 @@ const noDynamicTauriImport = {
 };
 
 export default tseslint.config(
-  { ignores: ["dist", "node_modules", "src-tauri/target", "docs"] },
+  { ignores: ["dist", "node_modules", "src-tauri/target", "docs", ".claude"] },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {

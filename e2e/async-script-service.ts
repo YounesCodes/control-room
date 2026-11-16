@@ -1,4 +1,3 @@
-// Functions are serialized for WebDriver and are never called by this service.
 type Script = string | ((...args: never[]) => unknown);
 type AsyncScriptBrowser = {
   executeAsync?: unknown;
