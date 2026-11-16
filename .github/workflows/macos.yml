@@ -15,19 +15,32 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  native:
-    name: Native tests (${{ matrix.arch }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-15
-            arch: arm64
-          - os: macos-15-intel
-            arch: x86_64
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      software: ${{ steps.classify.outputs.software }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: classify
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: node .github/scripts/software-changes.mjs --check
+
+  # Separate jobs keep both required check names when GitHub skips them.
+  native-arm64:
+    name: Native tests (arm64)
+    needs: changes
+    if: &run-macos ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.software != 'false') }}
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      EXPECTED_ARCH: arm64
+    steps: &native-steps
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
@@ -42,8 +55,6 @@ jobs:
           cache-bin: false
           cache-on-failure: true
       - name: Verify native runner architecture
-        env:
-          EXPECTED_ARCH: ${{ matrix.arch }}
         run: test "$(uname -m)" = "$EXPECTED_ARCH"
       - run: npm ci
       - run: npm run check:version
@@ -67,12 +78,24 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: failure() && steps.sanitize.outcome == 'success'
         with:
-          name: macos-${{ matrix.arch }}-diagnostics
+          name: macos-${{ env.EXPECTED_ARCH }}-diagnostics
           path: test-results/desktop-sanitized/
           if-no-files-found: ignore
 
+  native-x86-64:
+    name: Native tests (x86_64)
+    needs: changes
+    if: *run-macos
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    env:
+      EXPECTED_ARCH: x86_64
+    steps: *native-steps
+
   bundle:
     name: App and DMG (${{ matrix.target }})
+    needs: changes
+    if: *run-macos
     strategy:
       fail-fast: false
       matrix:
