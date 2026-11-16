@@ -28,8 +28,6 @@ const api = vi.hoisted(() => ({
   scratchpadNote: vi.fn(),
   saveScratchpadNote: vi.fn(),
   closeSession: vi.fn(),
-  // Control Room's own updater. Mounted once by App, so every test that renders
-  // App reaches it.
   currentAppVersion: vi.fn(),
   checkForUpdate: vi.fn(),
   pendingUpdateNotice: vi.fn(),
@@ -45,7 +43,6 @@ vi.mock("./components/WindowControls", () => ({
   WindowControls: () => <div data-testid="window-controls" />,
 }));
 
-/// How many times each Workspace's terminal has rendered.
 const paneRenders = vi.hoisted(() => new Map<string, number>());
 
 vi.mock("./components/TerminalPane", () => ({
@@ -65,9 +62,6 @@ vi.mock("./components/TerminalPane", () => ({
       <button type="button" className="test-pty" onClick={() => onActivity("output")}>
         {`output ${workspace.id}`}
       </button>
-      {/* The pty reporting a started session and a state change. That is the
-          only way a Workspace acquires either, and both arrive whenever the
-          host answers rather than when the UI is ready for them. */}
       <button
         type="button"
         className="test-pty"
@@ -139,16 +133,12 @@ function restoredState(connectionIds: string[]): PersistedWorkspaceState {
   };
 }
 
-/// A hidden Workspace's pane is `aria-hidden`, so role queries skip it. The
-/// stand-in pty controls are reached through the pane itself.
 function ptyButton(workspaceId: string, action: "start" | "connect" | "output"): HTMLElement {
   return within(screen.getByTestId(`terminal-${workspaceId}`)).getByText(
     `${action} ${workspaceId}`,
   );
 }
 
-/// The rail entry that opens a Saved Connection, as distinct from its actions
-/// menu and from a Workspace tab carrying the same name.
 function railEntry(displayName: string): HTMLElement {
   const entry = screen
     .getAllByRole("button")
@@ -161,9 +151,6 @@ function railEntry(displayName: string): HTMLElement {
   return entry;
 }
 
-/// Open Workspace tabs for one connection, counted from the tab strip rather
-/// than the rail, so a Saved Connection that is merely listed does not read as
-/// one that is open.
 function workspaceTabCount(displayName: string): number {
   return screen
     .getAllByRole("button")
@@ -185,8 +172,7 @@ function tabMainButton(label: string) {
   )!;
 }
 
-/// The jsdom strip reports zero boxes; pin the uniform tab slots the browser
-/// would lay out before driving a pointer drag.
+// jsdom reports zero-sized boxes.
 function stubTabStripLayout() {
   const content = document.querySelector<HTMLElement>(".session-tabs .session-tab-content");
   if (!content) throw new Error("no workspace tab strip");
@@ -212,7 +198,6 @@ function stubTabStripLayout() {
   });
 }
 
-/// The repo's pointer event pattern: a MouseEvent with pointer properties.
 function stripPointer(node: Element, type: string, x: number, y = 17) {
   const event = new MouseEvent(type, {
     bubbles: true,
@@ -225,7 +210,6 @@ function stripPointer(node: Element, type: string, x: number, y = 17) {
   fireEvent(node, event);
 }
 
-/// The most recent order App asked to persist, as workspace ids.
 function lastSavedWorkspaceIds() {
   const calls = api.saveWorkspaceState.mock.calls;
   return (calls[calls.length - 1]?.[0] as { workspaces: { id: string }[] }).workspaces.map(
@@ -237,8 +221,6 @@ function activeTabLabel() {
   return document.querySelector(".session-tab-wrap.active .session-tab-main")?.textContent;
 }
 
-/// Focus-mode strip: two two-pane groups around one plain Workspace, with a
-/// group member active: Alpha owns workspaces 0 and 1, Beta owns 3 and 4.
 function restoredGroupedState(): PersistedWorkspaceState {
   return {
     workspaces: ["a", "b", "c", "d", "e"].map((connectionId, index) => ({
@@ -276,8 +258,6 @@ function restoredGroupedState(): PersistedWorkspaceState {
   };
 }
 
-/// Focus mode collapses each terminal group to one slot, so the strip reads
-/// `Alpha 2` for a group and `Host C` for a plain Workspace.
 function focusStripLabels(): string[] {
   return Array.from(
     document.querySelectorAll<HTMLElement>(".session-tabs .session-tab-content > *"),
@@ -292,7 +272,6 @@ function focusStripLabels(): string[] {
 }
 
 function groupTab(name: string): HTMLElement {
-  // The group row's scope keeps the aria name short; Rename and Ungroup sit beside it.
   return within(screen.getByRole("group", { name })).getByRole("button", { name: /^Open / });
 }
 
@@ -361,15 +340,12 @@ describe("App Workspace behavior", () => {
 
     render(<App />);
 
-    // App loads TerminalPane lazily. Parallel full-suite runs can delay that
-    // import beyond Testing Library's one-second default without delaying App.
     expect(
       await screen.findByTestId("terminal-workspace-0", undefined, { timeout: 5_000 }),
     ).toBeTruthy();
     expect(screen.getByTestId("terminal-workspace-1")).toBeTruthy();
     await user.click(screen.getByLabelText("Open actions for Host A"));
     await user.click(screen.getByRole("menuitem", { name: /Delete connection/i }));
-    // Confirm the deletion in the in-app dialog.
     await user.click(screen.getByRole("button", { name: /Delete connection/i }));
 
     await waitFor(() => expect(screen.queryByTestId("terminal-workspace-0")).toBeNull());
@@ -423,15 +399,12 @@ describe("App Workspace behavior", () => {
     await user.keyboard("{Enter}");
     await user.click(screen.getByRole("button", { name: "Close Settings" }));
 
-    // The in-app confirm dialog appears and Settings stays open.
     expect(screen.getByRole("heading", { name: "Settings" })).toBeTruthy();
     expect(screen.getByText("Discard unsaved Settings changes?")).toBeTruthy();
 
-    // Cancel keeps the Settings page.
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.getByRole("heading", { name: "Settings" })).toBeTruthy();
 
-    // Discarding leaves Settings.
     await user.click(screen.getByRole("button", { name: "Close Settings" }));
     await user.click(screen.getByRole("button", { name: "Discard" }));
     await waitFor(() => expect(screen.queryByRole("heading", { name: "Settings" })).toBeNull());
@@ -452,15 +425,6 @@ describe("App Workspace behavior", () => {
     expect(terminal.getAttribute("data-reconnect-token")).toBe("0");
   });
 
-  // CR-AUDIT-005. `performDeleteConnection` reads `workspaces` from the render
-  // that created the confirmation callback, awaits the backend, and then writes
-  // a whole array back. Anything that changed the Workspace list while it was
-  // waiting is inside neither copy, so the write puts the older list back and
-  // the change is gone.
-  //
-  // Deleting a Saved Connection is the reachable version: the dialog closes
-  // before the work starts, so the rail stays live and opening another host's
-  // Workspace during a slow delete is an ordinary thing to do.
   it("keeps a Workspace opened while a connection deletion is in flight", async () => {
     const user = userEvent.setup();
     const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
@@ -484,13 +448,11 @@ describe("App Workspace behavior", () => {
     await user.click(screen.getByRole("button", { name: /Delete connection/i }));
     await waitFor(() => expect(api.deleteConnection).toHaveBeenCalled());
 
-    // The delete has not come back yet. Open the other host's Workspace.
     await user.click(railEntry("Host B"));
     await waitFor(() => expect(workspaceTabCount("Host B")).toBe(1));
 
     finishDelete();
 
-    // Host A's Workspace goes, and Host B's stays.
     await waitFor(() => expect(screen.queryByTestId("terminal-workspace-0")).toBeNull());
     expect(
       workspaceTabCount("Host B"),
@@ -498,11 +460,6 @@ describe("App Workspace behavior", () => {
     ).toBe(1);
   });
 
-  // The second async window inside the same deletion. Once the backend record
-  // is gone, the deleted connection's own Terminal Sessions still have to be
-  // torn down, and each teardown is a round trip. Taking the Workspace list
-  // before that loop and writing the result after it is the same stale-state
-  // shape as the test above, one await later.
   it("keeps a Workspace opened while a deleted connection's session is closing", async () => {
     const user = userEvent.setup();
     const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
@@ -510,8 +467,6 @@ describe("App Workspace behavior", () => {
     api.listConnections.mockResolvedValue([first, second]);
     api.workspaceState.mockResolvedValue(restoredState([first.id]));
 
-    // The delete itself returns at once. It is the pty teardown behind it that
-    // takes time here.
     api.deleteConnection.mockResolvedValue(undefined);
     const closes: Array<() => void> = [];
     api.closeSession.mockImplementation(
@@ -521,8 +476,6 @@ describe("App Workspace behavior", () => {
     const { container } = render(<App />);
     expect(await screen.findByTestId("terminal-workspace-0")).toBeTruthy();
 
-    // Host A's Workspace has a live session, so deleting it has something to
-    // close.
     await user.click(ptyButton("workspace-0", "start"));
 
     await user.click(screen.getByLabelText("Open actions for Host A"));
@@ -530,35 +483,26 @@ describe("App Workspace behavior", () => {
     await user.click(screen.getByRole("button", { name: /Delete connection/i }));
     await waitFor(() => expect(api.closeSession).toHaveBeenCalledWith("session-workspace-0"));
 
-    // The record is deleted and the pty is still closing. Open the other host.
     await user.click(railEntry("Host B"));
     await waitFor(() => expect(workspaceTabCount("Host B")).toBe(1));
 
     for (const resolve of [...closes]) resolve();
 
-    // Host A's Workspace goes, and Host B's stays.
     await waitFor(() => expect(screen.queryByTestId("terminal-workspace-0")).toBeNull());
     expect(
       workspaceTabCount("Host B"),
       "the Workspace opened during the session teardown was rolled back",
     ).toBe(1);
-    // Host A's rail entry is gone too, and Host B's is not.
     expect(container.textContent).not.toContain("Host Auser@");
     expect(railEntry("Host B")).toBeTruthy();
   });
 
-  // Deletion now removes the connection from the rail before it awaits, and
-  // derives the removal from the list as it is afterwards. That reordering has
-  // to leave the rest of the teardown exactly as it was, so this covers a
-  // connection with more than one Workspace, only one of which has a session,
-  // beside an unrelated Workspace that has to survive all of it.
   it("removes every Workspace of a deleted connection and leaves the rest intact", async () => {
     const user = userEvent.setup();
     const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
     const second = connection("22222222-2222-4222-8222-222222222222", "Host B");
     api.listConnections.mockResolvedValue([first, second]);
     api.workspaceState.mockResolvedValue(restoredState([first.id, first.id, second.id]));
-    // A pty that refuses to close is still best effort: the Workspaces go.
     api.closeSession.mockRejectedValue(new Error("session is already gone"));
 
     render(<App />);
@@ -575,13 +519,9 @@ describe("App Workspace behavior", () => {
     expect(workspaceTabCount("Host A")).toBe(0);
     expect(workspaceTabCount("Host B")).toBe(1);
 
-    // The one session that existed was closed, and the one Workspace that had
-    // none asked for nothing.
     expect(api.closeSession).toHaveBeenCalledWith("session-workspace-1");
     expect(api.closeSession).toHaveBeenCalledTimes(1);
 
-    // The active Workspace was one of the deleted ones, so it falls back to
-    // what is left rather than to nothing.
     const activeTab = screen
       .getAllByRole("button", { current: "page" })
       .filter((button) => button.className.includes("session-tab-main"));
@@ -589,8 +529,6 @@ describe("App Workspace behavior", () => {
     expect(activeTab[0].textContent).toBe("Host B");
   });
 
-  // The path with nothing to await at all. It shares the reordered code, so a
-  // change that only works when there is a session to close fails here.
   it("deletes a connection that has no open Workspace", async () => {
     const user = userEvent.setup();
     const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
@@ -611,10 +549,6 @@ describe("App Workspace behavior", () => {
     expect(workspaceTabCount("Host B")).toBe(1);
   });
 
-  // The other half of CR-AUDIT-005. Closing a Workspace with a live session
-  // asks first, then awaits the pty teardown, and only then replaces the whole
-  // list. A session that reported connected in that window belongs to a
-  // Workspace the replacement does not know about.
   it("keeps a session state that arrives while another Workspace is closing", async () => {
     const user = userEvent.setup();
     const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
@@ -633,13 +567,11 @@ describe("App Workspace behavior", () => {
     const { container } = render(<App />);
     expect(await screen.findByTestId("terminal-workspace-0")).toBeTruthy();
 
-    // Host A's Workspace has a live session, so closing it asks first.
     await user.click(ptyButton("workspace-0", "start"));
     await user.click(screen.getByRole("button", { name: "Close Host A Workspace" }));
     await user.click(screen.getByRole("button", { name: "Disconnect & close" }));
     await waitFor(() => expect(api.closeSession).toHaveBeenCalled());
 
-    // Host B connects while the teardown is still in flight.
     await user.click(ptyButton("workspace-1", "connect"));
     await waitFor(() => expect(container.querySelector(".presence-connected")).toBeTruthy());
 
@@ -677,7 +609,6 @@ describe("App Workspace behavior", () => {
     await waitFor(() => expect(api.cachedCapabilities).toHaveBeenCalledTimes(2));
     const rendered = new Map(paneRenders);
 
-    // Filtering the rail and opening a dialog both render App.
     await user.type(
       screen.getByRole("textbox", { name: "Filter connections by name, group, or tag" }),
       "host",
@@ -687,7 +618,6 @@ describe("App Workspace behavior", () => {
 
     expect(new Map(paneRenders)).toEqual(rendered);
 
-    // A terminal still renders for its own Workspace.
     await user.keyboard("{Escape}");
     fireEvent.click(ptyButton("workspace-1", "connect"));
     await waitFor(() =>
@@ -710,7 +640,6 @@ describe("App Workspace behavior", () => {
     expect(await screen.findByTestId("terminal-workspace-1")).toBeTruthy();
     await waitFor(() => expect(api.cachedCapabilities).toHaveBeenCalledTimes(2));
 
-    // The first report is new state; a pty then reports once per read.
     fireEvent.click(ptyButton("workspace-1", "output"));
     fireEvent.click(ptyButton("workspace-1", "output"));
     const settled = commits;
@@ -729,7 +658,6 @@ describe("App Workspace behavior", () => {
     await waitFor(() => expect(api.saveWorkspaceState).toHaveBeenCalled());
     const saves = api.saveWorkspaceState.mock.calls.length;
 
-    // A session connecting changes the Workspace, but nothing that is saved.
     fireEvent.click(ptyButton("workspace-0", "connect"));
     fireEvent.click(ptyButton("workspace-0", "output"));
     await new Promise((resolve) => setTimeout(resolve, 400));
@@ -746,13 +674,10 @@ describe("App Workspace behavior", () => {
     api.environment.mockReturnValue(new Promise((resolve) => (answer = resolve)));
     render(<App />);
 
-    // The first screen is there while the probe is still running, and it does
-    // not yet claim that OpenSSH is missing.
     expect(await screen.findByRole("heading", { name: "No connections yet" })).toBeTruthy();
     expect(screen.queryByText(/OpenSSH was not detected/)).toBeNull();
     await user.click(screen.getByRole("button", { name: "Open Settings" }));
     await user.click(screen.getByRole("button", { name: "App & Diagnostics" }));
-    // The SSH section holds its place and says it is still reading.
     expect(
       screen
         .getAllByRole("status")
@@ -790,13 +715,10 @@ describe("App Workspace behavior", () => {
     const hostCTab = tabMainButton("Host C");
     stripPointer(hostCTab, "pointerdown", 480);
     stripPointer(hostCTab, "pointermove", 60);
-    // Mid-drag the tab is lifted and the rest slide.
     expect(document.querySelector(".session-tab-dragged")).toBeTruthy();
     stripPointer(hostCTab, "pointerup", 60);
 
     expect(stripOrder()).toEqual(["Host C", "Host A", "Host B"]);
-    // The reordered tab keeps its terminal instance, session included, and the
-    // active Workspace is untouched by the motion next to it.
     expect(screen.getByTestId("terminal-workspace-2")).toBe(terminalC);
     expect(screen.getByTestId("terminal-workspace-0")).toBe(terminalA);
     expect(screen.getByTestId("terminal-workspace-1")).toBe(terminalB);
@@ -805,7 +727,6 @@ describe("App Workspace behavior", () => {
       expect(lastSavedWorkspaceIds()).toEqual(["workspace-2", "workspace-0", "workspace-1"]),
     );
 
-    // A finished drag does not swallow the next click: selecting still works.
     await user.click(tabMainButton("Host B"));
     await waitFor(() => expect(activeTabLabel()).toBe("Host B"));
     expect(stripOrder()).toEqual(["Host C", "Host A", "Host B"]);
@@ -839,7 +760,6 @@ describe("App Workspace behavior", () => {
       expect(lastSavedWorkspaceIds()).toEqual(["workspace-0", "workspace-1", "workspace-2"]),
     );
 
-    // The canceled drag left normal tab selection in place.
     await user.click(tabMainButton("Host C"));
     await waitFor(() => expect(activeTabLabel()).toBe("Host C"));
   });
@@ -855,8 +775,6 @@ describe("App Workspace behavior", () => {
     stripPointer(betaTab, "pointerup", 60);
 
     expect(focusStripLabels()).toEqual(["Beta 2", "Alpha 2", "Host C"]);
-    // The group moves whole, so its two Workspaces land together and in pane
-    // order, ahead of the plain Workspace it passed.
     await waitFor(() =>
       expect(lastSavedWorkspaceIds()).toEqual([
         "workspace-3",
@@ -866,7 +784,6 @@ describe("App Workspace behavior", () => {
         "workspace-2",
       ]),
     );
-    // Both groups stay single slots and the active group keeps its mark.
     expect(screen.getByRole("group", { name: "Alpha" })).toBeTruthy();
     expect(screen.getByRole("group", { name: "Beta" })).toBeTruthy();
     expect(document.querySelector(".session-tab-group.active")?.textContent).toContain("Alpha");
@@ -887,7 +804,6 @@ describe("App Workspace behavior", () => {
 
     stripPointer(alphaTab, "pointerup", 450);
     expect(focusStripLabels()).toEqual(["Alpha 2", "Host C", "Beta 2"]);
-    // The strip keeps its group block, plain tab, and group blocks in order.
     await waitFor(() =>
       expect(lastSavedWorkspaceIds()).toEqual([
         "workspace-0",
@@ -907,7 +823,6 @@ describe("App Workspace behavior", () => {
     act(() => alphaTab.focus());
     fireEvent.keyDown(alphaTab, { key: "ArrowRight", ctrlKey: true, shiftKey: true });
     expect(focusStripLabels()).toEqual(["Host C", "Alpha 2", "Beta 2"]);
-    // Moving the group one slot moves its Workspaces as one block.
     await waitFor(() =>
       expect(lastSavedWorkspaceIds()).toEqual([
         "workspace-2",
@@ -935,13 +850,11 @@ describe("App Workspace behavior", () => {
     const hostB = tabMainButton("Host B");
     fireEvent.keyDown(hostB, { key: "ArrowLeft", ctrlKey: true, shiftKey: true });
     expect(stripOrder()).toEqual(["Host B", "Host A", "Host C"]);
-    // Moving a tab never moves the active Workspace with it.
     expect(activeTabLabel()).toBe("Host A");
     await waitFor(() =>
       expect(lastSavedWorkspaceIds()).toEqual(["workspace-1", "workspace-0", "workspace-2"]),
     );
 
-    // Closing the moved tab leaves the survivors in their new relative order.
     await user.click(screen.getByRole("button", { name: "Close Host B Workspace" }));
     await waitFor(() => expect(screen.queryByTestId("terminal-workspace-1")).toBeNull());
     expect(stripOrder()).toEqual(["Host A", "Host C"]);

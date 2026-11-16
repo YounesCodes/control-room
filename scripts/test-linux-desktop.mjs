@@ -13,8 +13,7 @@ const env = {
   XDG_DATA_HOME: join(home, "data"),
   SHELL: "/bin/bash",
   TAURI_WEBVIEW_AUTOMATION: "true",
-  // WebKit's helper processes outlive the closed window and would still be
-  // writing a shader cache into this home while the cleanup removes it.
+  // WebKit helper processes outlive the window and keep writing a shader cache.
   MESA_SHADER_CACHE_DISABLE: "true",
 };
 const wm = spawn("openbox", [], { env, stdio: "inherit" });
@@ -46,8 +45,7 @@ function execute(script, ...args) {
   return request("POST", "/session/" + session + "/execute/sync", { script, args });
 }
 
-// Window state as the app's own window commands read it. Toggle Maximize acts
-// on this state, which can trail the X geometry by a few milliseconds.
+// Maximize state can trail the X geometry by a few milliseconds.
 async function maximized() {
   const value = await request("POST", "/session/" + session + "/execute/async", {
     script:
@@ -86,9 +84,7 @@ async function click(label) {
   );
 }
 
-// Native clicks aim at a point in the page. Pane layout glides with Web
-// Animations, and a hidden window holds them until it is shown again, so read
-// the point only once no finite animation runs and two reads agree.
+// A hidden window holds Web Animations until it is shown again.
 async function settledPoint(label, script) {
   let previous = "";
   let point;
@@ -129,8 +125,7 @@ function terminalText(marker) {
 }
 
 try {
-  // A window mapped while Openbox is still starting can stay unmanaged and
-  // invisible to the window lookup. Start the app only under a ready WM.
+  // A window mapped while Openbox is starting can stay unmanaged.
   await waitFor("window manager", () => {
     try {
       xdo("get_num_desktops");
@@ -241,9 +236,7 @@ try {
   xdo("mouseup", "1");
   await waitFor("window resize by its edge", () => width() > initial);
 
-  // A WebDriver click can still be waiting for the page's next rendering
-  // update when the window iconifies, and a minimized page renders nothing.
-  // Click the control the way a user does instead.
+  // A WebDriver click can wait for a rendering update that a minimized page never produces.
   const minimizePoint = await settledPoint(
     "minimize button",
     center("button[aria-label='Minimize window']"),
@@ -280,7 +273,6 @@ try {
     "Installed .deb opened, used the clipboard and split Bash panes, and exercised window controls under X11.",
   );
 } catch (error) {
-  // Report the cause here: a cleanup failure below must not replace it.
   console.error(error);
   if (session) {
     const page = await execute(
@@ -289,7 +281,6 @@ try {
     console.error("Page state:", page);
   }
   try {
-    // Tells an unmapped window apart from a missing or retitled one.
     console.error("Windows named Control Room:", xdo("search", "--name", "Control Room") || "none");
   } catch {
     console.error("No window is named Control Room");
@@ -308,6 +299,5 @@ try {
   if (session) await request("DELETE", "/session/" + session).catch(() => {});
   driver.kill();
   wm.kill();
-  // The app can still be writing its data while it exits.
   rmSync(home, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
 }

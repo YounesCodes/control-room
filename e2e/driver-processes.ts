@@ -68,9 +68,7 @@ export async function stopOwnedDrivers(directory: string) {
   for (const driver of remaining.reverse()) {
     try {
       process.kill(driver.id);
-    } catch {
-      // The service may have already stopped this driver.
-    }
+    } catch {}
   }
   const deadline = Date.now() + 20_000;
   for (const driver of remaining) {

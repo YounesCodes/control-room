@@ -115,8 +115,6 @@ describe("Saved Connection workspace removal", () => {
   });
 
   it("leaves local Workspaces open when a Saved Connection is deleted", () => {
-    // A local shell has no Saved Connection to lose, so deleting one must not
-    // touch it or its session.
     const remote = workspace("remote", "connection-a");
     const local = localWorkspace("local", "powershell-7", "PowerShell 7");
 
@@ -183,7 +181,6 @@ describe("Workspace labels", () => {
 
     expect(workspaceDisplayLabel(first, open)).toBe("PowerShell 7");
     expect(workspaceDisplayLabel(second, open)).toBe("PowerShell 7 2");
-    // A different shell starts its own numbering, as a different connection does.
     expect(workspaceDisplayLabel(bash, open)).toBe("Git Bash");
     expect(workspaceDisplayLabel(remote, open)).toBe("connection-a");
   });

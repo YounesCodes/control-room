@@ -206,9 +206,6 @@ async function mount() {
   else await expect.poll(() => element.querySelector(".sidebar")?.hasAttribute("inert")).toBe(true);
 }
 async function navigate(name: string) {
-  // A viewport change reaches the shell through a ResizeObserver; wait until the shell
-  // agrees with the window, or a just-narrowed window still looks wide here and the
-  // feature navigation stays shut inside the closed drawer.
   const compact = window.innerWidth < 860;
   await expect
     .poll(() => element.querySelector(".app-shell")?.hasAttribute("data-compact"))
@@ -244,7 +241,6 @@ afterEach(() => {
   window.localStorage.clear();
 });
 
-/** Splitting starts from New terminal: open it and choose a split mode card. */
 async function openSplit(card: "Split right" | "Split down" = "Split right") {
   await page.getByRole("button", { name: "New terminal", exact: true }).click();
   await page.getByRole("button", { name: new RegExp(`^${card},`) }).click();
@@ -253,8 +249,6 @@ async function openSplit(card: "Split right" | "Split down" = "Split right") {
 describe("complete app journeys with typed IPC fixtures", () => {
   it("keeps navigation reachable on both sides of the compact breakpoint", async () => {
     await mount();
-    // The terminal takes focus when it first mounts; on a slow runner that can
-    // land after Escape has returned focus to the navigation button.
     await expect.element(page.getByRole("textbox", { name: "Terminal input" })).toBeInTheDocument();
     for (const width of [858, 859, 860, 861, 862, 864]) {
       await page.viewport(width, 600);
@@ -342,7 +336,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
         Boolean(document.activeElement?.closest(".terminal-workspace-pane-visible.active")),
       )
       .toBe(true);
-    // Sample consecutive frames after the pane transition and terminal refit have finished.
     await new Promise((resolve) => setTimeout(resolve, 350));
     const viewport = element.querySelector<HTMLElement>(".terminal-pane-layout")!;
     const panes = Array.from(viewport.querySelectorAll(".terminal-workspace-pane-visible"));
@@ -362,8 +355,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .element(page.getByRole("separator", { name: "Resize terminal split 1" }))
       .toHaveAttribute("aria-orientation", width === 1180 ? "vertical" : "horizontal");
     if (width === 520) {
-      // With New terminal also covering splits, the compact strip keeps the group tab
-      // itself in view rather than collapsing it into the All terminals picker.
       const strip = element.querySelector<HTMLElement>(".session-tabs")!.getBoundingClientRect();
       const group = element.querySelector<HTMLElement>(".session-tab-group")!;
       expect(group.getAttribute("aria-label")).toBe("Group 1");
@@ -451,7 +442,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
         () => element.querySelector<HTMLElement>(".terminal-workspace-pane-visible")!.offsetHeight,
       )
       .toBeGreaterThanOrEqual(180);
-    // The target is now above the source after the swap and compact reflow.
     const from = grip.getBoundingClientRect();
     const destination = page
       .getByRole("button", { name: "Arrange Command Prompt", exact: true })
@@ -470,8 +460,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect
       .element(page.getByRole("separator", { name: "Resize terminal split 1" }))
       .toHaveAttribute("aria-orientation", "vertical");
-    // Panes glide to their wide bounds, and the glide can start a frame late;
-    // aim the drop once that motion settles.
     await settleMotion(element);
     const dock = begin("bottom");
     await expect
@@ -519,10 +507,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
     };
     await expect.poll(() => persisted.terminalGroups?.length).toBe(1);
     const original = structuredClone(persisted.terminalGroups!);
-    // The corner handle carries the drag; releasing over the target body's center swaps.
     await userEvent.dragAndDrop(handle("Fixture Alpha"), paneBody("Command Prompt"));
     await expect.poll(() => persisted.terminalGroups?.[0].layout).not.toEqual(original[0]?.layout);
-    // Pane names live in the pane tabs; a pane shows only its handle, and only under the pointer.
     expect(element.querySelector(".terminal-pane-heading")?.textContent).toBe("");
     await userEvent.hover(paneBody("Command Prompt 2"));
     await expect
@@ -534,7 +520,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .toEqual(["Arrange Command Prompt 2"]);
     await page.screenshot({ path: "../test-results/terminal-pane-handle.png" });
     await page.getByRole("button", { name: "Arrange Fixture Alpha", exact: true }).click();
-    // Arrange is a live map: pointing at a zone previews the move before choosing it.
     const map = page.getByRole("dialog", { name: "Arrange Fixture Alpha" });
     await map.getByRole("button", { name: "Dock below Command Prompt 2", exact: true }).hover();
     await expect
@@ -567,7 +552,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       native.invoke.mock.calls.filter(([command]) => command === "close_session"),
     ).toHaveLength(0);
     await page.screenshot({ path: "../test-results/terminal-rearranged.png" });
-    // Panes close from their pane tab, which reveals Close on hover like every tab.
     await userEvent.hover(
       [...element.querySelectorAll<HTMLElement>(".session-pane-tabs .session-tab-wrap")].find(
         (tab) => tab.querySelector(".session-tab-label")?.textContent === "Fixture Alpha",
@@ -805,7 +789,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const gitLogo = splitChoice.element().querySelector<HTMLImageElement>(".local-shell-mark img")!;
     await vi.waitFor(() => expect(gitLogo.naturalWidth).toBeGreaterThan(0));
     expect(getComputedStyle(gitLogo).filter).toBe("grayscale(1) brightness(0.85)");
-    // Mode cards keep their label on one line beneath a miniature of the result.
     const modes = [
       ...element.ownerDocument.querySelectorAll<HTMLElement>(
         ".terminal-open-modes button > span:last-child",
@@ -930,7 +913,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
 
   it("anchors the New terminal menu to its trigger and reveals each row's identity", async () => {
     await page.viewport(900, 640);
-    // Host B reports Debian, so the two rows reveal different brand hues.
     const debian = { ...fixtures.capabilities("host-b"), osId: "debian", osName: "Debian" };
     const perConnection = (args: { connectionId: string }) =>
       args.connectionId === "host-b" ? debian : fixtures.capabilities(args.connectionId);
@@ -943,18 +925,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await trigger.click();
     const menu = page.getByRole("dialog", { name: "New terminal" });
     await expect.element(menu).toBeVisible();
-    // Settle the shared entrance animation before measuring the anchor.
     for (const animation of menu.element().getAnimations()) {
       if (animation.playState === "running") animation.finish();
     }
-    // Anchored 6px below its own control, clamped inside the window gutters.
     const menuBox = menu.element().getBoundingClientRect();
     const triggerBox = trigger.element().getBoundingClientRect();
     expect(menuBox.top).toBeCloseTo(triggerBox.bottom + 6, 0);
     expect(window.innerWidth - menuBox.right).toBeGreaterThanOrEqual(12);
     expect(menuBox.left).toBeGreaterThanOrEqual(0);
-    // The menu opens with its first row active — highlighted, with its brand
-    // revealed, like a native menu's selection — while the others rest neutral.
     const alphaRow = menu.getByRole("button", { name: "Saved Connections: Fixture Alpha" });
     const alphaMark = alphaRow.element().querySelector(".host-os-ubuntu")!;
     const betaRow = menu.getByRole("button", { name: "Saved Connections: Fixture Beta" });
@@ -964,8 +942,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(color(alphaMark)).toBe("rgb(233, 84, 32)");
     expect(color(betaMark)).toBe(neutral);
     expect(color(localMark)).toBe(neutral);
-    // Hovering anywhere over a row — including just its name — moves the
-    // selection and reveals that row's own brand, one at a time.
     await userEvent.hover(betaRow.element());
     await expect.poll(() => color(betaMark)).toBe("rgb(215, 10, 83)");
     await userEvent.keyboard("{Home}");
@@ -976,9 +952,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await userEvent.hover(alphaRow.element().querySelector("span:last-child")!);
     await expect.poll(() => color(alphaMark)).toBe("rgb(233, 84, 32)");
     await expect.poll(() => color(betaMark)).toBe(neutral);
-    // The arrow keys continue from the active row and wrap at the ends; the
-    // menu owns focus from the moment it opens, before any key lands — even
-    // when a lazy pane settles underneath and would otherwise refocus.
     expect(menu.element().contains(document.activeElement)).toBe(true);
     await userEvent.keyboard("{ArrowDown}{ArrowDown}");
     await expect.poll(() => color(localMark)).toBe("rgb(255, 255, 255)");
@@ -987,14 +960,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.poll(() => color(localMark)).toBe(neutral);
     await expect.poll(() => color(betaMark)).toBe("rgb(215, 10, 83)");
     await page.screenshot({ path: "../test-results/new-terminal-menu.png" });
-    // Escape keeps the shared contract: focus returns first, the fading menu
-    // drops out of the accessibility tree, then unmounts.
     const menuNode = menu.element();
     await userEvent.keyboard("{Escape}");
     await expect.element(trigger).toHaveFocus();
     expect(menuNode.hasAttribute("data-closing")).toBe(true);
     await vi.waitFor(() => expect(element.querySelector(".terminal-target-menu")).toBeNull());
-    // Resizing invalidates the measured anchor, so the menu dismisses.
     await trigger.click();
     await expect.element(menu).toBeVisible();
     await page.viewport(900, 700);
@@ -1108,7 +1078,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await mount();
     await navigate("Terminal");
     const divider = page.getByRole("separator", { name: "Resize Connections panel" });
-    // Dividers explain themselves; none shows a hover tooltip.
     expect(divider.element().hasAttribute("title")).toBe(false);
     expect(element.querySelectorAll(".resize-divider[title]")).toHaveLength(0);
     await userEvent.hover(divider.element());
@@ -1132,7 +1101,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     canvas.height = bitmap.height;
     const context = canvas.getContext("2d")!;
     context.drawImage(bitmap, 0, 0);
-    // Count the lit pixels across the edge at the title bar, the tab strip, and below.
     const width = (y: number) => {
       const row = context.getImageData(Math.round(edge) - 6, y, 12, 1).data;
       let lit = 0;
@@ -1157,7 +1125,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect
       .poll(() => menu.element().getBoundingClientRect().top)
       .toBeCloseTo(trigger.element().getBoundingClientRect().bottom + 6, 0);
-    // It opens as a new tab; the split cards say what they do and change the targets.
     await expect
       .element(menu.getByRole("button", { name: "New tab", exact: true }))
       .toHaveAttribute("aria-pressed", "true");
@@ -1246,8 +1213,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
         ),
       ).toBe(true),
     );
-    // Allow the UI to paint before the shell returns a prompt. A transient
-    // busy state cannot be hidden by an immediately completed fixture command.
     await new Promise<void>((resolve) =>
       requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
     );
@@ -1574,8 +1539,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
         await userEvent.keyboard("{Escape}");
       }
     }
-    // The active group can already occupy the last page. The picker must work
-    // without assuming that scrolling farther right is possible.
     await page.getByRole("button", { name: "All terminals", exact: true }).click();
     const groupItem = page
       .getByRole("menu", { name: "All terminals menu" })
@@ -1697,8 +1660,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
           .sessionId,
       ).toBe("session-2"),
     );
-    // Pane selection is also reflected in persisted state, so a later restore
-    // and active-pane actions use the same terminal.
     await vi.waitFor(() =>
       expect(persisted.activeWorkspaceId).toBe(
         persisted.workspaces.find((workspace) => workspace.localShellId === "command-prompt")!.id,
@@ -2065,7 +2026,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     document.head.append(style);
     for (const view of ["Docker", "Terminal"]) {
       await navigate(view);
-      // Flush layout before inspecting the real CSS transitions.
       actions.getBoundingClientRect();
       const animations = [actions, focus, bar].flatMap((node) => node.getAnimations());
       expect(animations.length).toBeGreaterThan(0);
@@ -2088,7 +2048,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const status = host.querySelector<HTMLElement>(".host-session-status")!;
     const menu = host.querySelector<HTMLButtonElement>(".host-menu")!;
     const away = page.getByRole("button", { name: "Focus terminal", exact: true });
-    // The focus toggle fades in, staying hidden until its first frame.
     await expect.element(away).toBeVisible();
     away.element().focus();
     await userEvent.hover(page.getByRole("button", { name: "Find in terminal" }).element());
@@ -2098,8 +2057,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(getComputedStyle(menu).opacity).toBe("0");
     const width = host.getBoundingClientRect().width;
     expect(getComputedStyle(main).transitionProperty).toBe("padding");
-    // The row text carries live terminal status, so hover the row through its
-    // stably named main button rather than a locator built from that text.
     await userEvent.hover(page.getByRole("button", { name: /^Ubuntu host Fixture Alpha/ }).first());
     await expect.poll(rightGap).toBeCloseTo(36, 0);
     expect(status.getBoundingClientRect().right).toBeLessThan(menu.getBoundingClientRect().left);
@@ -2262,7 +2219,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
         if (!row) throw new Error("GPU details are not open");
         return row;
       });
-      // A missing GPU reading stays a muted "Unavailable", never a zero, with no caption.
       expect(gpuDetail.querySelector("strong")).toHaveAttribute("data-unavailable");
       expect(gpuDetail.textContent).toContain("Unavailable");
       expect(gpuDetail.querySelector("small")).toBeNull();
@@ -2789,7 +2745,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       rows[0].focus();
       await userEvent.keyboard("{End}");
       // WebKit may leave trailing padding below the keyboard scroll endpoint.
-      // The last record, rather than empty padding, must be fully reachable.
       await vi.waitFor(() =>
         expect(rows[rows.length - 1].getBoundingClientRect().bottom).toBeLessThanOrEqual(
           panel.getBoundingClientRect().bottom + 1,
@@ -2832,8 +2787,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await page.getByRole("button", { name: "Fit to view", exact: true }).click();
       await vi.waitFor(expectEntireGraph);
       await settleMotion(element.querySelector(".arch-content")!);
-      // WebKit on macOS can settle the first fit a few pixels from a later one
-      // as chip text finishes laying out.
+      // WebKit on macOS can settle the first fit a few pixels from a later one.
       expect(
         Math.abs(
           element.querySelector(".arch-content")!.getBoundingClientRect().height - fittedHeight,
@@ -3138,7 +3092,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await vi.waitFor(() =>
       expect(element.querySelector(".ports-page .arch-chip")?.textContent).toContain("443"),
     );
-    // A remote Docker context publishes ports elsewhere, so none map to this host.
     expect(element.querySelector(".ports-page")?.textContent).not.toContain(
       fixtures.container.name,
     );
@@ -3303,7 +3256,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: /fixture-web/ }).click();
     await page.getByRole("button", { name: "Open terminal", exact: true }).click();
 
-    // The session names only the container's full ID, never a command.
     await vi.waitFor(() =>
       expect(
         native.invoke.mock.calls.filter(
@@ -3320,7 +3272,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       containerId: fixtures.container.id,
     });
 
-    // The tab names the container and, quieter, its host.
     const tabs = page.getByRole("navigation", { name: "Open Workspaces" });
     const tab = tabs.getByRole("button", { name: "fixture-web Fixture Alpha" });
     await expect.element(tab).toHaveAttribute("aria-current", "page");
@@ -3328,8 +3279,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .element(tab)
       .toHaveAccessibleDescription("Container terminal on Fixture Alpha, Terminal connected");
 
-    // The host card gains a leaf; the leaf, not the card, is selected, and a
-    // container terminal is terminal-only.
     const leaves = page.getByRole("list", { name: "Container terminals on Fixture Alpha" });
     const leaf = leaves.getByRole("button", { name: "fixture-web", exact: true });
     await expect.element(leaf).toHaveAttribute("aria-current", "page");
@@ -3338,7 +3287,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .element(page.getByRole("navigation", { name: "Workspace features" }))
       .not.toBeInTheDocument();
 
-    // The host card returns to the host's own Workspace, still on Docker.
     await page
       .getByRole("navigation", { name: "Saved connections" })
       .getByRole("button", { name: /Fixture Alpha/ })
@@ -3350,8 +3298,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(element.querySelector(".host-row.active")).not.toBeNull();
     await expect.element(leaf).not.toHaveAttribute("aria-current");
 
-    // Opening the same container again brings its terminal back rather than
-    // starting a second shell.
     await page.getByRole("button", { name: "Open terminal", exact: true }).click();
     await expect.element(leaf).toHaveAttribute("aria-current", "page");
     expect(
@@ -3360,8 +3306,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       ),
     ).toHaveLength(1);
 
-    // Closing the leaf ends only the shell and removes the leaf. Close appears
-    // on hover, in the space the label leaves.
     await leaf.hover();
     await leaves
       .getByRole("button", { name: "Close fixture-web container terminal", exact: true })
@@ -3508,7 +3452,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.element(page.getByRole("button", { name: /12 established/ })).toBeVisible();
     expect(element.querySelectorAll(".arch-chip")).toHaveLength(6);
     expect(element.querySelector(".owner-container .lucide-container")).toBeTruthy();
-    // Every orthogonal segment must stay outside unrelated owner cards.
     const cards = [...element.querySelectorAll<HTMLElement>(".arch-group")];
     const rightmost = Math.max(...cards.map((card) => card.offsetLeft));
     const finalColumn = cards.filter((card) => card.offsetLeft === rightmost);
@@ -3570,8 +3513,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("textbox", { name: "Search ports" }).fill("443");
     const searchField = element.querySelector<HTMLElement>(".ports-search-field")!;
     const searchPanel = element.querySelector<HTMLElement>("#ports-tools")!;
-    // The panel enters scaled down. Bounding boxes include that transform,
-    // so compare the panel with its field once the entrance has finished.
     await settleMotion(searchPanel);
     expect(getComputedStyle(searchPanel).opacity).toBe("1");
     expect(searchPanel.querySelectorAll("button")).toHaveLength(1);
@@ -3974,21 +3915,17 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const alpha = stripTabMain("Fixture Alpha")!;
     const beta = stripTabMain("Fixture Beta")!;
 
-    // A reorderable strip promises the drag on hover.
     await userEvent.hover(beta);
     expect(getComputedStyle(beta).cursor).toBe("grab");
 
-    // A real pointer drag of Beta onto Alpha's slot.
     await userEvent.dragAndDrop(beta, alpha, { targetPosition: { x: 8, y: 15 } });
     await vi.waitFor(() => expect(stripTabLabels()).toEqual(["Fixture Beta", "Fixture Alpha"]));
     await vi.waitFor(() =>
       expect(persisted.workspaces.map((workspace) => workspace.id)).toEqual(["tab-b", "tab-a"]),
     );
-    // The active Workspace, its session, and its focus survive the reorder.
     expect(activeStripTab()).toBe("Fixture Alpha");
     expect(document.activeElement?.className).toContain("session-tab-main");
 
-    // The finished drag does not swallow the next click.
     await userEvent.click(beta);
     await vi.waitFor(() => expect(activeStripTab()).toBe("Fixture Beta"));
   });
@@ -4039,28 +3976,23 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const from = beta.getBoundingClientRect();
     const view = surface();
 
-    // Carried below the strip, the tab previews a split at the nearest edge of the pane.
     pointer("pointerdown", from.left + 20, from.top + 10);
     pointer("pointermove", view.left + 12, view.top + view.height / 2);
     await expect.poll(caption).toBe("Split left of Fixture Alpha");
     expect(element.querySelector(".session-tab-scroll-region.dragging-out")).not.toBeNull();
     await page.screenshot({ path: "../test-results/tab-split-preview.png" });
-    // The center is not a split; it points toward the edges instead.
     pointer("pointermove", view.left + view.width / 2, view.top + view.height / 2);
     await expect.poll(caption).toBe("Move toward an edge to split");
     expect(element.querySelector(".terminal-drop-target.hint")).not.toBeNull();
-    // Back in the strip it reorders again, and the preview goes away.
     pointer("pointermove", from.left + 20, from.top + 10);
     await expect.poll(caption).toBeNull();
     pointer("pointermove", view.left + view.width / 2, view.bottom - 12);
     await expect.poll(caption).toBe("Split below Fixture Alpha");
-    // Escape cancels the carry without splitting or reordering.
     await userEvent.keyboard("{Escape}");
     await expect.poll(caption).toBeNull();
     expect(persisted.terminalGroups).toEqual([]);
     expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta"]);
 
-    // A real drag dropped on the right edge splits the focused terminal there.
     await userEvent.dragAndDrop(
       beta,
       element.querySelector<HTMLElement>(".terminal-layout-surface")!,
@@ -4135,7 +4067,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
         "tab-c",
       ]),
     );
-    // Moving a tab never moves the active Workspace with it.
     expect(activeStripTab()).toBe("Fixture Alpha");
   });
 
@@ -4201,24 +4132,20 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await vi.waitFor(() => expect(focusStrip()).toEqual(["Fixture Group 2", "Fixture Gamma"]));
     const groupMain = () => document.querySelector<HTMLElement>(".session-tab-group-main")!;
 
-    // A reorderable strip promises the drag for group rows too.
     await userEvent.hover(groupMain());
     expect(getComputedStyle(groupMain()).cursor).toBe("grab");
 
-    // A real pointer drag of the group onto Gamma's slot.
     const gamma = stripTabMain("Fixture Gamma")!;
     await userEvent.dragAndDrop(groupMain(), gamma, { targetPosition: { x: 150, y: 15 } });
     await vi.waitFor(() => expect(focusStrip()).toEqual(["Fixture Gamma", "Fixture Group 2"]));
     const savedIds = () => persisted.workspaces.map((workspace) => workspace.id);
     await vi.waitFor(() => expect(savedIds()).toEqual(["tab-c", "tab-a", "tab-b"]));
 
-    // The group stays one slot and keeps the active Workspace's group.
     expect(document.querySelectorAll(".session-tab-group")).toHaveLength(1);
     expect(document.querySelector(".session-tab-group.active")?.textContent).toContain(
       "Fixture Group",
     );
 
-    // The keyboard moves the whole group back one slot.
     groupMain().focus();
     await userEvent.keyboard("{Control>}{Shift>}{ArrowLeft}{/Shift}{/Control}");
     await vi.waitFor(() => expect(focusStrip()).toEqual(["Fixture Group 2", "Fixture Gamma"]));
@@ -4274,22 +4201,18 @@ describe("complete app journeys with typed IPC fixtures", () => {
         expect(dragged).toBeTruthy();
         const box = dragged.getBoundingClientRect();
         const bounds = content.getBoundingClientRect();
-        // The lifted tab stays inside the strip's borders, right to the half
-        // pixel, no matter how far outside the pointer travels.
         expect(box.left).toBeGreaterThanOrEqual(bounds.left - 0.5);
         expect(box.right).toBeLessThanOrEqual(bounds.right + 0.5);
       });
       await page.screenshot({ path: `../test-results/${shot}` });
     };
 
-    // Throw the pointer far past both borders; the tab pins to each edge.
     pointer(alpha, "pointerdown", press.left + 20);
     pointer(content, "pointermove", window.innerWidth + 300);
     await expectPinnedInside("drag-overshoot-right.png");
     pointer(content, "pointermove", -300);
     await expectPinnedInside("drag-overshoot-left.png");
 
-    // Releasing out there is a drop outside the strip, so the order reverts.
     pointer(content, "pointerup", -300);
     await vi.waitFor(() => expect(document.querySelector(".session-tab-dragged")).toBeNull());
     expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta"]);
@@ -4348,9 +4271,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .closest(".session-tab-wrap")! as HTMLElement;
     const toolOf = (className: string) => draggedTab().querySelector<HTMLElement>(className)!;
 
-    // Held focus, like the ride along the strip's hover, would reveal the
-    // tab tools; mid-drag they stay parked so the lifted chip reads as one
-    // clean piece.
     alpha.focus();
     dispatch(alpha, "pointerdown", press.left + 20);
     dispatch(content, "pointermove", 460);
@@ -4361,7 +4281,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     });
     await page.screenshot({ path: "../test-results/drag-parked-tools.png" });
 
-    // Outside the drag, focus on a tab reveals the tools again.
     dispatch(content, "pointerup", 460);
     await vi.waitFor(() => expect(document.querySelector(".session-tab-dragged")).toBeNull());
     stripTabMain("Fixture Alpha")!.focus();

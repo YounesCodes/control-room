@@ -4,8 +4,6 @@ import { addConnection, feature, ipc, runtime } from "./helpers";
 import { focusNativeApp, nativeKey, typeNativeCommand } from "./native-input";
 import type { HostCapabilities } from "../src/types";
 
-// Explicit live fixture: never included in the offline suite and never skipped
-// when the configured host lacks a required service or permission.
 async function connect() {
   const host = process.env.CONTROL_ROOM_TEST_HOST;
   const user = process.env.CONTROL_ROOM_TEST_USER;
@@ -55,7 +53,6 @@ async function graphKeys(label: string, inspector: string) {
     ),
   ).toBe(true);
   for (const key of ["left", "right", "up", "down"]) {
-    // Start at the opposite edge so each direction has a real destination.
     const horizontal = key === "left" || key === "right";
     const reverse = key === "left" || key === "up";
     const index = await browser.execute(
@@ -98,7 +95,6 @@ describe("Native inspection shortcuts on a real SSH fixture", () => {
     await nativeKey("escape");
     await expect(search).toHaveValue("");
     const before = (await runtime()).sessionIds;
-    // Workspace shortcuts deliberately leave ordinary text fields alone.
     await focus(".logs-page button");
     await nativeKey("primary+shift+t");
     await $(".terminal-workspace-pane.active .xterm-screen").waitForDisplayed();

@@ -145,7 +145,6 @@ describe("DockerContainerInspector", () => {
     const onOpenTerminal = vi.fn();
     render(
       <DockerContainerInspector
-        // The listing still says running; the fresher inspection decides.
         summary={summary}
         cache={{
           value: { ...details, state: "exited", running: false },

@@ -37,23 +37,7 @@ import type {
   UpdateProgress,
 } from "../types";
 
-/// A last-resort guard so a Structured Operation that never answers cannot
-/// leave a pane loading forever. Rust owns the real budget: a command waits up
-/// to `MAX_STRUCTURED_QUEUE_WAIT` (4s) for a per-connection slot and then runs
-/// for at most `COMMAND_TIMEOUT` (20s). This has to stay above that sum, or the
-/// generic message below replaces the classified failure Rust would have
-/// returned and the user loses the reason.
-///
-/// The extra six seconds are deliberate, not rounding. Rust's 24s is the
-/// nominal budget; reaching the caller also costs process spawn, and on the
-/// timeout path `run_ssh` kills the child, waits for it, and joins both reader
-/// threads, which finish only once the OS closes the pipes. None of that
-/// cleanup is itself bounded, so the backstop leaves room for it and for
-/// scheduling variance instead of racing it.
-/// `api-timeout.test.ts` pins the relationship against the Rust constants.
 export const REMOTE_INSPECTION_TIMEOUT_MS = 30_000;
-// Platform discovery can try Linux and Windows in sequence, each with its own
-// backend command budget. Give both attempts time to return their real result.
 export const REMOTE_DISCOVERY_TIMEOUT_MS = 60_000;
 const REMOTE_INSPECTION_TIMEOUT_SECONDS = REMOTE_INSPECTION_TIMEOUT_MS / 1000;
 const REMOTE_INSPECTION_TIMEOUT_MESSAGE = `Remote inspection did not respond after ${REMOTE_INSPECTION_TIMEOUT_SECONDS} seconds`;
@@ -62,8 +46,7 @@ const terminalInputWrites = new Map<string, Promise<void>>();
 
 function writeTerminalInput(sessionId: string, bytes: Uint8Array): Promise<void> {
   const data = Array.from(bytes);
-  // Concurrent IPC requests have no execution-order guarantee. Keep input
-  // ordered within each session while independent terminals can still write.
+  // Tauri does not preserve the order of concurrent invoke calls.
   const write = (terminalInputWrites.get(sessionId) ?? Promise.resolve())
     .catch(() => undefined)
     .then(() => invoke<void>("write_session", { sessionId, data }))
@@ -165,8 +148,6 @@ export const api = {
     rows: number,
     output: Channel<ArrayBuffer>,
     remoteShellId: string | null = null,
-    // A Container Terminal names only the container's full ID. Rust builds the
-    // `docker exec` command from it.
     containerId: string | null = null,
   ) =>
     invoke<{ sessionId: string; connectionId: string }>("start_session", {
@@ -178,8 +159,6 @@ export const api = {
       output,
     }),
   listLocalShells: () => invoke<LocalShellCatalog>("list_local_shells"),
-  // The shell id is a Local Shell Profile id. Rust resolves the executable, its
-  // fixed arguments, and its working directory; none of them cross this call.
   startLocalSession: (shellId: string, cols: number, rows: number, output: Channel<ArrayBuffer>) =>
     invoke<{ sessionId: string; shellId: string }>("start_local_session", {
       shellId,
@@ -286,9 +265,6 @@ export const api = {
   clearHistory: (connectionId: string) => invoke<void>("clear_history", { connectionId }),
   setConnectionHistoryEnabled: (connectionId: string, enabled: boolean) =>
     invoke<SavedConnection>("set_connection_history_enabled", { connectionId, enabled }),
-  /* Control Room updating itself. Rust owns the endpoint, the signature check,
-     and the installer; these four calls name an intent and carry no URL, no
-     bytes, and no way to skip verification. Nothing here touches a Remote Host. */
   currentAppVersion: () => invoke<string>("current_app_version"),
   checkForUpdate: () => invoke<AppUpdateInfo | null>("check_for_update"),
   downloadUpdate: (progress: Channel<UpdateProgress>) =>

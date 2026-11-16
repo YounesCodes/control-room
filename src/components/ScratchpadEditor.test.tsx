@@ -47,14 +47,12 @@ const connection: SavedConnection = {
   updatedAt: "",
   lastConnectedAt: null,
 };
-/** The editor renders read-only while its note loads; wait until it accepts edits. */
 async function loadedNote(label: string) {
   const editor = await screen.findByLabelText(label);
   await waitFor(() => expect(editor).toHaveProperty("readOnly", false));
   return editor;
 }
 
-/** The visible note's save state; the other note stays mounted but hidden. */
 function savedLocally() {
   return waitFor(() => expect(screen.getByRole("status").textContent).toBe("Saved locally"));
 }
@@ -118,7 +116,6 @@ describe("Scratchpad note editing", () => {
         await waitFor(() => expect(api.saveScratchpadNote).toHaveBeenCalled(), { timeout: 2_000 });
         await savedLocally();
       }
-      // Keep queued deletion in one event turn so it cannot race the debounce.
       fireEvent.click(screen.getByRole("button", { name: "Delete note" }));
       fireEvent.click(screen.getAllByRole("button", { name: "Delete note" }).at(-1)!);
       if (saveState === "pending") expect(api.saveScratchpadNote).not.toHaveBeenCalled();
@@ -272,7 +269,6 @@ describe("Scratchpad note editing", () => {
     fireEvent.change(connectionEditor, { target: { value: "Host reminder, edited" } });
 
     await user.click(screen.getByRole("button", { name: "Global note for all connections" }));
-    // Already loaded: the switch shows the global note at once and focuses it.
     expect(screen.getByRole("textbox", { name: "Global note" })).toBe(globalEditor);
     expect(globalEditor).toHaveProperty("value", "Shared reminder");
     expect(document.activeElement).toBe(globalEditor);

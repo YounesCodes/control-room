@@ -168,7 +168,6 @@ describe("port inspector", () => {
       ],
     });
     expect(firewallForSocket(denied, socket()).state).toBe("denied");
-    // No matching rule falls back to the default policy.
     expect(firewallForSocket(firewall(), socket()).label).toBe("UFW default: deny incoming");
     expect(firewallForSocket(firewall({ active: false }), socket()).state).toBe("inactive");
     expect(firewallForSocket(firewall({ available: false }), socket()).state).toBe("unavailable");
@@ -177,7 +176,6 @@ describe("port inspector", () => {
       firewallForSocket(firewall({ backend: null, defaultIncoming: null, rules: [] }), socket())
         .label,
     ).toBe("Firewall: no matching numeric port rule");
-    // An IPv6 socket is not matched by an IPv4 rule.
     expect(
       firewallForSocket(allowAnywhere, socket({ addressFamily: "ipv6", localAddress: "::" })).state,
     ).toBe("no-rule");
@@ -215,11 +213,9 @@ describe("port inspector", () => {
       systemdUnit: null,
       ownership: "unavailable",
     });
-    // Docker-owned socket (443 tcp on 0.0.0.0 matches the container) sorts first.
     const groups = groupSocketsByOwner([web443, unknown, web80], [container()]);
     expect(groups.map((group) => group.owner.kind)).toEqual(["container", "service", "unknown"]);
     const service = groups.find((group) => group.owner.kind === "service");
-    // Both nginx ports collapse into one service group, sorted by port.
     expect(service?.sockets.map((entry) => entry.port)).toEqual([80]);
     expect(groups[2].owner.label).toBe("Unknown process");
   });
@@ -254,8 +250,6 @@ describe("owner gap notice", () => {
   });
 
   it("never offers sudo for listeners several processes hold", () => {
-    // This is the reported bug: nginx workers made the pane claim a privilege
-    // wall and offer a retry that could not change the answer.
     for (const elevated of [false, true]) {
       const notice = ownerGapNotice([gap("known"), gap("ambiguous")], elevated);
       expect(notice?.offerSudo).toBe(false);

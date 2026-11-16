@@ -8,8 +8,7 @@ type AsyncScriptBrowser = {
   ) => void;
 };
 
-// Tauri service 1.5 still uses WDIO 9's callback helper. WDIO 10 retains the
-// underlying W3C async-script endpoint, which supplies the completion callback.
+// Tauri service 1.5 still uses WDIO 9's callback helper.
 export function installAsyncScriptCommand(browser: AsyncScriptBrowser) {
   if (typeof browser.executeAsync === "function") return;
   browser.addCommand("executeAsync", (script, ...args) =>

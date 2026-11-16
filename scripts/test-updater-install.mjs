@@ -1,4 +1,3 @@
-// Runs a signed NSIS replacement through the real updater in a child process.
 // All files stay in an owned temporary directory; the user's app is untouched.
 import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { execFileSync } from "node:child_process";

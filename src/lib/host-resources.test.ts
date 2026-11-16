@@ -40,7 +40,6 @@ describe("formatKib", () => {
 });
 
 describe("memoryUsage", () => {
-  // Available already discounts cache, so a caching host is not shown as full.
   it("measures used against available rather than free", () => {
     const usage = memoryUsage(resources())!;
     expect(usage.usedKib).toBe(749_624);

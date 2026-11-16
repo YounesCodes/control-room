@@ -185,7 +185,6 @@ describe("Workspace restoration", () => {
 
     const restored = restoreWorkspaceState([connection("docker-host")], {
       ...saved,
-      // A view other than Terminal never belongs to a Container Terminal.
       workspaces: saved.workspaces.map((item, index) =>
         index === 1 ? { ...item, view: "docker" } : item,
       ),
@@ -360,7 +359,6 @@ describe("Workspace restoration", () => {
     const restored = restoreWorkspaceState([connection("connection-a")], state, [powershell]);
 
     expect(restored.workspaces.map((workspace) => workspace.kind)).toEqual(["local", "remote"]);
-    // Both tabs start new sessions when their TerminalPanes mount.
     expect(
       restored.workspaces.map(({ state, sessionId, connectRequested }) => ({
         state,
@@ -373,7 +371,6 @@ describe("Workspace restoration", () => {
     ]);
     expect(restored.workspaces[0].label).toBe("Build shell");
     expect(restored.terminalGroups[0].layout).toEqual(state.terminalLayout);
-    // A local and a remote tab persist side by side, each naming one target.
     expect(persistWorkspaceState(restored.workspaces, "workspace-a", []).workspaces).toEqual([
       {
         id: "workspace-a",
@@ -423,7 +420,6 @@ describe("Workspace restoration", () => {
       ),
     };
 
-    // Git for Windows was uninstalled since the layout was saved.
     const restored = restoreWorkspaceState([], state, [powershell]);
 
     expect(restored.workspaces).toHaveLength(1);
@@ -447,7 +443,6 @@ describe("Workspace restoration", () => {
           label: null,
           connectionId: null,
           localShellId: "git-bash",
-          // An unknown or remote-only view falls back to the terminal.
           view: "docker",
           historyPaused: false,
         },
@@ -482,7 +477,6 @@ describe("Workspace restoration", () => {
   });
 
   it("restores Workspace state written before Local Terminal existed", () => {
-    // Exactly the payload older releases wrote: no local shell field at all.
     const legacy = JSON.parse(
       `{"workspaces":[{"id":"workspace-a","label":null,"connectionId":"connection-a","view":"logs","historyPaused":true}],"activeWorkspaceId":"workspace-a","terminalLayout":{"kind":"leaf","workspaceId":"workspace-a"}}`,
     ) as PersistedWorkspaceState;

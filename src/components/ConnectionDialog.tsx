@@ -313,8 +313,6 @@ export function ConnectionDialog({
   );
 }
 
-/// What the test found, one entry per Structured Operations dependency. A
-/// missing one is neutral: the host still works, that screen has nothing to read.
 function testCapabilities(result: HostCapabilities) {
   const detected = (available: boolean) => (available ? "available" : "not detected");
   return [
@@ -337,8 +335,6 @@ function testCapabilities(result: HostCapabilities) {
   ];
 }
 
-/// Short windows scroll the form, which leaves the test outcome below the fold
-/// right after the button at the bottom is pressed.
 function revealTestOutcome(element: HTMLElement | null) {
   element?.scrollIntoView?.({ block: "nearest" });
 }

@@ -58,7 +58,6 @@ export function sanitizeDirectory(directory, output) {
           (entry.name === "wdio.log" || /\.spec-\d+-\d+\.log$/.test(entry.name))
         ) {
           // Launcher and restarted worker log writers can leave NUL padding.
-          // Omit corrupt contents entirely; other diagnostics still require redaction.
           writeFileSync(
             join(output, entry.name),
             "Corrupt test runner log omitted. See other diagnostics.\n",

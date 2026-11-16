@@ -49,12 +49,6 @@ export function parseHistoryOsc(data: string): HistoryOscEvent | null {
   return null;
 }
 
-/// The shell integration emits `$?`, which is a plain decimal number. `Number`
-/// reads a good deal more than that: an empty field becomes 0, so a finish that
-/// carried no status was recorded as a success; `0x10` becomes 16, `1e3`
-/// becomes 1000, and surrounding whitespace is ignored. None of those are
-/// things bash writes, so reading them is inventing an exit code for a record
-/// the user later searches by.
 function strictExitStatus(value: string): number | null {
   if (!/^\d{1,10}$/.test(value)) return null;
   const status = Number(value);

@@ -109,7 +109,6 @@ export function CommandPalette({
 
     for (const workspace of workspaces) {
       if (workspace.id === activeWorkspaceId) continue;
-      // Keep the shell identity even when a local workspace has been renamed.
       result.push(
         workspace.kind === "local"
           ? {
@@ -409,8 +408,7 @@ export function CommandPalette({
                       ? previous.x !== event.clientX || previous.y !== event.clientY
                       : Boolean(event.movementX || event.movementY);
                     pointerPosition.current = { x: event.clientX, y: event.clientY };
-                    // Scrolling an option under a stationary pointer must not
-                    // replace the user's keyboard selection.
+                    // Scrolling an option under a stationary pointer fires a pointer move.
                     if (keyboardNavigation.current && !moved) return;
                     keyboardNavigation.current = false;
                     setActiveIndex(index);

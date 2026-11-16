@@ -130,8 +130,6 @@ describe("Native application shortcuts and command palette", () => {
     expect(await font.getProperty("selectionStart")).toBe(3);
     await expect($('[role="tab"]=Appearance')).toHaveAttribute("aria-selected", "true");
     await $("[aria-label='Close Settings']").click();
-    // Installed-font fields commit while editing; the catalog picker keeps a
-    // typed query separate until the user chooses it.
     await browser.waitUntil(
       async () =>
         !(await $(".settings-page").isExisting()) || (await $("button=Discard").isExisting()),

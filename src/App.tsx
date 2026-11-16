@@ -174,9 +174,6 @@ import type {
   WorkspaceView,
 } from "./types";
 
-/// The compiled client platform arrives with the SSH environment, which can take
-/// seconds while ssh-add answers. Until then the WebView's own platform decides
-/// window chrome and shortcuts, so a Mac window never starts in the Windows layout.
 const provisionalPlatform: EnvironmentInfo["platform"] =
   typeof navigator === "undefined"
     ? "windows"
@@ -242,9 +239,6 @@ type TerminalHandlers = {
   reconnect: (workspace: Workspace) => void;
 };
 
-/// One terminal, rendered again only when its own Workspace, visibility, or
-/// find request changes. App renders for many unrelated reasons, and every open
-/// terminal used to repeat that work each time.
 const WorkspaceTerminal = memo(function WorkspaceTerminal({
   workspace,
   platform,
@@ -314,9 +308,6 @@ type InspectionHandlers = {
   restartTerminal: (workspace: RemoteWorkspace) => void;
 };
 
-/// The active remote Workspace's inspection view. It renders again when that
-/// Workspace or what it shows changes, not on every App render: these views
-/// hold the largest lists in the app.
 const WorkspaceInspection = memo(function WorkspaceInspection({
   workspace,
   windowsHost,
@@ -444,10 +435,6 @@ const WorkspaceInspection = memo(function WorkspaceInspection({
   );
 });
 
-/// Fixed geometry for a popover anchored to its trigger: a consistent 6px gap
-/// below the trigger (flipping above when the window lacks the room), clamped
-/// to 12px window-edge gutters, and a max height that keeps long lists
-/// scrolling inside the popup instead of off the window.
 interface AnchoredPopover {
   top?: number;
   bottom?: number;
@@ -475,13 +462,8 @@ const tabSplitCaption: Record<TerminalDropZone, (target: string) => string> = {
 };
 const NEW_TERMINAL_MENU_WIDTH = 272;
 const NEW_TERMINAL_MENU_HEIGHT = 480;
-// Wide enough that a popover opened from a window-edge trigger, such as
-// Scratchpad, sits clear of the window corner instead of hugging its border.
 const POPOVER_GUTTER = 12;
 
-/// Positions a fixed popover beside its anchor. `zoom` is the CSS zoom the popover
-/// renders under: its offsets and size scale by it, so the measurement happens in
-/// viewport pixels and the result is converted back into the popover's own pixels.
 function anchoredPopoverAt(
   rect: DOMRect,
   width: number,
@@ -505,7 +487,6 @@ function anchoredPopoverAt(
   };
 }
 
-/** The CSS zoom an element renders under (1 where the engine does not report it). */
 function cssZoomOf(element: Element | null): number {
   return (element as (Element & { currentCSSZoom?: number }) | null)?.currentCSSZoom ?? 1;
 }
@@ -600,18 +581,12 @@ export function App() {
   const [terminalFocusMode, setTerminalFocusMode] = useState(false);
   const [terminalGroups, setTerminalGroups] = useState<TerminalGroup[]>([]);
   const [splitDirection, setSplitDirection] = useState<TerminalSplitDirection>("vertical");
-  /// New terminal opens a tab or splits the focused view; it reopens on "tab".
   const [newTerminalMode, setNewTerminalMode] = useState<"tab" | "split">("tab");
-  /// A terminal tab carried from the strip over the terminal view, and where it would split.
   const [tabSplit, setTabSplit] = useState<TabSplit | null>(null);
   const [newTerminalMenuOpen, setNewTerminalMenuOpen] = useState(false);
   const [scratchpadOpen, setScratchpadOpen] = useState(false);
-  // Focus goes back to the control that opened the menu, so dismissing with
-  // Escape leaves the keyboard where it started.
   const newTerminalButtonRef = useRef<HTMLButtonElement>(null);
   const scratchpadButtonRef = useRef<HTMLButtonElement>(null);
-  // The closing transitions keep fading popovers mounted for a beat without
-  // delaying focus return or dismissal itself.
   const { present: newTerminalMenuPresent, closing: newTerminalMenuClosing } =
     usePopoverExit(newTerminalMenuOpen);
   const { present: scratchpadPresent, closing: scratchpadClosing } = usePopoverExit(scratchpadOpen);
@@ -623,7 +598,6 @@ export function App() {
     const unmeasured = { width: Infinity, height: Infinity };
     return { visible: unmeasured, available: unmeasured };
   });
-  // Anchored geometry for the terminal popovers, measured when they open.
   const [newTerminalMenuAt, setNewTerminalMenuAt] = useState<AnchoredPopover | null>(null);
   const [scratchpadAt, setScratchpadAt] = useState<AnchoredPopover | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -637,9 +611,6 @@ export function App() {
   const terminalHandlesRef = useRef(new Map<string, TerminalPaneHandle>());
   const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
   const [renameGroupTarget, setRenameGroupTarget] = useState<TerminalGroup | null>(null);
-  // One update lifecycle for the whole application: one timer, one in-flight
-  // check, no matter how many Workspaces are open. Defaults to on while
-  // Settings is still loading so a slow first read never skips the first check.
   const updater = useAppUpdater(
     environment !== null &&
       environment.inAppUpdates !== false &&
@@ -657,13 +628,6 @@ export function App() {
   const [workspacePersistenceReady, setWorkspacePersistenceReady] = useState(false);
   const capabilityDetectionsRef = useRef(new Set<string>());
 
-  // What the asynchronous close and delete paths read once they have awaited
-  // the backend. Both replace the whole Workspace list rather than patching
-  // one entry, and both start from a confirmation callback created in an
-  // earlier render, so reading these from the closure wrote back whatever they
-  // held when the dialog opened. A Workspace opened, or a session state that
-  // changed, while the request was in flight was inside neither the old list
-  // nor the replacement, and disappeared.
   const workspaceStateRef = useRef({
     workspaces,
     activeWorkspaceId,
@@ -681,9 +645,6 @@ export function App() {
 
   useEffect(() => {
     let current = true;
-    // Reading the SSH environment runs ssh-add, which can take seconds when the
-    // agent is slow to answer. Nothing on the first screen needs the result, so
-    // the app opens without waiting for it.
     void api.environment().then(
       (value) => current && setEnvironment(value),
       () => current && setEnvironment(emptyEnvironment),
@@ -806,8 +767,6 @@ export function App() {
   ].join("|");
   const activeTerminalEnded =
     activeWorkspace?.state === "disconnected" || activeWorkspace?.state === "error";
-  // Inspection views, Enhanced History, and Saved Connection actions belong to
-  // a remote Workspace. A local one is terminal-only.
   const activeRemoteWorkspace =
     activeWorkspace && isRemoteWorkspace(activeWorkspace) ? activeWorkspace : null;
   const activeConnection = activeRemoteWorkspace?.connectionSnapshot ?? null;
@@ -820,7 +779,6 @@ export function App() {
     !!activeRemoteWorkspace &&
     (activeRemoteWorkspace.remoteShell?.id.startsWith("macos:") ||
       hostCapabilities[activeRemoteWorkspace.connectionId]?.osId === "macos");
-  // Local workspaces offer Terminal only; notes live in the terminal toolbar.
   const offeredNavigation =
     activeWorkspace && (isLocalWorkspace(activeWorkspace) || isContainerWorkspace(activeWorkspace))
       ? navigation.filter((item) => item.id === "terminal")
@@ -837,14 +795,6 @@ export function App() {
     ? (connections.find((connection) => connection.id === activeRemoteWorkspace.connectionId) ??
       null)
     : null;
-  // "New terminal" asks which target to open, so it needs a target to offer
-  // rather than a compatible Workspace to copy. Having nothing saved and no
-  // shell installed is the only case with nothing to choose from.
-  //
-  // Every launcher offers the same set: each installed profile except the ones
-  // turned off in Settings. The catalog itself stays complete, because it is
-  // also what a restored Workspace is checked against — hiding a shell must
-  // never cost someone the Workspace that was already running it.
   const offeredShells = offeredLocalShells(
     localShells,
     settingsContract?.current.hiddenLocalShells ?? [],
@@ -889,7 +839,6 @@ export function App() {
         )
       : { panes: {}, dividers: [], viewport: visibleTerminalSpace };
   const terminalPaneRects = terminalGeometry.panes;
-  /// Only a group larger than the window gives its surface explicit pixels to scroll.
   const terminalSurfaceScrolls =
     terminalGeometry.viewport.width > visibleTerminalSpace.width ||
     terminalGeometry.viewport.height > visibleTerminalSpace.height;
@@ -970,8 +919,7 @@ export function App() {
     if (!element || typeof ResizeObserver === "undefined") return;
 
     function rememberSize(...sizes: [number, number, number, number]) {
-      // Display scaling gives fractional boxes; rounding up would push the right and
-      // bottom panes, and the selected frame, past the clipped edge.
+      // Display scaling yields fractional boxes; rounding up overflows the clipped edge.
       const [width, height, outerWidth, outerHeight] = sizes.map(Math.floor);
       setTerminalLayoutViewport((current) =>
         current.visible.width === width &&
@@ -991,7 +939,6 @@ export function App() {
     );
     const observer = new ResizeObserver(([entry]) => {
       if (!entry) return;
-      // A fallback scrollbar may shrink the visible box, but must not rotate the split again.
       const outer = entry.borderBoxSize?.[0];
       rememberSize(
         entry.contentRect.width,
@@ -1061,7 +1008,6 @@ export function App() {
           setPaletteOpen(false);
           return;
         }
-        // Do not stack the palette on top of a modal dialog (connection or sudo).
         if (dialogConnection !== null || document.querySelector('[role="dialog"]:not([inert])'))
           return;
         event.preventDefault();
@@ -1109,9 +1055,6 @@ export function App() {
       if (target instanceof Element && target.closest("[data-new-terminal-menu]")) return;
       setNewTerminalMenuOpen(false);
     }
-    // The anchor geometry was measured at open time; resizing invalidates it,
-    // so the menu dismisses instead of floating away from its control, and
-    // the keyboard comes back to the trigger with it.
     function dismissOnResize() {
       setNewTerminalMenuOpen(false);
       newTerminalButtonRef.current?.focus();
@@ -1124,8 +1067,6 @@ export function App() {
     };
   }, [newTerminalMenuOpen]);
 
-  // The Scratchpad popover belongs to the terminal view; leaving it (Settings,
-  // an inspection page, or the workspace closing) closes the popover with it.
   useEffect(() => {
     if (settingsOpen || activeWorkspace?.view !== "terminal") setScratchpadOpen(false);
   }, [settingsOpen, activeWorkspace?.view]);
@@ -1149,8 +1090,6 @@ export function App() {
     shellSize.width,
   ]);
 
-  // The palette's Split enters Focus Mode and opens New terminal in the same turn;
-  // its button moves with that layout, so the menu re-anchors to where it landed.
   useLayoutEffect(() => {
     if (!newTerminalMenuOpen) return;
     const rect = newTerminalButtonRef.current?.getBoundingClientRect();
@@ -1170,13 +1109,10 @@ export function App() {
     [connections, connectionGroups, hostSearch, ungroupedCollapsed],
   );
 
-  // The most meaningful live session state per saved connection, used to mark
-  // which connections currently have an open Workspace and how it is doing.
   const connectionSessionStates = useMemo(() => {
     const priority: ConnectionState[] = ["connected", "connecting", "error", "disconnected"];
     const map: Record<string, ConnectionState> = {};
     for (const workspace of workspaces) {
-      // A Container Terminal shows its state on its own leaf under the host.
       if (!isRemoteWorkspace(workspace) || workspace.container) continue;
       const current = map[workspace.connectionId];
       if (!current || priority.indexOf(workspace.state) < priority.indexOf(current)) {
@@ -1187,8 +1123,6 @@ export function App() {
   }, [workspaces]);
 
   const processingConnections = new Set(hostOperations);
-  // A Container Terminal's work spins its own leaf, and host reads spin the
-  // host, so neither indicator speaks for the other.
   for (const workspace of workspaces) {
     if (
       isRemoteWorkspace(workspace) &&
@@ -1224,11 +1158,6 @@ export function App() {
     );
   }
 
-  /// Moves a header tab to `targetSlot` in whole-strip positions. Tabs ride
-  /// along as whole objects, so session, name, and connection survive; the
-  /// active tab stays active wherever it lands. In focus mode a slot may be a
-  /// terminal group, so the group moves as one block and its member
-  /// Workspaces land contiguously in pane order.
   function moveTabTo(id: string, targetSlot: number) {
     setWorkspaces((current) => {
       if (!terminalFocusMode) {
@@ -1240,9 +1169,6 @@ export function App() {
         next.splice(to, 0, current[from]);
         return next;
       }
-      // Focus mode collapses each terminal group to one slot, so the reorder
-      // walks slots, not single Workspaces: a group keeps its members and a
-      // plain tab is a block of one.
       const blocks: { id: string; members: Workspace[] }[] = [];
       const listedGroups = new Set<string>();
       for (const workspace of current) {
@@ -1270,9 +1196,6 @@ export function App() {
     });
   }
 
-  /// Patches the fields only a remote Workspace has: inspection caches,
-  /// selections, and Enhanced History state. A local Workspace is left alone
-  /// rather than given fields it has no use for.
   function updateRemoteWorkspace(id: string, patch: Partial<Omit<RemoteWorkspace, "kind">>) {
     setWorkspaces((current) =>
       current.map((workspace) =>
@@ -1283,9 +1206,6 @@ export function App() {
     );
   }
 
-  // Closes Settings and then runs `after`. When there are unsaved changes it
-  // asks for confirmation first and defers `after` until the user discards, so
-  // callers pass the navigation they intend instead of a synchronous guard.
   function closeSettings(after: () => void = () => {}): boolean {
     if (settingsOpen && settingsDirty) {
       setConfirmState({
@@ -1408,8 +1328,6 @@ export function App() {
     containerId: string,
     details: CachedValue<DockerContainerDetails>,
   ) {
-    // Details for several containers can arrive in one turn; each builds on
-    // the cache as it is then, not as it was when the view last rendered.
     setWorkspaces((current) =>
       current.map((workspace) =>
         workspace.id === id && isRemoteWorkspace(workspace)
@@ -1564,10 +1482,6 @@ export function App() {
     setRemoteShellRequest(null);
   }
 
-  /// Opens a shell inside a container from Docker. A container already open in
-  /// a terminal is brought forward rather than opened twice; a new one lands
-  /// beside its host's other tabs and appears as a leaf under the host card.
-  /// The host keeps the container selected, so returning to Docker shows it.
   function openContainerTerminal(host: RemoteWorkspace, container: DockerContainer) {
     updateRemoteWorkspace(host.id, { containerSelectionId: container.id });
     const existing = workspaces.find(
@@ -1595,8 +1509,6 @@ export function App() {
     setActiveWorkspaceId(workspace.id);
   }
 
-  /// Opens a local shell as its own Workspace. Each launch is a new
-  /// shell, so there is nothing to reuse, and no Saved Connection is involved.
   function openLocalShell(shell: LocalShellProfile) {
     closeSettings(() => openWorkspace(createLocalWorkspace(shell)));
   }
@@ -1606,9 +1518,6 @@ export function App() {
     setActiveWorkspaceId(workspace.id);
   }
 
-  /// Opens the chooser under its own control, measured at the moment it opens:
-  /// a consistent gap below the button, flipped above it when the window has
-  /// no room, and clamped so neither edge pushes the menu off screen.
   function openNewTerminalMenu(mode: "tab" | "split" = "tab") {
     if (newTerminalMenuOpen) {
       setNewTerminalMenuOpen(false);
@@ -1646,9 +1555,6 @@ export function App() {
       .catch((error) => setActionError(`Could not refresh local shells: ${errorMessage(error)}`));
   }
 
-  /// Split's targets. It keeps its own order and its own extra group: a split
-  /// can adopt a terminal that is already open, which "New terminal" cannot,
-  /// because opening is the whole point of that menu.
   const splitTargetGroups: TerminalTargetGroup[] = [
     {
       label: "Existing terminals",
@@ -1693,12 +1599,9 @@ export function App() {
     },
   ];
   const canSplitTerminal = splitTargetGroups.some((group) => group.options.length > 0);
-  /// Splitting acts on the focused terminal view, so New terminal offers it only there.
   const splitAvailable = terminalFocusMode && !settingsOpen && activeWorkspace?.view === "terminal";
   const splitting = splitAvailable && newTerminalMode === "split";
 
-  /// Where a terminal tab dragged out of the strip would split the focused view: the pane
-  /// under the pointer and its nearest edge. The center is not a split, so it only hints.
   function tabSplitAt(id: string, x: number, y: number): TabSplit | null {
     if (!splitAvailable || !activeWorkspace) return null;
     const bounds = terminalLayoutSurfaceRef.current?.getBoundingClientRect();
@@ -1747,7 +1650,6 @@ export function App() {
     setActiveWorkspaceId(id);
   }
 
-  /// In Focus Mode a terminal tab outside the focused view can be dragged onto it to split.
   const tabDragOut: TabDragOut = {
     accepts: (id) => existingSplitCandidates.some((workspace) => workspace.id === id),
     move: (id, x, y) => setTabSplit(tabSplitAt(id, x, y)),
@@ -1755,9 +1657,6 @@ export function App() {
     cancel: () => setTabSplit(null),
   };
 
-  /// The targets "New terminal" offers: everything saved, plus every shell this
-  /// machine actually has. Each one opens its own Workspace, so choosing the
-  /// active target again is a second independent terminal rather than a no-op.
   const newTerminalGroups: TerminalTargetGroup[] = [
     {
       label: "Saved Connections",
@@ -1829,8 +1728,6 @@ export function App() {
     closingWorkspaceIdsRef.current.add(id);
     setActionError(null);
     if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
-    // Whatever the list holds now, not what it held when the confirmation was
-    // set up or before the close round trip.
     const current = workspaceStateRef.current;
     const index = current.workspaces.findIndex((item) => item.id === id);
     const remaining = current.workspaces.filter((item) => item.id !== id);
@@ -1891,10 +1788,6 @@ export function App() {
     }
     clearScratchpadDraft("connection", connection.id);
     connectionsRef.current = connectionsRef.current.filter((item) => item.id !== connection.id);
-    // The record is gone from the database, so take it out of the rail before
-    // anything else awaits. That also closes the only door a new Workspace for
-    // it could still come through while its sessions are being torn down, which
-    // is what lets the loop below be a single pass.
     setConnections((current) => current.filter((item) => item.id !== connection.id));
     setHostCapabilities((current) => {
       const next = { ...current };
@@ -1902,9 +1795,6 @@ export function App() {
       return next;
     });
 
-    // Tearing down a pty is a round trip, and there is one per Workspace this
-    // connection owns. The sessions to close are read from the list as it is
-    // now; the removal is not, because the list can change while they close.
     const beforeTeardown = workspaceStateRef.current;
     const owned = removeConnectionWorkspaces(
       beforeTeardown.workspaces,
@@ -1916,10 +1806,6 @@ export function App() {
       if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
     }
 
-    // Read again now that every teardown has finished. A Workspace opened, or
-    // a session state that arrived, while they ran is in this list and in no
-    // snapshot taken before them. Everything from here is synchronous, so this
-    // is the list the writes below are derived from.
     const current = workspaceStateRef.current;
     const removal = removeConnectionWorkspaces(
       current.workspaces,
@@ -2057,8 +1943,6 @@ export function App() {
     );
   }
 
-  /// Menus list a Container Terminal by its container's name, so its host
-  /// rides along with the session state.
   function workspaceMenuDetail(workspace: Workspace) {
     const hostContext = workspaceHostContext(workspace);
     const state = terminalStateLabel(workspace);
@@ -2081,10 +1965,6 @@ export function App() {
     updateWorkspace(activeRemoteWorkspace.id, { view: "terminal" });
   }
 
-  /// The Scratchpad popover's paste works on any terminal — local or remote —
-  /// and follows the selected pane, so it takes the live workspace rather than
-  /// the remote-only view the History paste is bound to. writeSession sends
-  /// raw bytes with no trailing newline, so the note is typed, never run.
   function pasteNoteIntoTerminal(text: string) {
     if (!activeWorkspace?.sessionId) {
       setActionError("Reconnect the terminal before pasting a note.");
@@ -2096,7 +1976,6 @@ export function App() {
       .catch((caught) => setActionError(`Could not paste into terminal: ${errorMessage(caught)}`));
   }
 
-  /// Keep shell and host identity consistent across tabs, menus, and split panes.
   function workspaceMark(workspace: Workspace) {
     if (isContainerWorkspace(workspace))
       return <ContainerTerminalMark image={workspace.container.image} />;
@@ -2110,8 +1989,6 @@ export function App() {
     );
   }
 
-  /// A Container Terminal hangs under its host's card as a leaf, so the rail
-  /// shows which host each container shell runs on and reaches it in one click.
   function renderContainerTerminalLeaf(workspace: ContainerWorkspace) {
     const active = workspace.id === activeWorkspaceId && !settingsOpen;
     const label = duplicateLabel(workspace);
@@ -2183,7 +2060,6 @@ export function App() {
       <div
         className={[
           "host-row",
-          // A Container Terminal marks its own leaf, not the host card above it.
           activeRemoteWorkspace?.connectionId === connection.id &&
           !activeRemoteWorkspace.container &&
           !settingsOpen
@@ -2303,10 +2179,6 @@ export function App() {
     );
   }
 
-  /* Installing replaces this process, so the interruption is stated before it
-     happens rather than after. Whether sessions are live is read from the
-     Workspaces already in state; the updater adds no lifecycle tracker of its
-     own to answer this. Saved Workspaces request fresh sessions after restart. */
   function requestUpdateInstall() {
     const version = updateInfo(updater.state)?.version ?? "the new version";
     const live = workspaces.some((workspace) => workspace.sessionId);
@@ -2320,7 +2192,6 @@ export function App() {
     });
   }
 
-  /// One outline where the dragged terminal would land, captioned like pane moves.
   function renderTabSplitPreview(split: TabSplit) {
     const label = (id: string) => {
       const workspace = workspaces.find((item) => item.id === id);
@@ -2478,8 +2349,6 @@ export function App() {
         connectRequested:
           state === "disconnected" || state === "error" ? false : workspace.connectRequested,
       });
-      // Host capability discovery is a Remote Host read. Nothing is detected
-      // about the local machine.
       if (state === "connected" && isRemoteWorkspace(workspace)) {
         detectConnectionCapabilities(workspace.connectionId);
       }
@@ -2491,8 +2360,6 @@ export function App() {
           : { ...current, [workspace.id]: hasSelection },
       );
     },
-    // Output reports arrive once per pty read. Only a change is new state: a
-    // background build must not render the app again for every chunk it prints.
     activity(workspace, kind) {
       setTerminalActivity((current) => {
         const next =
@@ -2567,8 +2434,6 @@ export function App() {
       });
     },
     paste: pasteIntoTerminal,
-    // A new shell loads the Bash integration the old one started without.
-    // Show the terminal, as History's paste does, so the restart is visible.
     restartTerminal(workspace) {
       updateWorkspace(workspace.id, {
         connectRequested: true,
@@ -2615,8 +2480,7 @@ export function App() {
 
   const headerMetrics = displayedHeaderMetrics(settingsContract?.current.hostMetrics);
   const focusToggleAvailable = !settingsOpen && activeWorkspace?.view === "terminal";
-  // macOS overlays native window controls on one toolbar row, so the
-  // Connections heading moves there unless compact navigation owns it.
+  // macOS draws its native window controls over this toolbar row.
   const macToolbarHeading = clientPlatform === "macos" && !compactShell;
   const connectionsHeading = (
     <div className="sidebar-heading sidebar-top-heading" data-tauri-drag-region>
@@ -2629,7 +2493,6 @@ export function App() {
         title="Reset all panel sizes"
         onClick={() => setPanelSizes({})}
       >
-        {/* Sized to read as the same icon set as groups-and-tags below it. */}
         <RotateCcw size={16} />
       </button>
     </div>
@@ -2642,8 +2505,7 @@ export function App() {
       data-focus-toggle={focusToggleAvailable ? "visible" : "hidden"}
       data-compact={compactShell || undefined}
       onClickCapture={(event) => {
-        // Safari does not focus buttons on mouse clicks. Keep keyboard return
-        // targets and subsequent shortcuts consistent across desktop webviews.
+        // WebKit does not focus buttons on mouse clicks.
         if (event.button === 0 && event.target instanceof Element) {
           event.target.closest("button")?.focus({ preventScroll: true });
         }
@@ -3028,7 +2890,6 @@ export function App() {
                             aria-pressed={active}
                             aria-label={name}
                           >
-                            {/* A miniature of the result; the filled tile is the new terminal. */}
                             <span className={`terminal-open-preview ${preview}`} aria-hidden="true">
                               <i />
                               <i />
@@ -3062,7 +2923,6 @@ export function App() {
                     type="button"
                     onClick={() => {
                       const terminal = terminalHandlesRef.current.get(activeWorkspace.id);
-                      // Before the terminal mounts, queue an open request like Ctrl+Shift+F.
                       if (terminal) terminal.toggleSearch();
                       else
                         setTerminalFindRequests((current) => ({
@@ -3218,11 +3078,7 @@ export function App() {
                           width: terminalGeometry.viewport.width,
                           height: terminalGeometry.viewport.height,
                         }
-                      : // A fitting group follows its container at once. Pixel sizes would
-                        // lag one observer pass behind a shrinking container (the pane row
-                        // appearing, say), overflow it, and flash a scrollbar that narrows
-                        // and resizes every terminal.
-                        { width: "100%", height: "100%" }
+                      : { width: "100%", height: "100%" }
                     : undefined
                 }
               >
@@ -3358,8 +3214,6 @@ export function App() {
                     );
                   })}
               </div>
-              {/* Inspection views need a Remote Host and its Saved
-                  Connection. A local Workspace renders its terminal only. */}
               {activeRemoteWorkspace && activeConnection && activeSavedConnection && (
                 <ConnectionSection
                   key={connectionTargetKey(activeConnection)}
@@ -3554,8 +3408,6 @@ export function App() {
           activeWorkspaceIsLocal={Boolean(activeWorkspace && isLocalWorkspace(activeWorkspace))}
           canFocusTerminal={Boolean(activeWorkspace && activeWorkspace.view === "terminal")}
           canSplitTerminal={canSplitTerminal}
-          // A local Workspace offers only Terminal; remote
-          // Workspaces offer the inspection views their platform supports.
           views={activeWorkspace ? offeredNavigation : []}
           hostCapabilities={hostCapabilities}
           labelForWorkspace={activityLabel}

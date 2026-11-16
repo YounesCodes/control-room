@@ -6,8 +6,6 @@ import { WorkspaceTabScroller, type WorkspaceTabOption } from "./WorkspaceTabScr
 const TAB_WIDTH = 175;
 const STRIP = { left: 0, right: 700, top: 0, bottom: 34 };
 
-/// The strip's tabs match App's shape: a wrap with the main button (drag and
-/// click surface) and a Close-style button that must never start a drag.
 function Strip({
   labels,
   onReorder,
@@ -60,8 +58,7 @@ function tabRect(base: Record<string, number>): DOMRect {
   } as DOMRect;
 }
 
-/// jsdom reports zero boxes, so each strip element gets the box the layout
-/// would give it: a 700px strip of four even 175px tabs.
+// jsdom reports zero-sized boxes.
 function stubStripGeometry(container: HTMLElement) {
   const content = container.querySelector<HTMLElement>(".session-tab-content")!;
   content.getBoundingClientRect = () =>
@@ -80,8 +77,6 @@ function stubStripGeometry(container: HTMLElement) {
   });
 }
 
-/// The repo's pointer pattern: a MouseEvent carrying pointer properties, as
-/// the ResizeDivider schedule tests use.
 function pointer(node: Element, type: string, x: number, y = 17) {
   const event = new MouseEvent(type, {
     bubbles: true,
@@ -130,7 +125,6 @@ describe("WorkspaceTabScroller reordering", () => {
     expect(container.querySelector(".session-tab-dragged")).toBeNull();
 
     pointer(third, "pointerdown", 360);
-    // Two pixels of settle are still a click, not a drag.
     pointer(third, "pointermove", 358);
     expect(container.querySelector(".session-tab-dragged")).toBeNull();
 
@@ -138,7 +132,6 @@ describe("WorkspaceTabScroller reordering", () => {
     const dragged = container.querySelector<HTMLElement>(".session-tab-dragged");
     expect(dragged).toBeTruthy();
     expect(dragged!.querySelector(".session-tab-main")!.textContent).toBe("C");
-    // A and B slide one slot right toward the first slot.
     expect(isShifted(container, "A")).toBe(true);
     expect(isShifted(container, "B")).toBe(true);
     expect(isShifted(container, "D")).toBe(false);
@@ -157,19 +150,15 @@ describe("WorkspaceTabScroller reordering", () => {
 
     pointer(third, "pointerdown", 360);
     pointer(third, "pointermove", 3000);
-    // Thrown far past the right border, the tab pins to the strip's right
-    // edge instead of sliding off the window.
     expect(container.querySelector<HTMLElement>(".session-tab-dragged")!.style.transform).toBe(
       "translate3d(175px, 0, 0)",
     );
-    // And a release out there is still a drop outside, so it reverts.
     pointer(third, "pointerup", 3000);
     expect(onReorder).not.toHaveBeenCalled();
     expect(container.querySelector(".session-tab-dragged")).toBeNull();
 
     pointer(third, "pointerdown", 360);
     pointer(third, "pointermove", -300);
-    // The same clamp holds at the left border.
     expect(container.querySelector<HTMLElement>(".session-tab-dragged")!.style.transform).toBe(
       "translate3d(-350px, 0, 0)",
     );
@@ -185,12 +174,10 @@ describe("WorkspaceTabScroller reordering", () => {
 
     pointer(first, "pointerdown", 60);
     pointer(first, "pointermove", 640);
-    // One more rAF-scheduled move so the rendered position follows the pointer.
     pointer(first, "pointermove", 641);
     act(() => frame(0));
     expect(container.querySelector<HTMLElement>(".session-tab-dragged")!).toBeTruthy();
     pointer(first, "pointerup", 641);
-    // The tab center at 641 lands on the last of the four slots.
     expect(onReorder).toHaveBeenCalledTimes(1);
     expect(onReorder).toHaveBeenCalledWith("id-1", 3);
   });
@@ -219,7 +206,6 @@ describe("WorkspaceTabScroller reordering", () => {
     const { container } = render(<Strip labels={["A", "B", "C", "D"]} onReorder={onReorder} />);
     const wrapsMounted = () =>
       container.querySelectorAll(".session-tab-wrap .session-tab-main").length;
-    // The window holds a single complete tab.
     expect(wrapsMounted()).toBe(1);
 
     const first = mainButton(container, "A");
@@ -310,7 +296,6 @@ describe("WorkspaceTabScroller reordering", () => {
     fireEvent.keyDown(first, { key: "ArrowLeft", ctrlKey: true, shiftKey: true });
     const last = mainButton(container, "D");
     fireEvent.keyDown(last, { key: "ArrowRight", ctrlKey: true, shiftKey: true });
-    // Both ends refuse to reorder past the strip.
     expect(onReorder).toHaveBeenCalledTimes(2);
 
     fireEvent.keyDown(first, { key: "ArrowRight" });
@@ -331,7 +316,6 @@ describe("WorkspaceTabScroller reordering", () => {
     expect(onReorder).not.toHaveBeenCalled();
     expect(container.querySelector(".session-tab-dragged")).toBeNull();
 
-    // Without a handler the strip stays a plain windowed list.
     const plain = render(<Strip labels={["A", "B", "C", "D"]} />);
     expect(
       plain.container

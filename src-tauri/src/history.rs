@@ -206,15 +206,10 @@ fn integration_script(script: &str, macos: bool) -> String {
     }
     let zsh_status = zsh_variant(STATUS_SCRIPT);
     if script == STATUS_SCRIPT {
-        // Both shells must agree before reporting installed or not installed.
-        // An outdated script in either shell offers the update, which
-        // reinstalls both; any other mix is incomplete.
         return format!(
             "bash_status=0; ( {STATUS_SCRIPT} ) || bash_status=$?; zsh_status=0; ( {zsh_status} ) || zsh_status=$?; if test $bash_status -eq 2 || test $zsh_status -eq 2; then exit 2; fi; if test $bash_status -eq $zsh_status; then exit $bash_status; fi; if test $bash_status -eq 3 || test $zsh_status -eq 3; then exit 3; fi; exit 2"
         );
     }
-    // Validate both startup files before changing either one. Each installer
-    // retains the existing marker-bounded, atomic file replacement.
     format!(
         "status=0; ( {STATUS_SCRIPT} ) || status=$?; test $status -ne 2 || exit 2; status=0; ( {zsh_status} ) || status=$?; test $status -ne 2 || exit 2; ( {script} ) || exit $?; ( {} )",
         zsh_variant(script)
@@ -374,11 +369,6 @@ test ! -e "$HOME/.local/share/control-room/shell-integration.zsh"
         assert!(UNINSTALL_SCRIPT.contains("incomplete or duplicated"));
     }
 
-    /// Runs a wrapper around the real scripts under Bash, which is one of
-    /// the shells Control Room hosts and so is resolved the way the app
-    /// resolves it. The scripts only ever run on a Remote Host, but they are
-    /// ordinary POSIX shell and their behaviour does not depend on which
-    /// machine the shell is on.
     fn run_under_bash(script: &str) -> std::process::Output {
         use std::io::Write;
 
@@ -401,8 +391,6 @@ test ! -e "$HOME/.local/share/control-room/shell-integration.zsh"
         child.wait_with_output().expect("Bash did not finish")
     }
 
-    /// Reads the `key=value` lines the wrapper prints, so a scenario reports
-    /// what it observed instead of the test parsing shell output by position.
     fn observations(output: &std::process::Output) -> std::collections::HashMap<String, String> {
         assert!(
             output.status.success(),
@@ -416,13 +404,6 @@ test ! -e "$HOME/.local/share/control-room/shell-integration.zsh"
             .collect()
     }
 
-    /// A `.bashrc` is the user's own file, and Control Room writes into it.
-    /// Installing twice must not leave two copies of the block, uninstalling
-    /// must take exactly the block and nothing around it, and uninstalling
-    /// something that is not installed has to succeed rather than fail.
-    ///
-    /// The source-text guard beside this says the markers exist. It cannot say
-    /// what running the script does to a file that already has content in it.
     #[test]
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     fn installing_history_twice_leaves_one_reversible_block() {
@@ -453,7 +434,6 @@ printf 'after_control_room=%s\n' "$(grep -Fic 'control room' "$HOME/.bashrc" || 
 printf 'after_control_room_path=%s\n' "$(grep -Fc 'control-room' "$HOME/.bashrc" || true)"
 printf 'after_integration_file=%s\n' "$(test -e "$HOME/.local/share/control-room/shell-integration.bash" && echo 1 || echo 0)"
 
-# Removing what is already gone is what a user who never installed it does.
 ( {UNINSTALL_SCRIPT} ) > /dev/null
 printf 'second_uninstall=ok\n'
 
@@ -488,10 +468,6 @@ rm -rf "$root"
                 "{line}: uninstall took something that was not its own"
             );
         }
-        // The block is appended after a blank line, and uninstall removes the
-        // marked lines rather than the separator, so the file can keep a blank
-        // line it did not start with. Everything with content in it is back to
-        // what it was, and nothing of Control Room's is left.
         assert_eq!(
             found.get("after_nonblank"),
             found.get("before_nonblank"),
@@ -511,10 +487,6 @@ rm -rf "$root"
         );
     }
 
-    /// Markers a user half-deleted, or duplicated by an older bug, mean the
-    /// script cannot tell which lines are its own. Editing anyway would take
-    /// somebody's shell configuration with it, so both scripts refuse and say
-    /// so, and leave the file exactly as they found it.
     #[test]
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     fn damaged_markers_stop_both_scripts_before_they_edit_anything() {
@@ -584,10 +556,6 @@ rm -rf "$root"
         }
     }
 
-    /// The integration only loads for a session Control Room started with the
-    /// flag set. Sourcing it in an ordinary interactive shell has to be a
-    /// no-op, or opting in on one host would follow the user into every shell
-    /// on that machine.
     #[test]
     #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
     fn the_integration_stays_inert_in_a_shell_control_room_did_not_start() {
@@ -599,13 +567,10 @@ touch "$HOME/.bashrc"
 ( {INSTALL_SCRIPT} ) > /dev/null
 integration="$HOME/.local/share/control-room/shell-integration.bash"
 
-# Not an interactive shell, and no opt-in.
 unset CONTROL_ROOM_SHELL_INTEGRATION
 loaded=$( . "$integration"; printf '%s' "${{__CONTROL_ROOM_LOADED:-0}}" )
 printf 'without_optin=%s\n' "$loaded"
 
-# Opted in, but this shell is still not interactive, which is what a
-# Structured Operation's own ssh invocation looks like.
 loaded=$( CONTROL_ROOM_SHELL_INTEGRATION=1; . "$integration"; printf '%s' "${{__CONTROL_ROOM_LOADED:-0}}" )
 printf 'noninteractive=%s\n' "$loaded"
 

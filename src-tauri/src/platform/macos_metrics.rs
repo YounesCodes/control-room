@@ -1,11 +1,8 @@
-//! Bounded, read-only samples from the tools included with macOS.
 use super::{HeaderMetric, HeaderMetrics, empty_sample, percent, set_disk_capacity};
 
 pub(crate) fn script(metrics: &[HeaderMetric]) -> String {
     let mut script = String::from("LC_ALL=C; export LC_ALL; ");
     if metrics.contains(&HeaderMetric::Cpu) {
-        // CPU totals do not need top's costly framework and per-process memory
-        // inspection. Keep the two samples one second apart for a real delta.
         script.push_str("/usr/bin/top -F -R -l 2 -s 1 -n 0 | /usr/bin/awk '/CPU usage:/ {idle=$7} END {print \"cpu_idle=\" idle}'; ");
     }
     if metrics.contains(&HeaderMetric::Ram) {
@@ -29,8 +26,6 @@ pub(super) fn collect(metrics: &[HeaderMetric]) -> Result<HeaderMetrics, String>
         return Ok(empty_sample());
     }
     let script = script(metrics);
-    // The script contains only fixed commands. Neither paths nor frontend
-    // strings become shell source, and each sample has a five-second budget.
     let mut child = crate::platform::background_command("/bin/sh")
         .args(["-c", &script])
         .stdin(Stdio::null())

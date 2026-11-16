@@ -1,16 +1,7 @@
 import type { AppSettings, SavedConnection } from "../types";
 
-/**
- * Why a Saved Connection is or is not allowed to run Structured Operations
- * under sudo.
- */
 export type ElevationSource = "global" | "connection" | "off";
 
-/**
- * The global setting is an override rather than a default: while it is on,
- * every host runs elevated regardless of its own flag, which is what allowing
- * sudo everywhere means. That is why "global" outranks "connection" here.
- */
 export function elevationSource(
   globalEnabled: boolean,
   connectionEnabled: boolean,
@@ -23,7 +14,6 @@ export function elevationAllowed(globalEnabled: boolean, connectionEnabled: bool
   return elevationSource(globalEnabled, connectionEnabled) !== "off";
 }
 
-/** True when the per-host control has nothing left to decide. */
 export function perHostControlLocked(globalEnabled: boolean): boolean {
   return globalEnabled;
 }
@@ -39,14 +29,6 @@ export function elevationSummary(source: ElevationSource): string {
   }
 }
 
-/**
- * What the host itself can do, kept separate from what the user allowed. A
- * permission the account cannot act on is the confusing case, so the UI says
- * both sentences rather than folding them into one.
- *
- * `null` means capabilities have not been read yet, which is not the same as
- * knowing the account has no passwordless sudo.
- */
 export function elevationCapabilityNote(passwordlessSudo: boolean | null): string | null {
   if (passwordlessSudo === null) return null;
   return passwordlessSudo

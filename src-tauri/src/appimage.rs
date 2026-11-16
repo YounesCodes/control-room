@@ -9,8 +9,7 @@ pub(crate) fn running() -> bool {
     bundle_type() == Some(BundleType::AppImage)
 }
 
-// AppRun adds paths for the app and its WebKit subprocesses. System programs
-// launched by the app must resolve their own libraries, Python, and GTK data.
+// AppRun adds library paths for the app's WebKit subprocesses that host programs must not inherit.
 pub(crate) fn host_environment() -> impl Iterator<Item = (&'static str, Option<OsString>)> {
     const PATH_VARIABLES: &[&str] = &[
         "PATH",

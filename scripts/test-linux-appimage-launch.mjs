@@ -1,4 +1,3 @@
-// Launch the release AppImage with isolated user data and use it for real work.
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -17,7 +16,6 @@ try {
   await withInstalledApp(resolve(appimage), async (invoke, session) => {
     assert.equal(await invoke("current_app_version"), version);
     assert.deepEqual(await invoke("list_connections"), []);
-    // Real SQLite writes, a UI-created split and live shell input.
     const seeded = await seedLifecycleData(invoke, session);
     assert.equal(seeded.workspace.workspaces.length, 2);
   });

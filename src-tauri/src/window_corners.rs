@@ -1,6 +1,4 @@
-//! The undecorated Linux window is transparent so the frontend can round its
-//! corners like Windows 11 does. Without a compositor the transparent corners
-//! paint black, so the frontend rounds them only while the screen composites.
+//! Without a compositor, transparent window corners paint black.
 use tauri::{AppHandle, Emitter, async_runtime::channel};
 
 pub const COMPOSITING_CHANGED: &str = "window-compositing-changed";

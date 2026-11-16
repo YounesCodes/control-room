@@ -12,8 +12,7 @@ pub(crate) fn launch(mut command: Command) -> Result<(), String> {
 }
 
 fn finish_launch(mut child: Child) -> Result<(), String> {
-    // Some xdg-open desktop fallbacks remain attached to the browser. Catch
-    // immediate launch errors without making the UI wait for a browser to close.
+    // Some xdg-open fallbacks stay attached to the browser until it closes.
     let deadline = Instant::now() + Duration::from_millis(200);
     loop {
         match child.try_wait().map_err(|error| error.to_string())? {
@@ -41,7 +40,6 @@ mod tests {
 
     #[test]
     fn a_running_browser_does_not_hold_the_native_request_open() {
-        // A real child stays alive until the test releases its input pipe.
         let mut child = Command::new("sh")
             .args(["-c", "read -r answer"])
             .stdin(Stdio::piped())

@@ -7,7 +7,6 @@ type Layout = ReturnType<typeof layoutSystemdGraph>;
 type Scene = { layout: Layout; root: string; scope: string; units: SystemdUnit[] };
 type Exit = { key: number; scene: Scene; ids: string[]; connections: Layout["connections"] };
 
-/** Visual-only snapshots let removed nodes and their connectors finish one short fade. */
 export function SystemdGraphExits({ layout, root, scope, units }: Scene) {
   const previous = useRef<Scene | null>(null);
   const serial = useRef(0);

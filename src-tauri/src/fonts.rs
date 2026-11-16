@@ -1,4 +1,3 @@
-//! Catalog previews stay in memory. Only install_catalog_font writes user fonts.
 use std::{
     collections::HashMap,
     io::Read,
@@ -67,8 +66,7 @@ pub struct FontProgress {
 }
 
 fn client() -> Result<Client, String> {
-    // Match the updater's existing provider. The catalog can be used before
-    // any update check initializes TLS, including with automatic checks off.
+    // The catalog can run before any update check installs a rustls crypto provider.
     let _ = rustls::crypto::ring::default_provider().install_default();
     Client::builder()
         .timeout(Duration::from_secs(30))
@@ -181,8 +179,6 @@ fn catalog_font(state: &FontState, id: &str) -> Result<CatalogFont, String> {
         .ok_or_else(|| "This font is no longer in the catalog. Refresh and retry.".into())
 }
 
-// Ignore arbitrary URLs in catalog data. Only Google's fixed HTTPS font host
-// can supply installable bytes; redirects, credentials, and query strings fail.
 fn ttf_urls(css: &str) -> Result<Vec<String>, String> {
     static EXPRESSION: OnceLock<regex::Regex> = OnceLock::new();
     let expression = EXPRESSION.get_or_init(|| {
@@ -202,8 +198,7 @@ fn validate_font(bytes: &[u8], family: &str, weight: u16) -> Result<(), String> 
     let invalid =
         || "Downloaded file is not a valid TrueType font. Retry the download.".to_string();
     let face = FontRef::from_index(bytes, 0).map_err(|_| invalid())?;
-    // FontRef reads tables lazily. Preserve the previous parser's mandatory
-    // header checks before trusting downloaded metadata or registering a font.
+    // FontRef reads tables lazily, so check the mandatory headers before trusting metadata.
     let head = face.head().map_err(|_| invalid())?;
     face.hhea().map_err(|_| invalid())?;
     let maxp = face.maxp().map_err(|_| invalid())?;
@@ -331,12 +326,10 @@ struct InstalledFile {
 
 #[cfg(any(windows, target_os = "macos", test))]
 trait FontRegistration {
-    // Returns true only when this call created a registry entry and resource.
     fn register(&self, path: &Path, key: &str) -> Result<bool, String>;
     fn unregister(&self, path: &Path, key: &str);
 }
 
-// Publish a fully synced staging file without replacing an existing font.
 #[cfg(any(windows, target_os = "macos", test))]
 fn write_font_file(path: &Path, bytes: &[u8]) -> Result<bool, String> {
     use std::io::Write;
@@ -495,8 +488,7 @@ mod windows {
             if already_registered && existing[..length as usize / 2] != path {
                 return Err("An existing Windows font registration uses this name. Remove the conflicting font in Windows Settings before retrying.".into());
             }
-            // Reusing an installed registration must not add another public
-            // GDI reference. One unregister would otherwise leave it loaded.
+            // Each AddFontResource adds a GDI reference that needs its own removal.
             if already_registered {
                 return Ok(false);
             }
@@ -679,7 +671,6 @@ mod tests {
             |_, _| {},
         )
         .unwrap();
-        // A retry never overwrites a user font or unregisters an existing resource.
         install_files(
             directory.path(),
             &font,
@@ -1050,7 +1041,6 @@ mod tests {
                     .encode_utf16()
                     .chain(Some(0))
                     .collect::<Vec<_>>();
-                // Clean up the original bug's extra reference even on assertion failure.
                 for _ in 0..2 {
                     if unsafe { RemoveFontResourceExW(wide.as_ptr(), 0, std::ptr::null()) } == 0 {
                         break;

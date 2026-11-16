@@ -95,7 +95,6 @@ describe("catalog font lifecycle", () => {
     act(() => field.focus());
     await screen.findByRole("option", { name: /Fira Mono/ });
     const toggle = screen.getByRole("button", { name: "Hide font suggestions" });
-    // Some pointers focus the button before its click, which blurs the field.
     fireEvent.pointerDown(toggle);
     act(() => toggle.focus());
     fireEvent.click(toggle);

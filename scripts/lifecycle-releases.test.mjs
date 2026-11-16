@@ -4,7 +4,6 @@ import { previousRelease, releaseAsset } from "./lifecycle-releases.mjs";
 it("upgrades from the newest stable release users can have, regardless of API ordering", () => {
   const releases = ["v0.9.4", "v0.10.0", "v0.9.5", "v0.9.3"].map((tag_name) => ({ tag_name }));
   releases.push({ tag_name: "v0.9.99", draft: true }, { tag_name: "v0.9.98", prerelease: true });
-  // A branch that still carries the published version upgrades from that release.
   expect(previousRelease(releases, "0.9.5").tag_name).toBe("v0.9.5");
   expect(previousRelease(releases, "0.9.6").tag_name).toBe("v0.9.5");
   expect(previousRelease(releases, "0.9.5", "v0.9.4").tag_name).toBe("v0.9.4");

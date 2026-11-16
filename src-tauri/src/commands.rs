@@ -208,9 +208,6 @@ pub fn start_session(
     let windows = database
         .get_capabilities(&connection_id)?
         .is_some_and(|caps| caps.os_id.as_deref() == Some("windows"));
-    // A container terminal runs `docker exec` on the host. Its command is built
-    // entirely in Rust from a validated full container ID, so nothing about the
-    // process comes from the frontend, and it needs no shell discovery.
     if let Some(container_id) = container_id {
         if remote_shell_id.is_some() {
             return Err("A container terminal cannot also choose a remote shell".into());
@@ -367,7 +364,6 @@ pub async fn sample_header_metrics(
     if metrics.is_empty() {
         return Ok(header_metrics::empty_sample());
     }
-    // SSH, limiter waits and native counter snapshots are blocking operations.
     tauri::async_runtime::spawn_blocking(move || {
         use tauri::Manager;
         let state = app.state::<header_metrics::HeaderMetricsState>();
@@ -447,10 +443,6 @@ pub fn list_windows_services(
     windows_inspection::services(&database.get_connection(&connection_id)?)
 }
 
-/// Decides how one Structured Operation should run on one host. The global
-/// setting is an override, not a default: while it is on, a connection that
-/// never opted in is still elevated, which is what "allow sudo everywhere"
-/// means. A password the user just typed always takes precedence.
 fn elevation_for(
     database: &Database,
     connection: &SavedConnection,
@@ -525,9 +517,6 @@ pub fn inspect_connections(
     if windows_host(&database, &connection_id)? {
         return windows_inspection::connections(&connection);
     }
-    // Peer ownership is only visible for the caller's own processes without
-    // privilege, so this read benefits from an allowance even though it has no
-    // password retry of its own.
     let elevation = elevation_for(&database, &connection, None)?;
     remote::list_connections(&connection, elevation)
 }
@@ -922,8 +911,6 @@ mod tests {
 
         assert!(start.contains("shell_id: String"));
         assert!(start.contains("local_shell::resolve_installed(&shell_id)"));
-        // Nothing about the process may come from the frontend: no path, no
-        // arguments, no environment, no working directory.
         for rejected in [
             "program",
             "executable",
@@ -942,10 +929,6 @@ mod tests {
         }
     }
 
-    /// No command writes a file the frontend named. Everything writes to paths
-    /// Rust chose, so a writer taking a path from a command would be a new
-    /// trust boundary rather than a new feature, and deserves the extension
-    /// and size checks a user-picked path needs.
     #[test]
     fn no_command_writes_a_frontend_named_path() {
         let sources = [
@@ -961,8 +944,6 @@ mod tests {
         let writes: usize = sources
             .iter()
             .map(|source| {
-                // The test module of this file names these while asserting
-                // about them, so only the code above `mod tests` counts.
                 let production = source.split("#[cfg(test)]").next().unwrap_or(source);
                 production.matches("fs::write(").count()
                     + production.matches("File::create(").count()
@@ -979,8 +960,6 @@ mod tests {
 
     #[test]
     fn there_is_no_arbitrary_process_execution_command() {
-        // Only the commands themselves, not this test module, which names the
-        // very identifiers it forbids.
         let commands = include_str!("commands.rs")
             .split("#[cfg(test)]")
             .next()
@@ -993,7 +972,6 @@ mod tests {
             "run_shell",
             "execute_command",
             "run_local_command",
-            // Control Room is the terminal emulator; it never launches another.
             "wt.exe",
         ] {
             assert!(!commands.contains(forbidden), "{forbidden} must not exist");
@@ -1003,9 +981,6 @@ mod tests {
             );
         }
 
-        // No command takes a program, a script, or an argument list from the
-        // frontend. The interactive terminal is the execution surface, and Rust
-        // owns what runs on it.
         for block in commands.split("#[tauri::command").skip(1) {
             let signature = block
                 .split(" {")
@@ -1048,10 +1023,6 @@ mod tests {
         assert!(!connection.history_enabled);
     }
 
-    /// Testing an unsaved connection has to normalize exactly the way saving
-    /// one does, or the destination the user tested is not the destination
-    /// stored a moment later. Blank optional fields collapse to `None` rather
-    /// than to an empty string that would reach SSH argument construction.
     #[test]
     fn testing_a_connection_blanks_optional_fields_the_way_saving_does() {
         let connection = validated_test_connection(SavedConnectionInput {

@@ -32,8 +32,7 @@ pub struct UnitInspection {
 
 fn command(unit: &str, section: UnitReadSection) -> Result<String, String> {
     let unit = validate_systemd_unit_id(unit)?;
-    // Validation excludes quotes and shell syntax; single quotes preserve the
-    // literal backslash in systemd's escaped mount and instance names.
+    // systemd escapes mount and instance names with literal backslashes.
     Ok(match section {
         UnitReadSection::Properties => format!(
             "LC_ALL=C TZ=UTC SYSTEMD_COLORS=0 systemctl show --all --no-pager --property={PROPERTIES} -- '{unit}'; cr_status=$?; if [ \"$cr_status\" -eq 0 ]; then printf '\\nControlRoomRealtimeSeconds='; date +%s 2>/dev/null || printf '\\n'; fi; exit \"$cr_status\""
@@ -75,7 +74,6 @@ fn parse(
             end -= 1;
         }
         text.truncate(end);
-        // Never present a cut property as complete dependency evidence.
         if matches!(section, UnitReadSection::Properties) {
             text.truncate(text.rfind('\n').unwrap_or(0));
         }

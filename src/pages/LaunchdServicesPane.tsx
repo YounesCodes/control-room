@@ -15,8 +15,7 @@ import { countSystemdUnits, filterSystemdUnits } from "../lib/systemd-units";
 import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
 import type { CachedList, LogSourceSelection, SavedConnection, SystemdUnit } from "../types";
 
-/// Mac hosts list launchd jobs. launchd reports no dependency graph, so the
-/// Linux systemd explorer does not apply; this is a flat list with details.
+// launchd reports no dependency graph, so Mac hosts get a flat list.
 export function LaunchdServicesPane({
   connection,
   cache,

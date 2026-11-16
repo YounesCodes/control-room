@@ -44,8 +44,7 @@ const MORE_MENU_WIDTH = 240;
 const MORE_MENU_HEIGHT = 132;
 const COPY_FEEDBACK_MS = 1500;
 const HISTORY_REFRESH_MS = 75;
-// Matches --motion-med.
-const REMOVE_COLLAPSE_MS = 160;
+export const REMOVE_COLLAPSE_MS = 160;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -190,9 +189,7 @@ export function HistoryPane({
   onPausedChange: (paused: boolean) => void;
   onConnectionChanged: (connection: SavedConnection) => void;
   onPaste: (command: string) => void;
-  /// Restarts this workspace's terminal so its new shell loads the integration.
   onRestartTerminal: () => void;
-  /// The workspace's terminal has a live session.
   canPaste: boolean;
 }) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
@@ -208,9 +205,6 @@ export function HistoryPane({
   const [readError, setReadError] = useState<string | null>(null);
   const error = actionError ?? readError;
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  // Set when capture turns on while this workspace's terminal is already
-  // running: that shell started without the integration, so it records
-  // nothing until it restarts.
   const [restartOffered, setRestartOffered] = useState(false);
   const restartButtonRef = useRef<HTMLButtonElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -296,17 +290,16 @@ export function HistoryPane({
   useEffect(() => {
     const searchTimer = window.setTimeout(() => void loadHistory(), search ? 180 : 0);
     let refreshTimer: number | undefined;
-    const refreshSaved = () => {
+    const refreshAfterRemovalsCollapse = () => {
       refreshTimer = undefined;
-      // Let a confirmed deletion finish collapsing before replacing the list.
       if (removalTimersRef.current.size > 0) {
-        refreshTimer = window.setTimeout(refreshSaved, REMOVE_COLLAPSE_MS);
+        refreshTimer = window.setTimeout(refreshAfterRemovalsCollapse, REMOVE_COLLAPSE_MS);
       } else {
         void loadHistory(true);
       }
     };
     const unsubscribe = onHistoryChanged(connection.id, () => {
-      refreshTimer ??= window.setTimeout(refreshSaved, HISTORY_REFRESH_MS);
+      refreshTimer ??= window.setTimeout(refreshAfterRemovalsCollapse, HISTORY_REFRESH_MS);
     });
     return () => {
       window.clearTimeout(searchTimer);
@@ -326,9 +319,6 @@ export function HistoryPane({
   }, [connection.id]);
 
   useEffect(() => {
-    // The control that turned capture on is gone (the opt-in card) or closed
-    // (the More menu returns focus to its trigger). Only take focus that the
-    // removed card would otherwise drop on the page body.
     if (!restartOffered) return;
     if (document.activeElement === document.body || document.activeElement === null) {
       restartButtonRef.current?.focus();
@@ -579,8 +569,6 @@ export function HistoryPane({
     }
   }
 
-  // The first read sketches the whole page: its actions wait on what the read
-  // finds, and the list keeps its timeline layout.
   if (loading && !hasLoaded && !error)
     return (
       <section className="feature-page history-page">

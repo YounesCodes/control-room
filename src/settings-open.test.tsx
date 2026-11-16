@@ -198,9 +198,6 @@ describe("Opening Settings", () => {
   });
 
   it("still opens when the settings payload predates the local terminal toggles", async () => {
-    // An older backend, or a stored payload from before this setting existed,
-    // simply has no such key. Settings has to open on that: the launchers read
-    // the same list, and neither should fail over a missing optional field.
     const current = { ...settings } as AppSettings;
     delete (current as Partial<AppSettings>).hiddenLocalShells;
     api.settingsContract.mockResolvedValue({
@@ -215,7 +212,6 @@ describe("Opening Settings", () => {
     await user.click(await screen.findByRole("button", { name: "Open Settings" }));
 
     expect(await screen.findByText("Local terminal", { selector: "legend" })).toBeTruthy();
-    // Absent means offered, so the shell reads as on rather than crashing.
     const toggle = screen.getByLabelText("Offer Git Bash");
     expect(toggle).toBeTruthy();
 
@@ -229,9 +225,6 @@ describe("Opening Settings", () => {
   });
 
   it("renders with the payload and catalog this machine actually produces", async () => {
-    // The real combination: sudo allowed globally, four installed shells with
-    // their administrator variants, an agent with no identity, and the version
-    // still resolving. Nothing here may take the pane down.
     api.settingsContract.mockResolvedValue({
       current: { ...settings, globalSudoEnabled: true },
       defaults: settings,

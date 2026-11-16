@@ -40,18 +40,14 @@ export function FontCatalogPicker({
   const installed = useRef<{ id: string; family: string } | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const catalogRequest = useRef(false);
-  // The chevron decides at press time: some pointers move focus to it before
-  // the click lands, and that blur would otherwise close the list first.
+  // Some pointers move focus to the chevron before the click lands.
   const toggleIntent = useRef<"open" | "close" | null>(null);
   const keepClosed = useRef(false);
   const matching = (catalog?.fonts ?? [])
     .filter((font) => font.family.toLowerCase().includes((query ?? "").trim().toLowerCase()))
     .slice(0, 8);
   const results = open ? matching : [];
-  // The list is on screen: suggestions, or their skeleton while the catalog loads.
   const showingSuggestions = open && (results.length > 0 || loading);
-  // Opening the list previews nothing until a font is highlighted or a search
-  // is typed; the top match stands in only for a typed search.
   const active =
     picked ??
     results.find((font) => font.id === selected) ??
@@ -169,8 +165,7 @@ export function FontCatalogPicker({
         installed.current = { id: active.id, family };
       }
       if (!alive.current) return;
-      // Reuse bytes cached by the successful Windows installer so the new
-      // family renders immediately while the system font cache refreshes.
+      // Windows refreshes its font cache after install, so preview from the cached bytes.
       const bytes = await api.previewCatalogFont(active.id);
       installedFace = await new FontFace(family, bytes).load();
       if (!alive.current) return;
@@ -253,8 +248,7 @@ export function FontCatalogPicker({
               }}
               onMouseDown={(event) => {
                 if (query === null || picked !== null) {
-                  // Prevent WebKit's mouse default from replacing the selected
-                  // current value with a caret after the focus handler runs.
+                  // WebKit's mouse default replaces the selected value with a caret.
                   event.preventDefault();
                   event.currentTarget.focus();
                   event.currentTarget.select();
@@ -316,7 +310,6 @@ export function FontCatalogPicker({
               onPointerDown={() => {
                 toggleIntent.current = showingSuggestions ? "close" : "open";
               }}
-              // Keep focus in the field so toggling the list never blurs it.
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 const intent = toggleIntent.current ?? (showingSuggestions ? "close" : "open");

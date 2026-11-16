@@ -47,8 +47,6 @@ describe("Workspace targets", () => {
     expect(local.connectRequested).toBe(true);
     expect(local.sessionId).toBeNull();
     expect(local.shell).toEqual(shell);
-    // No Saved Connection, no inspection caches, no History state exist to
-    // reach from a local Workspace.
     for (const remoteOnly of [
       "connectionId",
       "connectionSnapshot",
@@ -69,8 +67,6 @@ describe("Workspace targets", () => {
     expect(isRemoteWorkspace(remote)).toBe(true);
     expect(remote.connectionId).toBe(connection.id);
     expect(remote.connectionSnapshot).toEqual(connection);
-    // The snapshot is a copy, so editing the connection later cannot mutate an
-    // open Workspace behind React's back.
     expect(remote.connectionSnapshot).not.toBe(connection);
   });
 
@@ -106,8 +102,6 @@ describe("Workspace targets", () => {
     expect(workspaceTargetName(web)).toBe("web");
     expect(workspaceHostContext(web)).toBe("prod-web");
     expect(workspaceHostContext(host)).toBeNull();
-    // Each container is its own target, so neither the host's terminal nor
-    // another container's shifts its number.
     expect(workspaceTargetKey(web)).toBe(`container:${connection.id}:${"a".repeat(64)}`);
     const all = [host, web, cache];
     expect(workspaceDisplayLabel(host, all)).toBe("prod-web");

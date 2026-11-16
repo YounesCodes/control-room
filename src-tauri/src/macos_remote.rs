@@ -1,4 +1,3 @@
-//! Read-only macOS SSH collectors. Commands use tools shipped with macOS.
 use crate::{
     models::*,
     remote::{Elevation, RemoteCommandExecutor},
@@ -107,8 +106,6 @@ pub(crate) fn shells(
         windows_terminal_available: false,
         wsl_error: None,
         profile_error: None,
-        // An unavailable Docker context must not prevent an SSH terminal.
-        // Overview can retry optional host discovery independently.
         capabilities: crate::remote::discover_capabilities(c).ok(),
     })
 }
@@ -671,7 +668,6 @@ case "$pid" in ''|*[!0-9]*) ;; *) predicate="($predicate) OR processIdentifier =
             "/usr/bin/log show --last 1h --style syslog --info{predicate} | /usr/bin/tail -n {lines}"
         ))
     );
-    // Export the backend-built predicate to the pipefail subshell as data.
     Ok(command(&if follow {
         format!(
             "{setup} export predicate; {initial} || exit $?; exec /usr/bin/log stream --style syslog --level info{predicate}"
@@ -799,7 +795,6 @@ mod tests {
         })).unwrap();
         let label = format!("com.control-room.test.{}", uuid::Uuid::new_v4().simple());
         let path = format!("/tmp/{label}");
-        // Only this fixture's UUID-named job and directory are ever removed.
         struct Cleanup<'a>(&'a SavedConnection, String, String);
         impl Drop for Cleanup<'_> {
             fn drop(&mut self) {

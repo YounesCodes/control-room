@@ -46,8 +46,6 @@ function roundedPath(points: GraphPoint[]) {
   return path + ` L${last.x},${last.y}`;
 }
 
-/** Ordering is drawn from the earlier unit to the later unit. Before and its
- * inverse After are the same constraint; keep both original evidence records. */
 export function layoutSystemdGraph(
   ids: string[],
   edges: SystemdEdge[],
@@ -188,7 +186,6 @@ export function layoutSystemdGraph(
     const direction = Math.sign(target.x - source.x);
     const start = port(connection.source, connection, direction),
       end = port(connection.target, connection, -direction);
-    // Keep the stroke behind the triangle, with its tip four pixels off the card.
     const tip = { ...end };
     end.x -= direction * 8;
     connection.arrowhead = `M${tip.x},${tip.y} L${end.x},${end.y - 4} L${end.x},${end.y + 4} Z`;

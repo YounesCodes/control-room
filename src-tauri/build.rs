@@ -2,8 +2,6 @@ fn main() {
     println!("cargo:rerun-if-changed=icons/icon.ico");
     println!("cargo:rerun-if-changed=icons/icon-dev.ico");
     println!("cargo:rerun-if-changed=icons/icon.icns");
-    // Debug exes wear the dev-marked icon so a taskbar button cannot be
-    // mistaken for the installed app. Release keeps the shipped icon.
     let attributes = if std::env::var("PROFILE").as_deref() == Ok("debug") {
         tauri_build::Attributes::new().windows_attributes(
             tauri_build::WindowsAttributes::new().window_icon_path("icons/icon-dev.ico"),
@@ -22,9 +20,6 @@ fn main() {
     );
 }
 
-// Debug windows are titled with the checkout's branch, so the compile-time
-// value must follow branch switches. The title fn falls back to "dev" when
-// Git cannot name the branch.
 fn emit_branch() {
     let branch = std::process::Command::new("git")
         .args(["branch", "--show-current"])

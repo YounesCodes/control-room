@@ -166,8 +166,6 @@ export function SystemdUnitInspector({
   const [advanced, setAdvanced] = useState(initialViewState?.advanced ?? false);
   useEffect(() => {
     if (!initialViewState?.advanced) return;
-    // Restoring an open disclosure must recheck evidence freshness too.
-    // The parent loaders reuse fresh caches and deduplicate pending requests.
     if (/\.(service|socket)$/.test(unitId)) onRequestPorts?.();
   }, []);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -202,7 +200,6 @@ export function SystemdUnitInspector({
       }
       if (!pending.size) observer.disconnect();
     };
-    // Evidence can arrive after mount; restore again once its scroll range exists.
     const observer = new MutationObserver(restore);
     if (pending.size) observer.observe(body, { childList: true, subtree: true });
     restore();
@@ -228,7 +225,6 @@ export function SystemdUnitInspector({
     };
   }, []);
   const p = result?.value?.properties ?? {};
-  // Nothing read yet: show where the fields will be rather than "Unavailable".
   const pending = !result?.value && !result?.error;
   const type = unitId.split(".").at(-1);
   const active = p.ActiveState ?? summary?.activeState;
@@ -348,8 +344,6 @@ export function SystemdUnitInspector({
           </p>
         )}
         {pending ? (
-          // Nothing read yet: one skeleton holds every section in place, open
-          // or closed as the user left it, rather than showing "Unavailable".
           <Skeleton label="Reading unit details…">
             <SkeletonFields count={3} />
             <SkeletonSections count={1} offset={3} />

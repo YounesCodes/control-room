@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
-/** Retain exiting content for its slide, but remove it from focus and accessibility immediately. */
 export function SystemdPresence({ open, children }: { open: boolean; children: ReactNode }) {
   const [mounted, setMounted] = useState(open);
   const content = useRef(children);

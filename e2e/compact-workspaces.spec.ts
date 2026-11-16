@@ -165,7 +165,6 @@ describe("Compact native windows and live terminal arrangements", () => {
       expect((await saved()).terminalGroups![0].layout).toEqual(layout);
     }
     await browser.saveScreenshot("test-results/desktop/terminal-arrangement-native.png");
-    // Focus that pane's terminal body; its corner handle now opens Arrange on click.
     const commandPromptPane = await browser.execute(
       (shellLabel) =>
         document

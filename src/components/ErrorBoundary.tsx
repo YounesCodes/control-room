@@ -5,13 +5,6 @@ import { WindowControls } from "./WindowControls";
 type Props = { children: ReactNode; onReload?: () => void };
 type State = { error: Error | null };
 
-/**
- * A pane that fails to render must not take the whole window with it. Without
- * this, React unmounts the entire tree on an uncaught render error and the user
- * is left staring at the black page background with no way back but restarting
- * the app. The failure is shown instead: what happened, that stored data is
- * untouched, and a Reload that starts the session over.
- */
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
 
@@ -20,8 +13,6 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    // The screen carries the message itself; the console keeps the stack for
-    // anyone who has devtools open.
     console.error("Control Room hit a rendering error", error, info.componentStack ?? "");
   }
 

@@ -1,4 +1,3 @@
-// Real app, UI, HTTP feed, signature verification, package replacement and restart.
 // Only this disposable product's installation and data may be removed.
 import assert from "node:assert/strict";
 import { spawn, execFileSync } from "node:child_process";
@@ -125,8 +124,6 @@ try {
     join(source, "node_modules"),
     windows ? "junction" : "dir",
   );
-  // Build from disposable source; the lab checkout and production updater key
-  // stay unchanged. The two binaries have genuinely different package versions.
   const originalCargo = readFileSync(join(source, "src-tauri/Cargo.toml"), "utf8");
   const originalConfig = JSON.parse(
     readFileSync(join(source, "src-tauri/tauri.conf.json"), "utf8"),
@@ -153,8 +150,6 @@ try {
               pubkey,
               endpoints: [`${endpoint}/latest.json`],
               dangerousInsecureTransportProtocol: true,
-              // The fixture installs outside the ordinary application folder.
-              // Keep the actual updater installer in that owned directory too.
               windows: {
                 ...originalConfig.plugins.updater.windows,
                 installerArgs: [`/D=${installRoot}`],
@@ -208,8 +203,6 @@ try {
     ].join("\n"),
   ).toString("base64");
   if (windows) {
-    // Compare with the executable actually shipped by NSIS, including any
-    // bundler metadata, rather than assuming it matches Cargo's raw output.
     const reference = join(directory, "reference-installation");
     await run(installers[1], ["/S", `/D=${reference}`]);
     candidateHash = hash(join(reference, executable));
@@ -287,9 +280,7 @@ try {
       const originalProcesses = ownedProcesses().map((process) => process.Id);
       assert.ok(originalProcesses.length, "The original installed application must be running");
       await session.$("button=Restart and update").click();
-      // Keep the driver alive until installation and automatic launch finish.
-      // Deleting the old session immediately can close the app before its
-      // asynchronous install command has reached the native updater.
+      // Ending the session early can close the app before its install command reaches the native updater.
       await until(
         () => existsSync(application) && hash(application) === candidateHash,
         "Signed updater did not replace the executable with the candidate bytes",

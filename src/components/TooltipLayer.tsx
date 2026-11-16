@@ -63,8 +63,6 @@ export function TooltipLayer() {
       setTooltip(null);
     }
 
-    // An open menu or panel already shows what its trigger's tooltip describes,
-    // and the tooltip would sit on top of it.
     const expanded = (target: HTMLElement) => target.getAttribute("aria-expanded") === "true";
 
     function show(target: HTMLElement, delayed: boolean) {
@@ -116,9 +114,7 @@ export function TooltipLayer() {
       restoreTitle();
     }
 
-    // Returning to the window refocuses the last control without the user
-    // moving focus, which would pop its help wherever that control sits. Skip
-    // that restored focus; the next key or pointer press ends the window.
+    // Returning to the window refocuses the last control without user input.
     let restoringWindowFocus = false;
 
     function windowBlur() {

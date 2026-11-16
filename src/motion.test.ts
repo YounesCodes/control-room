@@ -1,15 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { POPOVER_EXIT_MS } from "./hooks/use-popover-exit";
+import { REMOVE_COLLAPSE_MS } from "./pages/HistoryPane";
 
 const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const appSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
 
-/** Body of the first rule whose selector matches exactly, failing when the
- *  rule is gone. Selectors are anchored to the start of a line so compound
- *  selectors that merely end in the same class (`.session-pane-tabs
- *  .session-tab-wrap`) do not shadow the base rule. Follows the
- *  source-scanning pattern of the typography and palette guardrails: motion
- *  here is CSS-only, so the stylesheet is the behavior under test. */
 function rule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = stylesSource.match(new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`));
@@ -17,13 +13,21 @@ function rule(selector: string): string {
   return match[1];
 }
 
+function motionTokenMs(token: string): number {
+  const match = stylesSource.match(new RegExp(`${token}:\\s*(\\d+)ms;`));
+  if (!match) throw new Error(`Missing motion token: ${token}`);
+  return Number(match[1]);
+}
+
 describe("motion guardrails", () => {
+  it("keeps JavaScript exit timers equal to the CSS motion tokens they wait for", () => {
+    expect(POPOVER_EXIT_MS).toBe(motionTokenMs("--motion-fast"));
+    expect(REMOVE_COLLAPSE_MS).toBe(motionTokenMs("--motion-med"));
+  });
+
   it("never animates the terminal surface", () => {
-    // xterm measures and paints on its own schedule; a transition on the
-    // container would smear every resize and refit.
     expect(rule(".terminal-container")).not.toMatch(/\b(animation|transition):/);
     const scrollbar = ".xterm .xterm-scrollable-element > .scrollbar";
-    // Only the scrollbar may fade. Keep terminal content and layout still.
     expect(rule(scrollbar).trim()).toBe("transition: opacity var(--motion-fast) var(--ease);");
     for (const [, selector, block] of stylesSource.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       if (selector.replace(/\/\*[\s\S]*?\*\//g, "").trim() === scrollbar) continue;
@@ -38,8 +42,6 @@ describe("motion guardrails", () => {
   it("answers presses on compact controls with a dip and keeps the host menu centered", () => {
     expect(rule("button")).toContain("transform var(--motion-fast)");
     expect(stylesSource).toContain("transform: scale(0.93)");
-    // The host menu button centers itself with a transform; pressing it must
-    // not drop that centering.
     expect(stylesSource).toContain("transform: translateY(-50%) scale(0.93)");
   });
 
@@ -52,7 +54,6 @@ describe("motion guardrails", () => {
     ]) {
       expect(stylesSource).toContain(selector);
     }
-    // Native window controls mimic the operating system and never dip.
     expect(stylesSource).not.toContain(".window-control-button:active");
   });
 
@@ -66,8 +67,6 @@ describe("motion guardrails", () => {
   it("announces a downloaded update with a resting halo built from the success token", () => {
     const ready = rule('.update-indicator-dot[data-state="ready"]');
     expect(ready).toContain("animation: ready-ping");
-    // The halo derives from --success through color-mix; a new literal hue
-    // would break the monochrome palette contract.
     expect(stylesSource).toMatch(
       /@keyframes ready-ping \{[\s\S]*?color-mix\(in srgb, var\(--success\)/,
     );
@@ -78,10 +77,6 @@ describe("motion guardrails", () => {
   });
 
   it("drags the trailing tab dot across and slides the tab tools into place", () => {
-    // Hovering reserves the action space by animating padding, so the label
-    // and session dot glide instead of jumping, and Rename and Close ride in
-    // from the right edge they occupy when hidden. This includes the focus
-    // mode pane tabs and group tabs, which reveal their tools the same way.
     expect(rule(".session-tab-main")).toContain("transition: padding var(--motion-med)");
     expect(stylesSource).toContain("transform: translateX(6px)");
     expect(stylesSource).toMatch(
@@ -94,9 +89,6 @@ describe("motion guardrails", () => {
     for (const token of ["--os-ubuntu:", "--os-debian:", "--os-windows:", "--shell-accent:"]) {
       expect(stylesSource).toContain(token);
     }
-    // One reveal rule reads each mark's --identity variable, so every brand
-    // surfaces on the same contexts: tabs and pane tabs, host rows, terminal
-    // menus and the overflow menus.
     const reveal = stylesSource.match(/[^{}]*\.identity-mark[^{}]*\{[^}]*color: var\(--identity\)/);
     expect(reveal, "the shared identity reveal rule is missing").toBeTruthy();
     for (const context of [
@@ -110,7 +102,6 @@ describe("motion guardrails", () => {
     }
     expect(stylesSource).toContain(".host-os-ubuntu {\n  --identity: var(--os-ubuntu);\n}");
     expect(stylesSource).toContain(".local-shell-mark.identity-mark");
-    // The generic mark carries no brand and must stay neutral everywhere.
     expect(stylesSource).not.toContain(".host-os-unknown");
     expect(stylesSource).not.toContain("in-layout");
   });

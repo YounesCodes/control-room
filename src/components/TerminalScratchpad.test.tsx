@@ -89,8 +89,6 @@ describe("Terminal Scratchpad popover", () => {
     );
   });
 
-  /// user-event's setup() installs its own clipboard stub on the navigator, so
-  /// the spy has to replace it after that, not before.
   function installClipboardSpy(user: ReturnType<typeof userEvent.setup>) {
     const write = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
@@ -214,7 +212,6 @@ describe("Terminal Scratchpad popover", () => {
   it("keeps keyboard undo in the compact editor", async () => {
     await mount();
     const editor = (await screen.findByLabelText("Terminal note")) as HTMLTextAreaElement;
-    // One edit, not one keystroke, so a single Ctrl+Z returns to the empty note.
     fireEvent.change(editor, { target: { value: "line" } });
     expect(editor.value).toBe("line");
     fireEvent.keyDown(editor, { key: "z", ctrlKey: true });

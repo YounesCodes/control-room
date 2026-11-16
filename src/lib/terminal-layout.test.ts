@@ -362,7 +362,6 @@ describe("terminal pane tree", () => {
   });
 
   describe("crossed splits", () => {
-    // Two columns, each split at the same height: a cross.
     const grid = (): TerminalLayout => {
       let layout = splitTerminalLayout(createTerminalLayout("a"), "a", "c", "vertical");
       layout = splitTerminalLayout(layout, "a", "b", "horizontal");
@@ -441,7 +440,6 @@ describe("terminal pane tree", () => {
     expect(above.x).toEqual({ left: 50, top: 0, width: 50, height: 50 });
     expect(above.b).toEqual({ left: 50, top: 50, width: 50, height: 50 });
     expect(above.a).toEqual({ left: 0, top: 0, width: 50, height: 100 });
-    // Already a member, or no such target: nothing to insert.
     expect(insertTerminalBeside(pair, "a", "b", "left")).toBe(pair);
     expect(insertTerminalBeside(pair, "x", "missing", "left")).toBe(pair);
   });

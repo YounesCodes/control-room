@@ -99,7 +99,6 @@ mod tests {
 
     #[test]
     fn reports_windows_browser_launch_failures() {
-        // ShellExecute returns error codes through 32, including missing associations.
         for code in [0, 2, 5, 31, 32] {
             let error = browser_launch_result(code).unwrap_err();
             assert!(error.contains(&format!("error {code}")));

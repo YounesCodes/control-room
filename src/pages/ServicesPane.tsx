@@ -140,8 +140,6 @@ export function ServicesPane({
       const items = await api.listServices(connection.id);
       if (request !== requestRef.current) return;
       onCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
-      // Dependencies outside the inventory and disappeared units retain their
-      // identity. Their own detail reads report their current availability.
     } catch (caught) {
       if (request !== requestRef.current) return;
       onCacheChange({ ...cacheRef.current, loading: false, error: errorMessage(caught) });
@@ -448,7 +446,6 @@ export function ServicesPane({
   );
 
   const firstLoad = cache.loading && !cache.items.length;
-  // The first read sketches the whole explorer, toolbar included, in its own layout.
   if (firstLoad)
     return (
       <section className="feature-page systemd-page">

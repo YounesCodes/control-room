@@ -22,7 +22,6 @@ export function SystemdCode({
         if (!selection || selection.isCollapsed || selection.rangeCount !== 1) return;
         const range = selection.getRangeAt(0);
         if (!event.currentTarget.contains(range.commonAncestorContainer)) return;
-        // Visual metadata breaks must not become extra bytes in copied commands.
         event.clipboardData.setData("text/plain", range.cloneContents().textContent ?? "");
         event.preventDefault();
       }}

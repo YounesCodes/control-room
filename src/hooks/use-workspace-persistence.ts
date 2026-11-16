@@ -19,8 +19,6 @@ export function useWorkspacePersistence({
   panelSizes: import("../lib/panel-layout").PanelSizes;
   onError: (message: string) => void;
 }) {
-  // Workspaces change identity for session states, inspection caches, and other
-  // things that are never saved. Only a change in what is saved is written.
   const serializedState = useMemo(
     () =>
       JSON.stringify(

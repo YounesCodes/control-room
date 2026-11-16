@@ -32,13 +32,10 @@ export async function stopOwnedMacApplications(directory: string) {
     .split(/\r?\n/)
     .map((line) => JSON.parse(line));
   for (const { pid, created } of records) {
-    // A PID from a dead worker alone is insufficient proof of ownership.
     if (identity(pid) !== created) continue;
     try {
       process.kill(pid, "SIGTERM");
-    } catch {
-      /* Already exited. */
-    }
+    } catch {}
     const deadline = Date.now() + 20_000;
     while (identity(pid) === created) {
       if (Date.now() > deadline)

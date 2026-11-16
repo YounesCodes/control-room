@@ -15,8 +15,6 @@ function publish() {
   listeners.forEach((listener) => listener());
 }
 
-/** Each request owns its completion, including rejection and the IPC backstop.
- * Overlapping reads must not turn the indicator off while another is pending. */
 export function beginHostOperation(connectionId: unknown): () => void {
   if (typeof connectionId !== "string") return () => undefined;
   const count = counts.get(connectionId) ?? 0;

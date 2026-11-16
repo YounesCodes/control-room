@@ -42,7 +42,6 @@ it("keeps logos neutral at rest and reveals brand colors on hover, keyboard focu
   await userEvent.keyboard(shiftTabKey);
   const postgres = screen.getByRole("button", { name: /PostgreSQL/ });
   await waitFor(() => expect(document.activeElement).toBe(postgres));
-  // Slow macOS runners can take longer than the default wait to start the fade.
   await waitFor(() => expect(color()).toBe(branded), { timeout: 3000 });
   await userEvent.keyboard("{Enter}" + tabKey);
   await waitFor(() => expect(color()).toBe(branded), { timeout: 3000 });

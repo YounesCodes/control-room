@@ -1,4 +1,3 @@
-//! Read-only diagnostics and isolated startup for debug desktop tests.
 #[cfg(any(not(target_os = "macos"), test))]
 use std::ffi::OsStr;
 use std::path::PathBuf;
@@ -138,7 +137,6 @@ pub fn automation_browser_args(arguments: &str) -> Option<String> {
         .find_map(|argument| argument.strip_prefix("--remote-debugging-port="))?
         .parse::<u16>()
         .ok()?;
-    // Preserve Wry's default switches while forwarding only the driver's debugging port.
     Some(format!(
         "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port={port}"
     ))

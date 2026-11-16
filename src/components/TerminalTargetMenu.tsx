@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
-/** One thing a terminal can be opened against. */
 export interface TerminalTargetOption {
   id: string;
   label: string;
@@ -14,39 +13,16 @@ export interface TerminalTargetGroup {
 }
 
 interface TerminalTargetMenuProps {
-  /** Named for screen readers, and shown to no one else. */
   label: string;
   groups: TerminalTargetGroup[];
-  /** Rendered above the groups. Split uses it for its direction switch. */
   children?: ReactNode;
   footer?: ReactNode;
   onClose: () => void;
   className?: string;
-  /** Set by a caller that positions the menu itself rather than anchoring it. */
   style?: React.CSSProperties;
-  /** True while the menu plays its closing transition before unmounting. */
   closing?: boolean;
 }
 
-/**
- * The grouped list of terminal targets, shared by "New terminal" and Split.
- *
- * Both menus answer the same question, "which Saved Connection or Local Shell
- * Profile", and differ only in what they do with the answer. Splitting can also
- * adopt a terminal that already exists, which is why the groups are passed in
- * rather than derived here: the component owns presentation and keyboard
- * movement, and each caller owns what its targets mean.
- *
- * One row is always the menu's active target — highlighted, with its identity
- * mark revealed, exactly like a native menu's selection. Hovering moves it and
- * the arrow keys continue from it, so keyboard selection stays visible no
- * matter whether the menu was opened by mouse or keyboard; relying on
- * :focus-visible alone would drop the highlight, since a script-focused row
- * after a pointer open is not "focus visible" to the browser.
- *
- * Empty groups are dropped, so a machine with no local shells installed shows
- * no "Local terminals" heading rather than an empty one.
- */
 export function TerminalTargetMenu({
   label,
   groups,
@@ -70,12 +46,6 @@ export function TerminalTargetMenu({
   const [keyboardNav, setKeyboardNav] = useState(false);
 
   useLayoutEffect(() => {
-    // The first target, not the first focusable thing: Split puts its direction
-    // switch above the list, and opening the menu on it would make the arrow
-    // keys start somewhere the reader did not ask about. Runs on mount and
-    // again when a quick reopen cancels the closing transition, since the
-    // menu element stayed mounted and would otherwise never pull focus back.
-    // A layout effect, so the row owns focus before any further input lands.
     if (closing) return;
     setActiveIndex(0);
     setKeyboardNav(false);
@@ -96,9 +66,6 @@ export function TerminalTargetMenu({
     if (!targets.length) return;
     event.preventDefault();
     const step = event.key === "ArrowDown" ? 1 : -1;
-    // Wraps, so a list shorter than the reader expects still moves. Continues
-    // from the active row — where hover left it — not from wherever DOM focus
-    // happens to sit.
     const next =
       event.key === "Home"
         ? 0

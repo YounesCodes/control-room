@@ -1,5 +1,3 @@
-//! Discover Linux shells locally. The frontend can only select a profile ID.
-
 #[cfg(test)]
 use std::path::Path;
 use std::{env, path::PathBuf};

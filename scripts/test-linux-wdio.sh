@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Run the full native suite on a private X11 display with a real window manager.
 set -euo pipefail
 export PATH="$HOME/.cargo/bin:$PATH"
 export TAURI_WEBVIEW_AUTOMATION=true

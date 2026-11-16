@@ -37,7 +37,6 @@ export interface TerminalLayoutViewport {
   height: number;
 }
 
-/** Round shared edges together so adjacent panes meet on complete CSS pixels. */
 export function getTerminalPanePixels(
   rectangle: TerminalPaneRect,
   viewport: TerminalLayoutViewport,
@@ -59,7 +58,6 @@ export function getTerminalPanePixels(
   };
 }
 
-/** Sides of a pane that meet the surface's left, right, or bottom edge, where the window border runs. */
 export function terminalPaneOuterEdges(
   rectangle: TerminalPaneRect,
 ): ("left" | "right" | "bottom")[] {
@@ -86,7 +84,6 @@ function validMembers(layout: TerminalLayout, source: string, target: string): b
   );
 }
 
-/** Exchange leaves, keeping all split geometry and session identities. */
 export function swapTerminalLayout(
   layout: TerminalLayout,
   source: string,
@@ -106,7 +103,6 @@ export function swapTerminalLayout(
   return visit(layout);
 }
 
-/** Detach first, collapse its ancestors, then dock beside the surviving target. */
 export function dockTerminalLayout(
   layout: TerminalLayout,
   source: string,
@@ -180,8 +176,6 @@ export function terminalParentSplitPath(
   return visit(layout, "");
 }
 
-/** Coordinates are relative to the target pane; corners choose the nearest edge. */
-/** Bring a terminal from outside the layout in beside `target`, on the given edge. */
 export function insertTerminalBeside(
   layout: TerminalLayout,
   workspaceId: string,
@@ -300,7 +294,6 @@ export function selectTerminalTab(layout: TerminalLayout, workspaceId: string): 
   return terminalLayoutContains(layout, workspaceId) ? layout : createTerminalLayout(workspaceId);
 }
 
-/** Paths identify splits inside one group's current tree, never terminal sessions. */
 export function resizeTerminalLayout(
   layout: TerminalLayout,
   path: string,
@@ -321,12 +314,6 @@ export function getTerminalPaneRects(layout: TerminalLayout): Record<string, Ter
   });
 }
 
-/**
- * Keeps the saved split directions at ordinary sizes, but turns an individual
- * split ninety degrees when halving its current rectangle would make either
- * child unusably narrow or short. The saved tree is untouched, so growing the
- * window restores the directions the user chose.
- */
 export function getResponsiveTerminalPaneRects(
   layout: TerminalLayout,
   viewport: TerminalLayoutViewport,
@@ -439,7 +426,6 @@ function terminalLayoutMinimum(layout: TerminalLayout): TerminalLayoutViewport {
     : { width: Math.max(first.width, second.width), height: first.height + second.height };
 }
 
-/** Choose directions before scrollbars take space, then size panes in the visible viewport. */
 export function getTerminalLayoutSurface(
   layout: TerminalLayout,
   visible: TerminalLayoutViewport,
@@ -460,8 +446,6 @@ export function getTerminalLayoutSurface(
   return { viewport, ...getResponsiveTerminalGeometry(temporary, viewport, false) };
 }
 
-/** A divider handle: a split's whole divider, or one half of a divider two lined-up
- *  perpendicular splits cross. `transpose` names the crossed split to regroup first. */
 export interface TerminalDividerHandle extends TerminalLayoutDivider {
   transpose: string | null;
 }
@@ -479,11 +463,6 @@ function terminalNodeAt(layout: TerminalLayout, path: string): TerminalLayout | 
     : null;
 }
 
-/**
- * Regroups a crossed split the other way round with identical geometry: two columns
- * that are each split at the same height become two rows each split at the same
- * width, and vice versa. Anything else is returned unchanged.
- */
 export function transposeTerminalCross(layout: TerminalLayout, path: string): TerminalLayout {
   const node = terminalNodeAt(layout, path);
   if (
@@ -514,7 +493,6 @@ export function transposeTerminalCross(layout: TerminalLayout, path: string): Te
   return replace(layout, path);
 }
 
-/** The point along a divider's own axis where it sits, as a surface percentage. */
 function dividerLine(divider: TerminalLayoutDivider) {
   const { rectangle } = divider;
   return divider.direction === "vertical"
@@ -522,13 +500,6 @@ function dividerLine(divider: TerminalLayoutDivider) {
     : rectangle.top + (rectangle.height * divider.position) / divider.size;
 }
 
-/**
- * The dividers to offer for a surface. Where both children of a split are split the
- * other way and their dividers line up, the split's divider is offered as two halves,
- * so each row (or column) of the cross resizes on its own; dragging a half regroups
- * the tree around it first (see transposeTerminalCross). Splits shown rotated for a
- * small window keep their whole divider.
- */
 export function getTerminalDividerHandles(
   layout: TerminalLayout,
   dividers: TerminalLayoutDivider[],
@@ -563,7 +534,6 @@ export function getTerminalDividerHandles(
   });
 }
 
-/** Applies a handle's new ratio, regrouping a crossed split first when the handle is a half. */
 export function resizeTerminalHandle(
   layout: TerminalLayout,
   handle: Pick<TerminalDividerHandle, "path" | "transpose">,

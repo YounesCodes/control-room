@@ -71,8 +71,6 @@ it("renders temporary faces, supports keyboard selection, and passes accessibili
   expect(fieldInput.selectionEnd).toBe(fieldInput.value.length);
   await expect.element(page.getByRole("option", { name: /Fira Mono/ })).toBeVisible();
   expect(container.querySelector(".ansi-preview")!.getBoundingClientRect().top).toBe(previewTop);
-  // Opening loads the suggestion faces but keeps the live preview on the
-  // current font until a suggestion is highlighted.
   await vi.waitFor(() =>
     expect(document.fonts.check('14px "ControlRoomPreview-fira-mono"')).toBe(true),
   );
@@ -112,7 +110,6 @@ it("renders temporary faces, supports keyboard selection, and passes accessibili
   await expect.element(input).toHaveValue("Consolas, monospace");
   await expect.element(page.getByRole("listbox")).not.toBeInTheDocument();
   expect(document.querySelector(".ansi-preview")?.getAttribute("style")).toContain("Consolas");
-  // Reopening an already focused field must select the restored saved value.
   await input.click();
   await userEvent.keyboard("fira");
   await expect.element(input).toHaveValue("fira");

@@ -143,25 +143,18 @@ describe("terminalRightClickAction", () => {
   });
 
   it("keeps a selection even while a program reads the mouse", () => {
-    // The user has already said which text they mean, and a program reading the
-    // mouse never asked for that selection to be dropped.
     expect(terminalRightClickAction(click({ hasSelection: true, mouseTrackingMode: "any" }))).toBe(
       "copy",
     );
   });
 
   it("ignores anything that is not a right button", () => {
-    // The context-menu key raises the same event with no button behind it.
-    // Claiming it would take away a keyboard route to the menu.
     expect(terminalRightClickAction(click({ button: 0 }))).toBe("ignore");
     expect(terminalRightClickAction(click({ button: 1 }))).toBe("ignore");
     expect(terminalRightClickAction(click({ button: 0, hasSelection: true }))).toBe("ignore");
   });
 
   it("says nothing about the webview menu", () => {
-    // Suppressing that menu is decided at the event, for every pointer right
-    // click. Deriving it from this result is what let the menu appear whenever
-    // Control Room declined the gesture.
     const results = [
       terminalRightClickAction(click({ hasSelection: true })),
       terminalRightClickAction(click()),

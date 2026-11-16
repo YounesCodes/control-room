@@ -1,4 +1,3 @@
-// Native input-source selection and key mapping for the disposable desktop lab.
 #include <Carbon/Carbon.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,8 +50,7 @@ int main(int argc, char **argv) {
     if (session) CFRelease(session);
     return 0;
   }
-  // Keys and clicks are posted as HID events, which need Accessibility approval
-  // only. Scripting System Events would also need a separate Automation approval.
+  // HID events need only Accessibility approval; System Events scripting also needs Automation.
   if (!strcmp(argv[1], "key")) {
     if (argc < 3) fail("Expected a virtual key code and optional modifier names");
     CGEventFlags flags = 0;

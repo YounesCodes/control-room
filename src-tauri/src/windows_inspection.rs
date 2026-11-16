@@ -75,7 +75,6 @@ pub fn metrics(
         })
         .collect::<Vec<_>>()
         .join(",");
-    // HeaderMetrics is deliberately output-only in the common model.
     let value: serde_json::Value = parse(&read(
         connection,
         "metrics",

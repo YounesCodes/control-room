@@ -1,13 +1,3 @@
-/* ==========================================================================
-   Control Room — typefaces
-   Inter Variable (opsz, 100–900) for interface text: tall x-height and
-   optical sizing for 10–13px dense chrome. Space Grotesk (variable,
-   300–700) for headings and display sizes only, preserving product
-   character where it is large enough to stay legible. Both are bundled
-   (npm / woff2) so the desktop build never depends on the network or a
-   fallback flash. Terminal, log, and code text keep their monospace stack.
-   ========================================================================== */
-
 @font-face {
   font-family: "Space Grotesk";
   font-style: normal;
@@ -31,14 +21,6 @@
     U+A720-A7FF;
 }
 
-/* ==========================================================================
-   Control Room — design tokens
-   A restrained, monochrome desktop system. The only non-neutral colors are the
-   three semantic status colors (success / warning / failure). Elevation is
-   expressed through surface lightness rather than heavy shadows, following
-   dark-UI elevation practice.
-   ========================================================================== */
-
 :root {
   color-scheme: dark;
   color: #f2f2ee;
@@ -55,7 +37,6 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 
-  /* Base palette (read by the palette contrast tests — keep as literal hex). */
   --app-bg: #090909;
   --topbar-bg: #000;
   --sidebar-bg: #050505;
@@ -69,10 +50,6 @@
   --warning: #d6a84a;
   --failure: #ef5b6b;
 
-  /* Identity marks: OS and shell brand hues, revealed on hover or selection
-     as identification — never at rest and never a status signal. Alpine,
-     CentOS, and AlmaLinux use their official hue lightened just enough to
-     read on the app's dark surfaces. */
   --os-ubuntu: #e95420;
   --os-debian: #d70a53;
   --os-windows: #0078d4;
@@ -96,14 +73,12 @@
   --shell-git: #f05032;
   --identity-size: 18px;
 
-  /* Surface elevation ramp — lighter reads as higher. */
   --surface-base: #090909;
   --surface-sunken: #050505;
   --surface-chrome: #070707;
   --surface-raised: #161616;
   --surface-overlay: #1c1c1c;
 
-  /* Interaction fills. */
   --fill-hover: #1a1a1a;
   --fill-active: #242424;
   --fill-selected: #2a2a2a;
@@ -113,26 +88,21 @@
   --fill-current: #191918;
   --border-current: #3b3a37;
 
-  /* Text roles. */
   --text-strong: #fff;
   --on-accent: #000;
 
-  /* Borders. */
   --border-strong: #454545;
   --border: #343434;
   --border-subtle: #232323;
   --border-faint: #1a1a1a;
 
-  /* Radii. */
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
 
-  /* Elevation. */
   --shadow-popover: 0 10px 30px rgb(0 0 0 / 55%);
   --shadow-modal: 0 24px 60px rgb(0 0 0 / 60%);
 
-  /* Motion. */
   --motion-fast: 110ms;
   --motion-med: 160ms;
   --motion-focus: 180ms;
@@ -140,8 +110,6 @@
   --ease: cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* Headings and display sizes keep the product voice. Body chrome stays in
-   the UI workhorse for small-size legibility. */
 h1,
 h2,
 h3 {
@@ -154,7 +122,6 @@ h3 {
   box-sizing: border-box;
 }
 
-/* Selected text keeps the neutral palette instead of the system blue. */
 ::selection {
   background: var(--fill-text-selection);
   color: var(--text-strong);
@@ -193,9 +160,7 @@ h3 {
 html,
 body,
 #root {
-  /* Tauri owns the native 520 x 480 minimum. WebView2 can report a fractional
-     content size just below that boundary after Windows scaling, so the web
-     root must follow the actual viewport instead of forcing one extra pixel. */
+  /* WebView2 can report a fractional content size just below Tauri's minimum after Windows scaling. */
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -208,8 +173,7 @@ body {
   user-select: none;
 }
 
-/* Linux draws the window corners Windows 11 draws natively. The window is
-   transparent, so the page clips itself, including fixed dialogs and menus. */
+/* Linux has no native rounded corners, so the transparent window clips the page itself. */
 html[data-window-corners="rounded"],
 html[data-window-corners="rounded"] body {
   background: transparent;
@@ -250,8 +214,6 @@ button:disabled {
   opacity: 0.4;
 }
 
-/* A ring that reads clearly on every surface and never clips inside dense rows
-   (WCAG 2.2 focus appearance: >=2px, high contrast to the unfocused state). */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -298,7 +260,6 @@ select {
   background-position: right 10px center;
 }
 
-/* Keep the browser's select semantics while rounding its top-layer picker. */
 @supports (appearance: base-select) {
   select:not([multiple]):not([size]),
   select:not([multiple]):not([size])::picker(select) {
@@ -447,10 +408,7 @@ code,
   font-size: 12px;
 }
 
-/* Chromium cannot transition ::-webkit-scrollbar pseudo-elements, so the thumb
-   inherits this property while the hovered section transitions it. The
-   explicit transparent keeps unhovered descendants from chasing the animation
-   through inheritance. */
+/* Chromium cannot transition ::-webkit-scrollbar pseudo-elements, so the thumb inherits this property. */
 @property --scrollbar-thumb {
   syntax: "<color>";
   inherits: true;
@@ -483,7 +441,6 @@ code,
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  /* Keep the section's animated alpha when highlighting the thumb itself. */
   background: rgb(from var(--scrollbar-thumb) 106 106 106 / alpha);
   background-clip: padding-box;
 }
@@ -492,9 +449,7 @@ code,
   background: transparent;
 }
 
-/* xterm owns a DOM scrollbar rather than a native browser scrollbar. It only
-   fades on its own auto-hide path, so the hover reveal needs a transition of
-   its own to come in animated. */
+/* xterm draws a DOM scrollbar that only fades on its own auto-hide path. */
 .xterm .xterm-scrollable-element > .scrollbar {
   transition: opacity var(--motion-fast) var(--ease);
 }
@@ -503,10 +458,6 @@ code,
   opacity: 0;
   pointer-events: none;
 }
-
-/* ==========================================================================
-   App shell
-   ========================================================================== */
 
 .app-shell {
   position: relative;
@@ -526,11 +477,6 @@ code,
   --focus-toggle-width: 40px;
 }
 
-/* Layer order for the shell, lowest to highest: page content, the sidebar
-   (6), the session tab strip (10), in-page popovers and toasts (20–30), the
-   titlebar (35). The titlebar must paint above the strip because the update
-   popover is anchored to it and drops into the row below; fixed dialogs
-   (1000) and the command palette (1100) sit above everything here. */
 .app-bar {
   z-index: 35;
   grid-column: 2 / -1;
@@ -543,7 +489,6 @@ code,
   transition: padding-right var(--motion-med) var(--ease);
 }
 
-/* One window-anchored control group serves both titlebar and Focus Mode. */
 .app-window-actions {
   position: absolute;
   z-index: 35;
@@ -737,8 +682,6 @@ code,
 .host-metric[data-metric="diskIo"] {
   min-width: 166px;
 }
-/* Fixed slots keep changing rates from moving W or the next reading. Each value
-   starts beside its own letter so "R 0 B/s" and "W 0 B/s" read as pairs. */
 .host-metric[data-metric="diskIo"] .host-metric-value {
   display: inline-grid;
   grid-template-columns: max-content 9ch max-content 9ch;
@@ -754,7 +697,6 @@ code,
   text-overflow: ellipsis;
   text-align: left;
 }
-/* Details stack Read over Write with right-aligned values, a two-row table. */
 .host-metric-detail-value > strong:has(.host-metric-direction) {
   display: inline-grid;
   grid-template-columns: auto auto;
@@ -924,10 +866,6 @@ code,
   margin-bottom: 10px;
 }
 
-/* Stepped slider for settings with a few fixed choices. The native range
-   input sits over a drawn track so keyboard, pointer, and screen-reader
-   behaviour stay native. Stops, fill, and ticks share one
-   position formula so the thumb always lands exactly on a stop. */
 .step-slider {
   --step-thumb: 16px;
   display: flex;
@@ -938,14 +876,11 @@ code,
   gap: 8px 16px;
 }
 
-/* The unit belongs to the label but stays quieter than the setting's name. */
 .step-slider-label > .step-slider-label-unit {
   color: var(--text-faint);
   font-weight: 500;
 }
 
-/* Line the label up with the track, not with the track and ticks together. */
-/* Settings labels are flex columns; this one keeps its name and unit on one line. */
 .settings-form .step-slider > .step-slider-label,
 .step-slider-label {
   display: block;
@@ -968,9 +903,6 @@ code,
   margin-inline: 6px;
 }
 
-/* The track ends just past the first and last stops, rather than reaching
-   out to the thumb's full travel. The cap leaves the end dot an even margin
-   inside the rounded end instead of crowding its edge. */
 .step-slider {
   --step-track-cap: 5px;
 }
@@ -985,8 +917,6 @@ code,
   background: var(--border);
 }
 
-/* Inside the track, positions count from its caps; under it, from the
-   thumb's travel. Both land on the same pixels. */
 .step-slider-fill,
 .step-slider-stop {
   --step-at: calc(var(--step-track-cap) + (100% - var(--step-track-cap) * 2) * var(--step));
@@ -1063,7 +993,6 @@ code,
   transform: scale(1.12);
 }
 
-/* Keyboard focus rings the thumb, not the whole slider box. */
 .step-slider input[type="range"]:focus-visible::-webkit-slider-thumb {
   box-shadow:
     0 0 0 3px var(--app-bg),
@@ -1153,10 +1082,6 @@ code,
   }
 }
 
-/* ==========================================================================
-   Control Room updates
-   ========================================================================== */
-
 .update-indicator {
   position: relative;
   display: flex;
@@ -1185,7 +1110,6 @@ code,
   stroke-dasharray: 100;
 }
 
-/* The restart icon, tooltip, and accessible name also identify the ready state. */
 .update-indicator-dot {
   position: absolute;
   top: 6px;
@@ -1199,26 +1123,17 @@ code,
 
 .update-indicator-dot[data-state="ready"] {
   background: var(--success);
-  /* Three soft halos announce the download, then the dot rests. */
   animation: ready-ping 2.2s var(--ease) 0.3s 3;
 }
 
 .update-panel {
   position: absolute;
-  /* Scoped inside the titlebar's stacking context, which the layer order at
-     .app-bar puts above everything in the page; the value itself only has to
-     win within the titlebar. */
   z-index: 40;
   top: calc(100% + 6px);
   right: 0;
   display: flex;
-  /* Wide enough that generated GitHub notes and their compare lines do not
-     wrap mid-word. The max-width subtracts the Settings button, divider, and
-     window controls right of the panel's anchor (191px) plus a 16px margin,
-     so the panel stays inside the window at any width. */
   width: 420px;
   max-width: calc(100vw - 208px);
-  /* 48px of titlebar and gap above, 24px of margin below. */
   max-height: min(460px, calc(100vh - 72px));
   flex-direction: column;
   gap: 12px;
@@ -1235,9 +1150,6 @@ code,
 .update-panel-empty,
 .update-panel-error,
 .update-panel-actions {
-  /* The header, status lines, and actions own their rows; only the notes
-     flex and scroll, so the version and the buttons can never be pushed out
-     of view by long notes. */
   flex: none;
 }
 
@@ -1288,13 +1200,10 @@ code,
   overflow-y: auto;
 }
 
-/* Release notes are external text rendered as text nodes, never as markup. */
 .release-notes {
   color: var(--text);
   font-size: 12.5px;
   line-height: 1.55;
-  /* A URL that is not one of the compacted GitHub shapes must wrap instead
-     of forcing the panel wider or scrolling sideways. */
   overflow-wrap: anywhere;
 }
 
@@ -1339,9 +1248,6 @@ code,
   font-size: 11.5px;
 }
 
-/* A failed check is an inline error beside the button. The technical reason
-   sits under the plain sentence rather than replacing it, so a network
-   failure stays readable. */
 .settings-update-error.inline-error {
   flex: 1 1 260px;
   margin: 0;
@@ -1353,8 +1259,6 @@ code,
   font-size: 11px;
 }
 
-/* SSH environment: paths stay plain selectable text; the agent row leads with
-   its state and keeps the troubleshooting hint quiet beneath it. */
 .settings-ssh dd.technical {
   font-size: 12px;
 }
@@ -1407,10 +1311,6 @@ code,
   color: #fff;
 }
 
-/* ==========================================================================
-   Search field (shared)
-   ========================================================================== */
-
 .search-field {
   display: flex;
   min-height: 32px;
@@ -1460,8 +1360,6 @@ code,
   box-shadow: none;
 }
 
-/* Buttons inside a search field (clear, previous, next, close) share one
-   size, and the field tightens its right padding so they sit evenly. */
 .search-field:has(> button) {
   padding-right: 4px;
 }
@@ -1482,10 +1380,6 @@ code,
 .search-field > button:disabled {
   opacity: 0.4;
 }
-
-/* ==========================================================================
-   Sidebar
-   ========================================================================== */
 
 .sidebar {
   z-index: 6;
@@ -1523,8 +1417,6 @@ code,
   text-align: center;
 }
 
-/* Same insets as the filter row below: the title starts on the search
-   field's edge, and Reset layout sits in the groups-and-tags button's column. */
 .sidebar-top-heading {
   min-height: 42px;
   flex: none;
@@ -1535,8 +1427,6 @@ code,
   pointer-events: none;
 }
 
-/* One continuous Mac toolbar owns the native controls and Connections heading.
-   Its leading space stays fixed while the sidebar resizes or collapses. */
 .app-shell[data-platform="macos"] {
   --mac-window-controls-space: 104px;
   --window-actions-width: 40px;
@@ -1627,8 +1517,6 @@ code,
   text-align: left;
 }
 
-/* One chevron rotates between collapsed and expanded instead of swapping
-   glyphs, so the state change reads as a movement of the same control. */
 .connection-group-heading > svg {
   transition: transform var(--motion-med) var(--ease);
 }
@@ -1671,7 +1559,6 @@ code,
   transition: background-color var(--motion-fast) var(--ease);
 }
 
-/* Selected hosts and sections share an inset outline that does not move content. */
 .host-row::before,
 .feature-nav button::before {
   content: "";
@@ -1748,8 +1635,6 @@ code,
   white-space: nowrap;
 }
 
-/* Tags start under the host name, in the text column, so the row reads as one
-   block instead of a second row hanging under the OS mark. */
 .host-tag-summary {
   display: flex;
   min-width: 0;
@@ -1775,8 +1660,6 @@ code,
   white-space: nowrap;
 }
 
-/* Secondary to the host name and no louder than its address line, but large
-   enough to read at a glance. */
 .host-tag-summary .connection-tag-badge {
   min-height: 17px;
   max-width: 92px;
@@ -1821,10 +1704,6 @@ code,
   color: var(--text-strong);
 }
 
-/* Container Terminals hang under their host card as leaves. A thin elbow runs
-   from under the host's OS mark to each leaf, and the leaf's own mark lines up
-   with the host's text column, so the pair reads as one host with a shell
-   inside one of its containers. */
 .host-children {
   --leaf-indent: 30px;
   --leaf-rail: calc(11px + var(--identity-size) / 2 - var(--leaf-indent));
@@ -1856,7 +1735,6 @@ code,
   pointer-events: none;
 }
 
-/* The elbow into this leaf. */
 .host-child-row::before {
   top: -2px;
   width: calc(-1 * var(--leaf-rail) - 3px);
@@ -1865,7 +1743,6 @@ code,
   border-bottom-left-radius: 5px;
 }
 
-/* The rail continues past a leaf to the next one. */
 .host-child-row:not(:last-child)::after {
   top: 50%;
   bottom: -2px;
@@ -1919,7 +1796,6 @@ code,
   text-overflow: ellipsis;
 }
 
-/* An ended container shell stays listed, quieter, until its tab is closed. */
 .host-child-row:is([data-session-state="disconnected"], [data-session-state="error"])
   .host-child-label
   strong {
@@ -1958,8 +1834,6 @@ code,
   color: var(--text-strong);
 }
 
-/* A container mark rides the shared identity footprint; the logo inside
-   follows the mark's color so the reveal rules below apply to it too. */
 .container-terminal-mark > .docker-image-icon,
 .container-terminal-mark > svg {
   color: inherit;
@@ -2086,10 +1960,6 @@ code,
   padding: 10px 14px 12px;
 }
 
-/* The rail's persistent action sits quiet: a raised charcoal surface that
-   reads as clickable without competing with the host list the way a filled
-   accent button did. Filled accent stays reserved for the one main decision
-   inside dialogs. */
 .sidebar-primary {
   display: grid;
   grid-column: span 4;
@@ -2107,7 +1977,6 @@ code,
   font-weight: 650;
 }
 
-/* Center the action's icon and label as one block. */
 .sidebar-primary > svg {
   grid-column: 2;
   justify-self: center;
@@ -2141,16 +2010,11 @@ code,
   transform: translateX(1px);
 }
 
-/* Local shell and host OS marks share a separate identity slot. */
 .local-shell-mark {
   flex: none;
   color: var(--text-muted);
   transition: color var(--motion-fast) var(--ease);
 }
-
-/* ==========================================================================
-   Workspace shell
-   ========================================================================== */
 
 .workspace-shell {
   position: relative;
@@ -2230,13 +2094,7 @@ code,
   display: none;
 }
 
-/* ==========================================================================
-   Session tab strip
-   ========================================================================== */
-
 .session-tabs {
-  /* Below the titlebar (see the layer order at .app-bar), so the update
-     popover that drops out of the titlebar paints over this strip. */
   position: relative;
   z-index: 10;
   display: flex;
@@ -2268,12 +2126,9 @@ code,
   width: 100%;
   min-width: 0;
   align-items: stretch;
-  /* The insertion marker and lifted tabs position against the content box. */
   position: relative;
 }
 
-/* Drag reordering pins tabs at uniform slot positions and animates only the
-   slot motion, so the strip stays light under the pointer. */
 .session-tab-scroll-region.can-reorder .session-tab-main,
 .session-tab-scroll-region.can-reorder .session-tab-group-main {
   cursor: grab;
@@ -2289,8 +2144,6 @@ code,
   cursor: grabbing;
 }
 
-/* Space for Rename and Close is reserved only on hover and focus; a lifted tab
-   keeps its label full-width for the whole drag. */
 .session-tab-scroll-region.dragging .session-tab-wrap:hover .session-tab-main,
 .session-tab-scroll-region.dragging .session-tab-wrap:focus-within .session-tab-main,
 .session-tab-scroll-region.dragging .session-tab-group:hover .session-tab-group-main,
@@ -2298,9 +2151,6 @@ code,
   padding-right: 8px;
 }
 
-/* Slots slide only while a tab is lifted; the settling render that drops the
-   region class switches layout and transform at once without animating them,
-   because every displaced tab is already sitting at its final position. */
 .session-tab-scroll-region.dragging .session-tab-wrap,
 .session-tab-scroll-region.dragging .session-tab-group {
   transition:
@@ -2309,7 +2159,6 @@ code,
     border-bottom-color var(--motion-fast) var(--ease);
 }
 
-/* A tab carried out toward the terminal view waits, dimmed, in its own slot. */
 .session-tab-scroll-region.dragging-out .session-tab-dragged {
   opacity: 0.55;
   box-shadow: none;
@@ -2321,7 +2170,6 @@ code,
   box-shadow: var(--shadow-popover);
 }
 
-/* The lifted tab tracks the pointer one-to-one; its own slide never lags. */
 .session-tab-scroll-region.dragging .session-tab-dragged {
   transition: none;
 }
@@ -2520,7 +2368,6 @@ code,
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
-  /* Same reveal as Workspace tabs: the padding slides aside for Rename and Ungroup. */
   transition: padding var(--motion-med) var(--ease);
 }
 
@@ -2557,9 +2404,6 @@ code,
 }
 
 .terminal-focus-mode .session-tabs {
-  /* Every strip cell — tabs included — runs to the window's top edge so its
-     highlight fills the full header height; the overlay drag strip above the
-     top pixels stays the drag target. */
   padding-top: 0;
   min-height: 42px;
   padding-right: var(--window-actions-width);
@@ -2592,7 +2436,6 @@ code,
   width: var(--session-tab-width, 180px);
 }
 
-/* The selected pane's frame marks it below; an underline would sit on that frame. */
 .session-pane-tabs .session-tab-wrap.active {
   border-bottom-color: transparent;
 }
@@ -2625,12 +2468,8 @@ code,
   align-items: center;
   gap: 8px;
   background: transparent;
-  /* The trailing 8px keeps the session and activity cues off the tab border;
-     hovering still opens the Rename/Close action space from here. */
   padding: 0 8px 0 12px;
   color: inherit;
-  /* Hovering reserves room for Rename and Close; animating the padding drags
-     the trailing session dot and label across instead of letting them jump. */
   transition: padding var(--motion-med) var(--ease);
 }
 
@@ -2649,8 +2488,6 @@ code,
   white-space: nowrap;
 }
 
-/* A Container Terminal's tab names its container and, quieter, its host. The
-   host gives way first when the tab narrows, so the container name stays. */
 .session-tab-main.has-context .session-tab-label {
   flex: 0 1 auto;
 }
@@ -2670,8 +2507,6 @@ code,
   color: #767673;
 }
 
-/* The cue pops in when output or a bell arrives on an inactive terminal, so
-   the eye is drawn to the new mark instead of it silently appearing. */
 .terminal-activity {
   width: 7px;
   height: 7px;
@@ -2733,7 +2568,6 @@ code,
   color: var(--text-strong);
 }
 
-/* Identity marks and trailing session indicators occupy separate slots. */
 .target-mark {
   display: inline-grid;
   flex: none;
@@ -2803,8 +2637,6 @@ code,
   color: #767673;
   opacity: 0;
   pointer-events: none;
-  /* Hidden controls rest a step to the right, so revealing them reads as the
-     tools sliding into the space the label just vacated. */
   transform: translateX(6px);
   transition:
     opacity var(--motion-fast) var(--ease),
@@ -2843,9 +2675,6 @@ code,
   width: 24px;
 }
 
-/* A drag rides the strip's hover and hold, so Rename and Close would reveal
-   mid-motion and float over the lifted chip. While the strip drags, the tab
-   tools stay parked so the chip reads as one clean piece. */
 .session-tab-scroll-region.dragging .session-tab-close,
 .session-tab-scroll-region.dragging .session-tab-rename {
   opacity: 0;
@@ -2875,9 +2704,6 @@ code,
   line-height: 1;
 }
 
-/* The chevron is the menu affordance of one "New terminal" control, not a
-   second glyph button: it stays smaller and quieter than the plus and than
-   the neighboring All-terminals picker chevron. */
 .session-new-terminal > svg:last-of-type {
   color: var(--text-muted);
 }
@@ -2960,7 +2786,6 @@ code,
   padding: 3px 3px 9px;
 }
 
-/* New terminal's mode cards show the result in miniature above a short label. */
 .terminal-open-modes button {
   display: flex;
   min-width: 0;
@@ -3001,7 +2826,6 @@ code,
   flex-direction: column;
 }
 
-/* A new tab: two tab chips above one view; the filled chip is the new tab. */
 .terminal-open-preview.tab {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -3048,7 +2872,6 @@ code,
     opacity var(--motion-fast) var(--ease);
 }
 
-/* The second tile is where the new terminal opens. */
 .terminal-open-preview i:last-child {
   background: rgb(255 255 255 / 14%);
 }
@@ -3100,9 +2923,6 @@ code,
   color: var(--text-strong);
 }
 
-/* After the keyboard moves the selection, the pointer may still rest on
-   another row; until it moves again, that stale hover must not compete with
-   the arrow-key selection, exactly like a native menu. */
 .terminal-target-menu[data-keyboard-nav]
   .terminal-target-group
   > button:hover:not([data-active="true"]) {
@@ -3117,8 +2937,6 @@ code,
   color: var(--text-muted);
 }
 
-/* Dense menu rows deepen their fill on press instead of moving: the row the
-   user is about to click must not shift under the pointer. */
 .terminal-target-menu .terminal-target-group > button:active {
   background: var(--fill-selected);
 }
@@ -3179,12 +2997,6 @@ code,
   line-height: 1.5;
 }
 
-/* New terminal hangs off the tab strip, so it opens below and to the left of
-   its own control rather than the right edge of the strip. Inline style owns
-   the anchored top-or-bottom position; the autos here only keep the base
-   menu's absolute offsets from leaking into the fixed placement. */
-/* Contributes no box of its own: the button inside must stay a full-height
-   flex cell, or its hover shrinks to the size of the text. */
 .session-new-terminal-anchor {
   display: contents;
 }
@@ -3196,10 +3008,6 @@ code,
   bottom: auto;
   width: 272px;
 }
-
-/* ==========================================================================
-   Status indicators
-   ========================================================================== */
 
 .status-dot {
   display: inline-block;
@@ -3241,10 +3049,6 @@ code,
   gap: 8px;
 }
 
-/* ==========================================================================
-   Workspace content + terminal panes
-   ========================================================================== */
-
 .workspace-content {
   position: relative;
   min-width: 0;
@@ -3282,7 +3086,6 @@ code,
 .terminal-pane-layout .terminal-layout-surface {
   position: relative;
   inset: auto;
-  /* Keep rounded pane edges and animated headings out of the scroll size. */
   overflow: clip;
 }
 
@@ -3294,7 +3097,6 @@ code,
   overflow: hidden;
 }
 
-/* Paint the frame inside the pane's rectangle. */
 .terminal-pane-layout .terminal-workspace-pane::after {
   content: "";
   position: absolute;
@@ -3305,7 +3107,6 @@ code,
   pointer-events: none;
 }
 
-/* The window border already separates outer edges from the desktop. */
 .terminal-pane-layout .terminal-workspace-pane.edge-right::after {
   border-right-color: transparent;
 }
@@ -3318,8 +3119,6 @@ code,
   border: 1px solid var(--accent);
 }
 
-/* At the window border the selected frame sits one pixel in, so the border and
-   display scaling never swallow that side of the outline. */
 .terminal-pane-layout .terminal-workspace-pane.active.edge-left::after {
   left: 1px;
 }
@@ -3353,17 +3152,14 @@ code,
   cursor: row-resize;
 }
 
-/* A full-width, click-through row that only carries the pane's corner grip. */
 .terminal-pane-heading {
   position: absolute;
-  /* Above split dividers (8), whose hit area reaches into the pane corner. */
   z-index: 9;
   display: flex;
   justify-content: flex-end;
   padding: 5px 6px;
   pointer-events: none;
 }
-/* A frosted chip keeps the grip legible over terminal text without a hard box. */
 .terminal-pane-heading .terminal-pane-grip {
   display: grid;
   width: 22px;
@@ -3421,7 +3217,6 @@ code,
   background: rgb(255 255 255 / 55%);
   transition: background-color var(--motion-fast) var(--ease);
 }
-/* Under the pointer the dots spread a touch and brighten, like a grip being taken. */
 .terminal-pane-grip:hover .terminal-pane-grip-dots,
 .terminal-pane-heading.engaged .terminal-pane-grip-dots {
   gap: 3px 4px;
@@ -3452,11 +3247,9 @@ code,
   place-items: center;
   padding: 12px;
 }
-/* The lifted pane recedes so the preview reads as where it goes next. */
 .terminal-drop-source {
   background: rgb(0 0 0 / 45%);
 }
-/* A tab carried over a pane's center: not a split, so a quiet hint toward the edges. */
 .terminal-drop-target.hint {
   border: 2px dashed var(--border-strong);
   background: rgb(255 255 255 / 3%);
@@ -3493,8 +3286,6 @@ code,
     transition: none;
   }
 }
-/* Arrange: the group as a live map. Tiles mirror the panes; each other pane's
-   center swaps and its edges dock, matching the pointer drop zones. */
 .terminal-arrange-menu {
   position: fixed;
   z-index: 40;
@@ -3560,9 +3351,6 @@ code,
 .terminal-arrange-zone:focus-visible {
   outline: none;
 }
-/* Each edge zone owns its quarter strip, and clip-path trims the strip's corners into
-   the drop zone's trapezoid, for paint and hit area alike. The strip's center always
-   lies inside its own shape, so pointing at or focusing a zone lands on that zone. */
 .terminal-arrange-zone[data-zone="center"] {
   inset: 25%;
 }
@@ -3600,7 +3388,6 @@ code,
 .terminal-arrange-zone[data-state="invalid"]:focus-visible {
   background: color-mix(in srgb, var(--failure) 30%, transparent);
 }
-/* Where the pane would land; glides as the pointer moves between zones. */
 .terminal-arrange-result {
   position: absolute;
   border: 2px solid var(--accent);
@@ -3710,9 +3497,6 @@ code,
   height: 31px;
 }
 
-/* Terminal notices are the inline error and warning stretched into a strip
-   above the output: an icon and the message on a faint tint, divided from the
-   terminal by a quiet rule rather than a coloured one. */
 .terminal-notice {
   --notice-tone: var(--failure);
   display: grid;
@@ -3744,18 +3528,15 @@ code,
   width: 14px;
   height: 14px;
   background: var(--notice-tone);
-  /* lucide circle-alert */
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' x2='12' y1='8' y2='12'/%3E%3Cline x1='12' x2='12.01' y1='16' y2='16'/%3E%3C/svg%3E")
     center / contain no-repeat;
 }
 
 .terminal-notice[data-tone="warning"]::before {
-  /* lucide triangle-alert */
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
 }
 
 .terminal-notice[data-tone="neutral"]::before {
-  /* lucide unplug */
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m19 5 3-3'/%3E%3Cpath d='m2 22 3-3'/%3E%3Cpath d='M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z'/%3E%3Cpath d='M7.5 13.5 10 11'/%3E%3Cpath d='M10.5 16.5 13 14'/%3E%3Cpath d='m12 6 6 6 2.3-2.3a2.4 2.4 0 0 0 0-3.4l-2.6-2.6a2.4 2.4 0 0 0-3.4 0Z'/%3E%3C/svg%3E");
 }
 
@@ -3823,9 +3604,6 @@ code,
   flex: 1;
 }
 
-/* Find in terminal is the shared search field floating over the output. It
-   keeps the field's metrics and adds only the overlay surface, clearing the
-   overview ruler on the right. */
 .terminal-search {
   position: absolute;
   /* Above xterm's match decorations (6-7), overview ruler (8) and
@@ -3839,8 +3617,6 @@ code,
   animation: popover-in var(--motion-fast) var(--ease);
 }
 
-/* The count holds its width so stepping through results never moves the
-   buttons, and it disappears while nothing has been typed. */
 .terminal-search-count {
   min-width: 48px;
   flex: none;
@@ -3893,10 +3669,6 @@ code,
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
-/* ==========================================================================
-   Feature pages
-   ========================================================================== */
-
 .feature-page {
   overflow: auto;
   background: var(--app-bg);
@@ -3925,8 +3697,6 @@ code,
   flex: none;
 }
 
-/* One-line failure statuses in a reserved slot (Settings Save, Scratchpad
-   save) keep their size but take the inline error's tone and icon. */
 .scratchpad-save-error,
 .settings-status.failed {
   color: color-mix(in srgb, var(--failure) 55%, var(--text));
@@ -3941,7 +3711,6 @@ code,
   margin-right: 5px;
   vertical-align: -2px;
   background: var(--failure);
-  /* lucide circle-alert */
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' x2='12' y1='8' y2='12'/%3E%3Cline x1='12' x2='12.01' y1='16' y2='16'/%3E%3C/svg%3E")
     center / contain no-repeat;
 }
@@ -3978,14 +3747,10 @@ code,
   border-radius: var(--radius-sm);
 }
 
-/* The terminal action strip's Scratchpad popover. Anchored like the split
-   menu so opening it overlays the workspace instead of reflowing the strip. */
 .scratchpad-popover {
   position: fixed;
   z-index: 30;
   top: auto;
-  /* A gutter from the window edge keeps the popover's own border readable
-     instead of merging with the window's. */
   right: auto;
   bottom: auto;
   display: flex;
@@ -4002,9 +3767,6 @@ code,
   animation: popover-in var(--motion-fast) var(--ease);
 }
 
-/* Terminal/Global read as one segmented control: a single quiet well with
-   two segments, where one raised fill slides under the active note scope
-   instead of each button drawing its own. */
 .scratchpad-popover-scope {
   position: relative;
   isolation: isolate;
@@ -4125,7 +3887,6 @@ code,
   font-size: 12.5px;
 }
 
-/* In a dialog the message is the content the reader must answer, not a caption. */
 .modal-copy {
   color: var(--text);
   line-height: 1.5;
@@ -4172,10 +3933,6 @@ dd {
   font-size: 12.5px;
   overflow-wrap: anywhere;
 }
-
-/* ==========================================================================
-   Boot summary
-   ========================================================================== */
 
 .overview-stats {
   display: grid;
@@ -4228,8 +3985,6 @@ dd {
   list-style: none;
 }
 
-/* No width cap of its own: the list spans the content column so its rows line
-   up with the definition grid above instead of stopping halfway across. */
 .capability-row {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr) auto;
@@ -4272,10 +4027,6 @@ dd {
   text-align: right;
 }
 
-/* ==========================================================================
-   Buttons
-   ========================================================================== */
-
 .primary-button,
 .secondary-button,
 .danger-button,
@@ -4306,8 +4057,6 @@ dd {
   color: var(--on-accent);
 }
 
-/* A faded light fill reads as a heavy grey slab that outweighs the enabled
-   buttons beside it. An unavailable primary action recedes to an outline. */
 .primary-button:disabled {
   border-color: var(--border);
   background: transparent;
@@ -4339,15 +4088,9 @@ dd {
   color: var(--failure);
 }
 
-/* A delete icon in every row would repeat a column of red. Icon-only delete
-   buttons stay neutral until they are pointed at or focused. */
 .icon-button.danger-text:not(:hover, :focus-visible) {
   color: var(--text-muted);
 }
-
-/* ==========================================================================
-   Split (list + detail) pages
-   ========================================================================== */
 
 .split-page {
   display: grid;
@@ -4539,7 +4282,6 @@ dd {
   grid-area: 1 / 1;
   justify-self: end;
 }
-/* Both modes share one bounded slot, including their visual-only exits. */
 .systemd-mode-tools > .systemd-presence[data-leaving] > * {
   position: absolute;
   top: 50%;
@@ -4876,7 +4618,6 @@ dd {
 .systemd-filter-fields label:last-child {
   grid-column: 1 / -1;
 }
-/* A full-width strip under the Systemd header, so it drops the rounding. */
 .systemd-page > .inline-warning {
   flex: none;
   margin: 0;
@@ -4918,8 +4659,6 @@ dd {
   border-top: 0;
   overflow-x: hidden;
 }
-/* With no rows, the empty state fills the list and centres like the loading
-   and error states do. */
 .systemd-inventory-rows:has(> .panel-state) {
   height: 100%;
 }
@@ -5775,14 +5514,9 @@ dd {
   padding: 11px 0;
 }
 
-/* Values stay copyable; labels keep the app-wide non-selectable chrome. */
 .detail-list dd {
   user-select: text;
 }
-
-/* ==========================================================================
-   Panel states (loading / empty / error)
-   ========================================================================== */
 
 .panel-state {
   display: flex;
@@ -5843,10 +5577,6 @@ dd {
   }
 }
 
-/* Skeletons sketch loading content with that content's own layout classes, so
-   neighbors never move when it arrives. Rows pulse gently in sequence, top to
-   bottom, to show the read is alive; reduced motion holds them still. The
-   pulse only changes opacity, so it never repaints the shapes. */
 .skeleton {
   display: flex;
   flex-direction: column;
@@ -5883,7 +5613,6 @@ dd {
   margin-top: 3px;
 }
 
-/* A control without a set width fills its row, as a search field does. */
 .skeleton-bone[data-shape="control"]:not([style]) {
   flex: 1 1 0;
   width: 100%;
@@ -5945,8 +5674,6 @@ dd {
   }
 }
 
-/* Placeholder rows sit in the real list, field, and section layouts; these only
-   align the shapes that stand in for text. */
 .skeleton .row-main {
   gap: 5px;
 }
@@ -6015,15 +5742,12 @@ dd {
   margin-top: 0;
 }
 
-/* A labelled control: its caption over the control, as a form field. */
 .skeleton-field {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-/* The graph skeleton is drawn at the shared graph's own card sizes and fitted
-   like a loaded graph, clear of the canvas toolbars. */
 .skeleton-graph-frame {
   position: absolute;
   inset: 72px 24px 64px;
@@ -6080,10 +5804,6 @@ dd {
     animation: none;
   }
 }
-
-/* ==========================================================================
-   Logs
-   ========================================================================== */
 
 .logs-page {
   display: flex;
@@ -6145,7 +5865,6 @@ dd {
   gap: 4px;
 }
 
-/* Start and Stop share one footprint so the button never moves under the pointer. */
 .log-start {
   min-width: 78px;
   min-height: 32px;
@@ -6302,12 +6021,10 @@ dd {
   width: auto;
 }
 
-/* Off-screen blocks skip layout and paint; their last measured height is kept. */
 .log-output-wrapped .log-chunk {
   content-visibility: auto;
 }
 
-/* A hanging indent keeps wrapped text clear of the line-number gutter. */
 .log-line {
   --log-gutter-width: calc(var(--log-gutter, 3ch) + 24px);
   min-height: 1lh;
@@ -6321,7 +6038,6 @@ dd {
   overflow-wrap: anywhere;
 }
 
-/* Line numbers are generated content: never copied and hidden from assistive technology. */
 .log-line::before {
   content: attr(data-line);
   content: attr(data-line) / "";
@@ -6452,10 +6168,6 @@ dd {
   overflow-wrap: anywhere;
 }
 
-/* ==========================================================================
-   History
-   ========================================================================== */
-
 .history-opt-in {
   max-width: 780px;
   border: 1px solid var(--border);
@@ -6514,8 +6226,6 @@ dd {
   margin: 0 0 14px;
 }
 
-/* Page title with one compact state beside it, as Logs and History show
-   their stream and capture state: a dot and a short label. */
 .page-heading-title {
   display: flex;
   align-items: center;
@@ -6602,7 +6312,6 @@ dd {
   background: var(--fill-active);
 }
 
-/* Search: one compact field aligned with the list, not a full-width toolbar. */
 .history-search-row {
   max-width: 980px;
   margin-bottom: 16px;
@@ -6625,8 +6334,6 @@ dd {
   animation: history-results-in var(--motion-med) var(--ease);
 }
 
-/* Restart the result transition after a read without remounting rows or
-   resetting keyboard focus, text selection, and command scroll positions. */
 @keyframes history-results-in {
   from {
     opacity: 0.45;
@@ -6651,8 +6358,6 @@ dd {
   text-transform: uppercase;
 }
 
-/* The article is a single collapsible track around the row grid; a successful
-   delete collapses the track to 0fr and only then drops from the list. */
 .history-row {
   display: grid;
   grid-template-rows: 1fr;
@@ -6702,8 +6407,6 @@ dd {
   font-variant-numeric: tabular-nums;
 }
 
-/* Exit status sits directly on the row: success is a bare green check, failure
-   is the bare nonzero code, unknown is a muted dash. No badge, box, or fill. */
 .exit-status {
   grid-area: status;
   display: inline-flex;
@@ -6726,10 +6429,6 @@ dd {
   font-weight: 400;
 }
 
-/* The command is the visual anchor: a charcoal Markdown-style code surface with
-   its own padding, not a card around the whole row. Exact text is preserved;
-   long or multiline commands scroll inside the surface instead of breaking the
-   layout. */
 .history-command {
   grid-area: command;
   display: block;
@@ -6789,22 +6488,10 @@ dd {
   color: var(--success);
 }
 
-/* ==========================================================================
-   Settings
-   ========================================================================== */
-
-/* Settings is a bar plus a scroll area rather than one scrolling page. The form
-   runs long enough that a submit button at its end is several screens from most
-   of the fields it applies to, so the bar keeps Back, the page identity, and
-   Save on screen the whole way down. */
 .settings-page {
   container: settings / inline-size;
   --settings-measure: none;
   --settings-gutter: 30px;
-  /* The classic scrollbar Chromium gives the body, sized by the
-     `::-webkit-scrollbar` rule near the top of this file. The bar reserves the
-     same strip the scrolling body loses to it, so the two boxes are the same
-     width and centre their column on one axis. */
   --settings-scrollbar: 11px;
 
   position: relative;
@@ -6822,7 +6509,6 @@ dd {
   padding: 13px var(--settings-gutter);
 }
 
-/* Align the heading and Save with the form across the full Settings page. */
 .settings-heading-inner {
   position: relative;
   display: flex;
@@ -6988,9 +6674,7 @@ dd {
   gap: 12px;
 }
 
-/* The save result belongs next to the control that produced it, so it is a line
-   of text in the bar rather than a banner in the form. 21ch keeps a 24px gap
-   from the centered search at 960px, including macOS WebKit's wider ch. */
+/* macOS WebKit renders ch wider than Chromium. */
 .settings-status {
   width: 21ch;
   text-align: right;
@@ -7255,10 +6939,6 @@ dd {
   color: var(--text-faint);
 }
 
-/* ==========================================================================
-   Forms + modals
-   ========================================================================== */
-
 .form-stack {
   display: flex;
   flex-direction: column;
@@ -7295,9 +6975,6 @@ dd {
   min-height: 28px;
 }
 
-/* Settings mirrors the launcher it controls: the same two groups, in the same
-   order, as the Local terminal menu, so each row toggles exactly the entry the
-   reader can see it will remove. */
 .local-shell-toggle-group {
   display: flex;
   flex-direction: column;
@@ -7353,8 +7030,6 @@ dd {
   font-size: 11.5px;
 }
 
-/* A locked checkbox has to read as unavailable without disappearing: the note
-   underneath is what explains why it cannot be changed. */
 .checkbox-label:has(input:disabled) {
   color: var(--text-faint);
 }
@@ -7392,9 +7067,6 @@ dd {
   min-width: 0;
 }
 
-/* Text inputs centre their line on their own. The styled select lays its
-   20px line from the top of its content box, so extra padding pushed
-   "Ungrouped" toward the bottom edge; it keeps the shared select padding. */
 .connection-form input:not([type="checkbox"]) {
   padding-top: 7px;
   padding-bottom: 7px;
@@ -7422,7 +7094,6 @@ dd {
   min-height: 24px;
 }
 
-/* Indent the explanation to the checkbox text so it reads as part of it. */
 .connection-form .elevation-field > small {
   padding-left: 24px;
 }
@@ -7432,8 +7103,6 @@ dd {
   padding: 12px 16px;
 }
 
-/* Testing access is a check, not a way to finish the dialog. Keep it apart
-   from Cancel and Save. */
 .connection-form .connection-test-button {
   margin-right: auto;
 }
@@ -7465,8 +7134,6 @@ dd {
   text-transform: uppercase;
 }
 
-/* Names a control elsewhere in the app with the icon it shows, so the reader
-   can recognize the button the hint points to. */
 .control-reference {
   color: var(--text);
   white-space: nowrap;
@@ -7536,8 +7203,6 @@ dd {
   margin-top: 0;
 }
 
-/* With no tags listed, the create row is the last content; keep it clear of
-   the footer divider. */
 .connection-groups-dialog > .modal-actions {
   margin-top: 20px;
 }
@@ -7572,8 +7237,6 @@ dd {
   gap: 7px;
 }
 
-/* Same height as the name field beside it, with the round swatch used by the
-   tag rows below so the new color reads as the same control. */
 .connection-tag-create .connection-tag-color-field input {
   width: 32px;
   height: 32px;
@@ -7600,7 +7263,6 @@ dd {
   border-top: 1px solid var(--border);
 }
 
-/* With nothing listed, the create field alone says the section is empty. */
 .connection-group-list:empty,
 .connection-tag-manage-list:empty {
   display: none;
@@ -7704,7 +7366,6 @@ dd {
   animation: dialog-in var(--motion-med) var(--ease);
 }
 
-/* One field needs less width than a form. */
 .modal.prompt-dialog {
   width: min(420px, calc(100vw - 40px));
 }
@@ -7738,10 +7399,6 @@ dd {
   margin: 4px -20px -20px;
   padding: 13px 20px;
 }
-
-/* ==========================================================================
-   Inline messages
-   ========================================================================== */
 
 .remote-shell-body {
   display: grid;
@@ -7874,8 +7531,6 @@ dd {
   position: sticky;
   bottom: 0;
 }
-/* The inline error's tint, holding a title, the reason, a hint, and retry
-   actions. */
 .remote-shell-error {
   display: flex;
   align-items: flex-start;
@@ -7928,8 +7583,6 @@ dd {
   line-height: 1.5;
 }
 
-/* Warnings share the inline error's calm shape in amber: a triangle icon and
-   the message on a faint tint, with any action after the message. */
 .inline-warning {
   justify-content: flex-start;
   align-items: flex-start;
@@ -7947,7 +7600,6 @@ dd {
   height: 14px;
   margin-top: 2.5px;
   background: var(--warning);
-  /* lucide triangle-alert */
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3'/%3E%3Cpath d='M12 9v4'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E")
     center / contain no-repeat;
 }
@@ -7962,9 +7614,6 @@ dd {
   flex: none;
 }
 
-/* Errors read as one calm line: an alert icon and the message on a faint red
-   tint, without a red box and heavy left rule competing with the form. The
-   tint is mixed into a surface so floating errors stay opaque. */
 .inline-error {
   justify-content: flex-start;
   align-items: flex-start;
@@ -7982,7 +7631,6 @@ dd {
   height: 14px;
   margin-top: 2.5px;
   background: var(--failure);
-  /* lucide circle-alert */
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' x2='12' y1='8' y2='12'/%3E%3Cline x1='12' x2='12.01' y1='16' y2='16'/%3E%3C/svg%3E")
     center / contain no-repeat;
 }
@@ -7992,9 +7640,6 @@ dd {
   min-width: 0;
 }
 
-/* Structured access test: the same calm shape as an inline error, in green.
-   The title says SSH works; each dependency follows with a small mark, and a
-   missing one stays neutral because the host still works without it. */
 .connection-test-result {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr);
@@ -8007,7 +7652,6 @@ dd {
   line-height: 1.5;
 }
 
-/* Revealing the outcome must clear the sticky modal footer. */
 .connection-test-result,
 .connection-test-error {
   scroll-margin-bottom: 72px;
@@ -8087,10 +7731,6 @@ dd {
   background: rgb(255 255 255 / 8%);
 }
 
-/* ==========================================================================
-   Empty workspace
-   ========================================================================== */
-
 .empty-workspace {
   display: grid;
   flex: 1;
@@ -8146,10 +7786,6 @@ dd {
   max-width: 460px;
   text-align: left;
 }
-
-/* ==========================================================================
-   Render failure
-   ========================================================================== */
 
 .crash-shell {
   display: grid;
@@ -8227,10 +7863,6 @@ kbd {
   line-height: 1.4;
 }
 
-/* ==========================================================================
-   Command palette
-   ========================================================================== */
-
 .command-palette-backdrop {
   position: fixed;
   z-index: 1100;
@@ -8280,8 +7912,6 @@ kbd {
   font-size: 13px;
 }
 
-/* The search bar is the palette's obvious focus target, so suppress the shared
-   input focus ring (outline + box-shadow) that otherwise floats awkwardly. */
 .command-palette-search input:focus,
 .command-palette-search input:focus-visible {
   outline: none;
@@ -8394,10 +8024,6 @@ kbd {
   gap: 6px;
 }
 
-/* ==========================================================================
-   Motion
-   ========================================================================== */
-
 @keyframes overlay-in {
   from {
     opacity: 0;
@@ -8418,10 +8044,6 @@ kbd {
   }
 }
 
-/* The shared exit for anchored popovers: the mirror of popover-in, retreating
-   toward the trigger that opened it. While it plays the popover ignores the
-   pointer, so a fading menu can never catch a click meant for what is under
-   it; unmount follows the animation length (POPOVER_EXIT_MS). */
 @keyframes popover-out {
   from {
     opacity: 1;
@@ -8438,8 +8060,6 @@ kbd {
   animation: popover-out var(--motion-fast) var(--ease) forwards;
 }
 
-/* Centered dialogs rise in place like native Windows sheets instead of
-   dropping from above like anchored menus. */
 @keyframes dialog-in {
   from {
     opacity: 0;
@@ -8451,8 +8071,6 @@ kbd {
   }
 }
 
-/* A cue that mounts (new terminal output) pops into place rather than
-   silently appearing. */
 @keyframes cue-in {
   from {
     opacity: 0;
@@ -8460,7 +8078,6 @@ kbd {
   }
 }
 
-/* An in-progress state (connecting) breathes until it resolves. */
 @keyframes state-pulse {
   0%,
   100% {
@@ -8471,8 +8088,6 @@ kbd {
   }
 }
 
-/* One-shot halos: the bell asks for attention once, and the downloaded-update
-   dot announces readiness three times before resting. */
 @keyframes bell-ping {
   from {
     box-shadow:
@@ -8495,13 +8110,6 @@ kbd {
   }
 }
 
-/* ==========================================================================
-   Press feedback
-   Compact controls dip under the pointer; dense rows, tabs, and list items
-   deepen their fill instead, so high-frequency targets never wobble. Native
-   window controls stay exempt: they mimic the operating system, not the app.
-   ========================================================================== */
-
 .icon-button:active:not(:disabled),
 .toolbar-button:active:not(:disabled),
 .app-bar-button:active:not(:disabled),
@@ -8516,7 +8124,6 @@ kbd {
   transform: scale(0.93);
 }
 
-/* The host menu button carries its own centering transform. */
 .host-menu:active:not(:disabled) {
   transform: translateY(-50%) scale(0.93);
 }
@@ -8530,7 +8137,6 @@ kbd {
   transform: scale(0.98);
 }
 
-/* The launcher animates its icon and fill while keeping its hit area fixed. */
 .sidebar-primary:active:not(:disabled) {
   transform: none;
   background: var(--fill-selected);
@@ -8543,17 +8149,6 @@ kbd {
 .connection-group-heading:active {
   background: var(--fill-active);
 }
-
-/* ==========================================================================
-   Identity marks
-   OS and shell marks stay neutral at rest and reveal their brand color where
-   the user is headed: the hovered, keyboard-focused, or selected tab, pane
-   tab, menu row, or host row, across workspace tabs, terminal menus, the
-   overflow menus, and the local-shell launcher. Each brand-bearing mark
-   carries its hue in a shared --identity variable, so one reveal rule covers
-   every surface and a new distro only adds a variable. Generic OS marks stay
-   neutral. Identity color never signals health.
-   ========================================================================== */
 
 .host-os-ubuntu {
   --identity: var(--os-ubuntu);
@@ -8624,7 +8219,6 @@ kbd {
   --identity: var(--os-amazon);
 }
 
-/* Generic terminal marks brighten from gray to white; blue identifies PowerShell. */
 .local-shell-mark.identity-mark:not(.local-shell-icon) {
   --identity: var(--text-strong);
 }
@@ -8652,10 +8246,6 @@ kbd {
   color: var(--identity);
   --shell-artwork-filter: none;
 }
-
-/* ==========================================================================
-   Responsive / density
-   ========================================================================== */
 
 @media (max-height: 720px) {
   .feature-nav button {
@@ -8711,7 +8301,6 @@ kbd {
   }
 }
 
-/* Shared inspection canvas */
 .ports-page {
   position: absolute;
   overflow: hidden;
@@ -8762,8 +8351,6 @@ kbd {
   top: calc(100% + 8px);
   left: 0;
   width: min(340px, calc(100cqw - 24px));
-  /* The window bound matters in compact windows, where the pane is taller
-     than what is on screen and the panel would run past the bottom edge. */
   max-height: min(calc(100cqh - 100px), calc(100dvh - 160px));
   overflow-y: auto;
   padding: 12px;
@@ -8803,8 +8390,6 @@ kbd {
   min-width: 0;
 }
 
-/* The clear button keeps its place while hidden so typing never shifts the
-   field. */
 .ports-search-field > button:disabled {
   visibility: hidden;
 }
@@ -8832,14 +8417,10 @@ kbd {
   min-width: 0;
 }
 
-/* The panel receives focus so keyboard users land in it, not to show a ring
-   around the whole popover. Its controls keep their own focus rings. */
 .ports-tools-panel:focus {
   outline: none;
 }
 
-/* Reading warnings: one quiet row per affected read, divided like the other
-   lists. Amber is the icon only; the reason stays readable in muted text. */
 .reading-warnings {
   margin: 0;
   padding: 0;
@@ -9079,8 +8660,6 @@ kbd {
   height: 100%;
 }
 
-/* One status names the read, over the skeleton graph on first load and over
-   the nodes already on the canvas while more are discovered. */
 .arch-loading-status {
   position: absolute;
   bottom: 12px;
@@ -9435,7 +9014,6 @@ details[open] > .inspector-disclosure-body {
   padding-right: 34px;
 }
 
-/* The chevron opens and closes the list, and turns to face up while it shows. */
 .font-family-toggle {
   position: absolute;
   top: 50%;
@@ -9484,7 +9062,6 @@ details[open] > .inspector-disclosure-body {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   animation: popover-in var(--motion-fast) var(--ease);
-  /* Placeholders step up with the lighter overlay surface. */
   --skeleton-fill: var(--border);
 }
 
@@ -9640,7 +9217,6 @@ details[open] > .inspector-disclosure-body {
   }
 }
 
-/* Saved panel widths and keyboard-operable dividers. */
 .sidebar {
   position: relative;
   container-type: inline-size;
@@ -9741,14 +9317,10 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 }
 
 .connections-divider {
-  /* Keep the drag target outside the sidebar's native scrollbar gutter. */
   right: -12px;
   width: 12px;
 }
 
-/* Straddle the sidebar edge: one pixel in the sidebar, one on the divider's own
-   column. The pixel beyond lies under the title bar and tab strip, which stack
-   above the divider and would halve the line along the top of the window. */
 .connections-divider::after {
   left: -1px;
 }
@@ -9777,7 +9349,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 
 .content-divider {
   right: 0;
-  /* Feature pages leave this gutter outside their scrolling area. */
   width: 6px;
 }
 
@@ -9805,7 +9376,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 }
 
 .resizable-split > .split-divider {
-  /* Use the detail pane's inset instead of covering the list's scrollbar. */
   width: 12px;
   right: auto;
 }
@@ -9865,7 +9435,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
     flex-wrap: wrap;
   }
 
-  /* Keep the sticky group header flush with the reduced page padding. */
   .history-group > h3 {
     top: -20px;
   }
@@ -9942,8 +9511,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   .history-search-row .search-field {
     width: 100%;
   }
-  /* Compact rows fold time and exit status onto one metadata line above the
-     command surface and keep the action buttons visible without hover. */
   .history-row-inner {
     grid-template-columns: auto auto minmax(0, 1fr);
     grid-template-areas:
@@ -9968,7 +9535,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   }
 }
 
-/* Compact windows keep content wide; Connections and views share a drawer. */
 .compact-navigation-toggle,
 .navigation-backdrop {
   display: none;
@@ -10060,7 +9626,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   }
 }
 
-/* Resize borders for the undecorated GTK window. */
 .window-resize-handles {
   position: fixed;
   inset: 0;

@@ -115,8 +115,6 @@ export function SystemdGraph({
       }
       if (expansionChanged || (shapeChanged && !interrupted.current)) {
         cancelFitFrame();
-        // Normalize the new scene without moving its root on screen, then
-        // animate from that pose on the next frame instead of jumping first.
         const view = renderedView();
         setMoving(false);
         setView({
@@ -193,8 +191,6 @@ export function SystemdGraph({
     if (selectedId) {
       detailRef.current?.focus({ preventScroll: true });
       wasInspecting.current = true;
-      // Selection focuses this node; late inspection data must not replace
-      // that framing. The next expansion action resumes automatic fitting.
       interrupted.current = true;
       frameSelectedRef.current(true);
     } else if (wasInspecting.current) {
@@ -273,8 +269,6 @@ export function SystemdGraph({
       className={"arch-canvas systemd-canvas" + (selectedId ? " inspecting" : "")}
       onPointerDownCapture={(event) => {
         const last = lastNodeClick.current;
-        // The camera may move the node out from under the second click.
-        // Recognize that gesture before it reaches the canvas or inspector.
         if (
           event.button === 0 &&
           last &&

@@ -180,7 +180,6 @@ export function HostMetrics({
     if (!element) return;
     const cells = Array.from(element.children);
     const measure = () => {
-      // Hidden cells keep their layout boxes so they can reappear as space returns.
       const right = element.getBoundingClientRect().right;
       const firstOverflow = cells.findIndex((cell) => cell.getBoundingClientRect().right > right);
       setVisibleCount(firstOverflow === -1 ? cells.length : firstOverflow);

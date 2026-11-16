@@ -59,8 +59,7 @@ export function Modal({ title, children, onClose, className }: ModalProps) {
       if (event.key !== "Tab") return;
       const items = focusable();
       if (!items.length) return;
-      // WebKit can skip buttons depending on macOS keyboard-navigation
-      // preferences. Own the whole cycle so every dialog action stays reachable.
+      // WebKit can skip buttons depending on macOS keyboard-navigation preferences.
       event.preventDefault();
       const current = items.indexOf(document.activeElement as HTMLElement);
       const next =

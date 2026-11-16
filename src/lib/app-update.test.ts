@@ -22,7 +22,6 @@ const info: AppUpdateInfo = {
   publishedAt: "2026-09-05T17:00:00Z",
 };
 
-/** Every state that has an update attached, including the failed one. */
 const busyStates: AppUpdateState[] = [
   { status: "checking" },
   { status: "available", info },
@@ -38,7 +37,6 @@ const busyStates: AppUpdateState[] = [
 
 describe("update indicator label", () => {
   it("shows nothing at all while up to date or checking", () => {
-    // A quiet background check must leave the titlebar exactly as it was.
     expect(updateIndicatorLabel(idleUpdateState)).toBeNull();
     expect(updateIndicatorLabel({ status: "checking" })).toBeNull();
   });
@@ -61,7 +59,6 @@ describe("update indicator label", () => {
     const state: AppUpdateState = { status: "downloading", info, downloaded: 4200, total: null };
     expect(updateIndicatorLabel(state)).toBe("Downloading…");
     expect(downloadPercent(4200, null)).toBeNull();
-    // A zero total would divide to nothing useful, so it is treated as unknown.
     expect(downloadLabel(10, 0)).toBe("Downloading…");
   });
 
@@ -71,8 +68,6 @@ describe("update indicator label", () => {
   });
 
   it("does not park a failure in the titlebar", () => {
-    // The update is still available and still retryable; the reason belongs in
-    // the popover rather than permanently in the window chrome.
     const state: AppUpdateState = {
       status: "failed",
       info,
@@ -125,8 +120,6 @@ describe("automatic check schedule", () => {
   });
 
   it("runs the first check whenever the scheduler first asks", () => {
-    // The 10 second startup delay lives in the scheduler; eligibility itself
-    // only sees that no check has happened yet.
     expect(shouldRunAutomaticCheck(base)).toBe(true);
   });
 
@@ -155,8 +148,6 @@ describe("automatic check schedule", () => {
   });
 
   it("stays eligible after a failure instead of latching off", () => {
-    // A failed automatic check returns the state to idle and records the time,
-    // so the next interval tries again rather than retrying in a loop.
     const failedAt = 500_000;
     expect(
       shouldRunAutomaticCheck({
@@ -192,8 +183,6 @@ describe("foreground refresh schedule", () => {
   });
 
   it("does not refresh when no check has ever happened", () => {
-    // The startup delay owns the first check; focusing the window while it is
-    // pending must not pull the check ahead of the restore work it waits for.
     expect(shouldRunForegroundRefresh({ ...base, lastCheckedAt: null })).toBe(false);
   });
 

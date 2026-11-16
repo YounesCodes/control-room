@@ -72,8 +72,7 @@ fn cached_host(connection: &SavedConnection) -> Option<WindowsHost> {
         .map(|(_, host)| host.clone())
 }
 
-// EncodedCommand uses UTF-16LE. Encoding the complete script avoids passing
-// executable paths or distribution names through cmd or the SSH default shell.
+// -EncodedCommand takes base64 UTF-16LE.
 pub fn powershell_command(script: &str) -> String {
     let bytes: Vec<_> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
     let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -150,7 +149,6 @@ pub fn discover(connection: &SavedConnection, refresh: bool) -> Result<RemoteShe
     if !refresh && let Some(host) = cached_host(connection) {
         return Ok(catalog(host));
     }
-    // A tiny probe keeps Linux connections on their existing launch path.
     if let Ok(output) =
         RemoteCommandExecutor::execute(connection, "detect_host_platform", "uname -s; uname -r")
         && let Ok(text) = output.success_text()
@@ -227,9 +225,6 @@ fn launch(shell: &ResolvedShell) -> Result<String, String> {
 }
 
 pub fn selected_command(connection: &SavedConnection, shell_id: &str) -> Result<String, String> {
-    // Reuse only a recent result for this exact SSH target. The caller supplies
-    // an ID; executable and arguments remain backend-owned. The launch script
-    // verifies that the executable still exists on the remote host.
     let host = match cached_host(connection) {
         Some(host) => host,
         None => discover_windows(connection)?,

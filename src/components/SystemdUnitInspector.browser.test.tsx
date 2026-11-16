@@ -102,8 +102,7 @@ it("lets property values and command code be selected for copying", () => {
     />,
   );
   const label = screen.getByText("Restart policy");
-  // Chromium reports the label's inherited "none"; WebKit reports "auto",
-  // which follows the unselectable app shell the same way.
+  // Chromium reports the inherited "none"; WebKit reports "auto".
   expect(["none", "auto"]).toContain(getComputedStyle(label).userSelect);
   expect(getComputedStyle(label.nextElementSibling!).userSelect).toBe("text");
   expect(getComputedStyle(screen.getByLabelText("ExecStart")).userSelect).toBe("text");

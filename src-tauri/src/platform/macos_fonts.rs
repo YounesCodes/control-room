@@ -1,4 +1,3 @@
-//! Install files in ~/Library/Fonts and make them available to this process immediately.
 use super::{FontRegistration, Path};
 use std::{ffi::c_void, os::unix::ffi::OsStrExt, ptr};
 
@@ -51,8 +50,7 @@ impl FontRegistration for UserFonts {
     fn register(&self, path: &Path, _key: &str) -> Result<bool, String> {
         let url = FontUrl::new(path)?;
         let mut error = ptr::null();
-        // Process scope gives the current WKWebView immediate access. The file
-        // in Library/Fonts provides persistent, account-wide installation.
+        // Process scope gives the running WKWebView immediate access.
         let registered = unsafe { CTFontManagerRegisterFontsForURL(url.0, 1, &mut error) } != 0;
         let code = if error.is_null() {
             0

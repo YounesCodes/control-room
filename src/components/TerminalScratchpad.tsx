@@ -5,16 +5,6 @@ import type { ScratchpadScope } from "../types";
 
 type NoteSelection = "terminal" | "global";
 
-/**
- * The Scratchpad popover anchored to the terminal action strip.
- *
- * It answers "let me jot something down or pull a note back into this
- * terminal" without leaving the terminal view, in normal mode and Focus Mode
- * alike. The note follows the active terminal: a local terminal workspace
- * owns a note of its own, a remote terminal uses its connection's note, and
- * the global note stays one switch away. The shared editor owns autosave and
- * recovery drafts.
- */
 export function TerminalScratchpad({
   terminalScope,
   ownerId,
@@ -25,26 +15,17 @@ export function TerminalScratchpad({
   closing,
   style,
 }: {
-  /** What the active terminal is: a local workspace or a Saved Connection. */
   terminalScope: Extract<ScratchpadScope, "local" | "connection">;
-  /** The workspace UUID for a local terminal, the connection UUID otherwise. */
   ownerId: string;
-  /** Names the terminal's owner in the switch and its accessible labels. */
   ownerLabel: string;
-  /** False while the terminal has no live session to receive pasted text. */
   canPaste: boolean;
-  /** Receives the note text; the caller owns writing it to the terminal. */
   onPaste: (text: string) => void;
   onClose: () => void;
-  /** True while the popover plays its closing transition before unmounting. */
   closing?: boolean;
   style?: CSSProperties;
 }) {
   const [selection, setSelection] = useState<NoteSelection>("terminal");
   const [texts, setTexts] = useState<Record<NoteSelection, string>>({ terminal: "", global: "" });
-  // A quick reopen cancels the closing transition, so the popover stays
-  // mounted with its last selection. Every open starts on the terminal's
-  // note, as a fresh mount does.
   const [wasClosing, setWasClosing] = useState(Boolean(closing));
   if (wasClosing !== Boolean(closing)) {
     setWasClosing(Boolean(closing));
@@ -68,9 +49,6 @@ export function TerminalScratchpad({
   useLayoutEffect(() => setTexts((current) => ({ ...current, terminal: "" })), [terminalNoteKey]);
 
   useLayoutEffect(() => {
-    // Both notes stay mounted, so a switch only reveals the other editor; it
-    // never waits on a load. The revealed note fades up while the switch's
-    // fill slides across, and takes focus as a freshly opened note would.
     if (shownSelection.current === selection) return;
     shownSelection.current = selection;
     const note = notesRef.current[selection];
@@ -78,8 +56,6 @@ export function TerminalScratchpad({
     if (!note?.animate || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     const styles = getComputedStyle(document.documentElement);
     const time = /^(\d*\.?\d+)(ms|s)$/.exec(styles.getPropertyValue("--motion-med").trim());
-    // Opacity only: shifting the note would push its border into the
-    // popover's scroll edge and flash a scrollbar mid-switch.
     const animation = note.animate([{ opacity: 0.35 }, { opacity: 1 }], {
       duration: time ? Number(time[1]) * (time[2] === "s" ? 1000 : 1) : 160,
       easing: styles.getPropertyValue("--ease").trim() || "ease-out",
@@ -88,8 +64,6 @@ export function TerminalScratchpad({
   }, [selection]);
 
   useEffect(() => {
-    // Clicks outside the popover close it, except on its own trigger button,
-    // which the caller marks so a toggle click does not reopen immediately.
     const closeOutside = (event: PointerEvent) => {
       const target = event.target instanceof Node ? event.target : null;
       if (rootRef.current?.contains(target)) return;
@@ -102,9 +76,7 @@ export function TerminalScratchpad({
   }, []);
 
   useEffect(() => {
-    // The editor owns the initial focus through autoFocus; this repeats it
-    // when a quick reopen cancels the closing transition, since the popover
-    // element stayed mounted and autoFocus never runs a second time.
+    // autoFocus does not run again when a reopen cancels the closing transition.
     if (closing) return;
     notesRef.current[shownSelection.current]?.querySelector("textarea")?.focus();
   }, [closing]);

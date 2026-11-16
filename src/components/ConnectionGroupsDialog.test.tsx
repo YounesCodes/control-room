@@ -105,7 +105,6 @@ describe("ConnectionGroupsDialog", () => {
 
     await user.click(screen.getByRole("button", { name: "Delete Production" }));
     expect(api.deleteConnectionGroup).not.toHaveBeenCalled();
-    // The consequence is stated where it applies, not in a paragraph above the form.
     expect(screen.getByText("Delete Production? Its connections move to Ungrouped.")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Delete group" }));
 

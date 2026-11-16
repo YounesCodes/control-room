@@ -21,7 +21,6 @@ export function trackCodexMouse(container: HTMLElement, terminal: Terminal) {
     codex = false;
     cancelPress();
   });
-  // Keep recognizing Codex once the welcome banner has scrolled away.
   const output = terminal.onWriteParsed(() => {
     if (terminal.modes.mouseTrackingMode === "none") {
       codex = false;
@@ -39,7 +38,6 @@ export function trackCodexMouse(container: HTMLElement, terminal: Terminal) {
     }
   });
 
-  // Let native xterm handle both outcomes, once we know what the gesture means.
   const holdPress = (event: MouseEvent) => {
     if (
       !codex ||
@@ -67,8 +65,6 @@ export function trackCodexMouse(container: HTMLElement, terminal: Terminal) {
       DRAG_THRESHOLD;
     const replayPress = (select: boolean) => {
       cancelPress();
-      // xterm's selection modifier starts native selection, including its
-      // handling of wrapped lines and drags that leave the terminal.
       screen.dispatchEvent(
         new MouseEvent("mousedown", {
           bubbles: true,

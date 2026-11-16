@@ -16,18 +16,12 @@ const tabScrollerSource = readFileSync(
 const portsSource = readFileSync(new URL("./pages/PortsPane.tsx", import.meta.url), "utf8");
 const dockerSource = readFileSync(new URL("./pages/DockerPane.tsx", import.meta.url), "utf8");
 const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
-/** Source with comments removed, so a comment explaining a rule cannot be
- *  mistaken for a violation of it. */
 function code(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/(^|[^:])\/\/.*$/gm, "$1");
 }
 
-/**
- * Methods the app calls on the app window, found by following whatever the
- * `getCurrentWindow()` result was bound to in each file that imports it.
- */
 function calledWindowMethods(): string[] {
   const called = new Set<string>();
   for (const file of productionSources()) {
@@ -53,7 +47,6 @@ const linuxWindowCapabilities = JSON.parse(code("../src-tauri/capabilities/linux
 const apiSource = code("./lib/api.ts");
 const tauriSource = code("../src-tauri/src/lib.rs");
 
-/** Every production `.ts`/`.tsx` file under `src`, tests excluded. */
 function productionSources(directory = new URL("./", import.meta.url)): URL[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     if (entry.isDirectory()) return productionSources(new URL(`${entry.name}/`, directory));
@@ -62,7 +55,6 @@ function productionSources(directory = new URL("./", import.meta.url)): URL[] {
   });
 }
 
-/** Dialog-plugin functions the frontend actually imports, across all of `src`. */
 function importedDialogFunctions(): string[] {
   const named = new Set<string>();
   for (const file of productionSources()) {
@@ -121,11 +113,6 @@ describe("application hierarchy", () => {
   });
 
   it("keeps one offerable list of local terminals behind Settings", () => {
-    // Settings is where a shell is turned off, and it needs the full catalog to
-    // turn it back on, so the filtering happens once for every launcher rather
-    // than in each menu. The catalog itself stays unfiltered because restoring
-    // a Workspace checks against it: hiding a shell must never cost the user a
-    // Workspace that was already running it.
     expect(settingsSource).toContain('"Local terminal"');
     expect(settingsSource).toContain("localShells: LocalShellProfile[]");
     expect(appSource).toContain("offeredLocalShells(");
@@ -151,9 +138,6 @@ describe("application hierarchy", () => {
   it("puts the global elevation switch in Settings and keeps one-shot sudo per pane", () => {
     expect(settingsSource).toContain('"Elevated commands"');
     expect(settingsSource).toContain("draft.globalSudoEnabled");
-    // Turning elevation on must not remove the per-request escape hatch: a host
-    // without passwordless sudo still falls back to an unelevated read, and the
-    // panes are where the user answers that with a password.
     expect(logsSource).toContain("Retry with sudo");
     expect(portsSource).toContain("Retry with sudo");
     expect(dockerSource).toContain("Retry with sudo");
@@ -171,15 +155,10 @@ describe("application hierarchy", () => {
   });
 
   it("makes terminal right-click behaviour built in rather than a setting", () => {
-    // Copy-or-paste on right click is the terminal's own convention now, so
-    // there is no preference to read and none to show.
     expect(settingsSource).not.toContain("terminalRightClickPaste");
     expect(settingsSource).not.toContain("Paste on right click");
     expect(terminalSource).not.toContain("shouldPasteOnRightClick");
     expect(terminalSource).toContain("terminalRightClickAction");
-    // Suppressing the webview menu must not be conditional on who owns the
-    // clipboard: deciding it from the action is what let the menu appear
-    // whenever Control Room declined the gesture.
     expect(terminalSource).toMatch(
       /if \(action === "ignore"\) return;[\s\S]{0,80}event\.preventDefault\(\);/,
     );
@@ -190,8 +169,6 @@ describe("application hierarchy", () => {
     expect(appSource).toContain('aria-label="Copy terminal selection"');
     expect(appSource).toContain('aria-label="Paste into terminal"');
     expect(appSource).not.toContain('aria-label="Clear terminal"');
-    // The ended-session action is not strip chrome anymore: it rides the
-    // notice that names the failure, labelled for the session kind.
     expect(appSource).not.toContain('"Reconnect terminal"');
     expect(terminalSource).toContain("terminal-notice-action");
     expect(terminalSource).toContain('"Reconnect"');
@@ -207,9 +184,6 @@ describe("application hierarchy", () => {
   });
 
   it("keeps a local Workspace terminal-only and off every remote code path", () => {
-    // The launcher lists detected shells beside Add connection, and a local
-    // Workspace has no capability navigation because there is no host to inspect.
-    // A container terminal is terminal-only too: its host keeps the inspection.
     expect(appSource).toContain("api.listLocalShells()");
     expect(appSource).toContain("Local terminal");
     expect(appSource).toMatch(
@@ -221,26 +195,18 @@ describe("application hierarchy", () => {
     expect(appSource).toContain(
       "{activeRemoteWorkspace && activeConnection && activeSavedConnection && (",
     );
-    // Host capability discovery is a Remote Host read and stays behind the
-    // remote guard.
     expect(appSource).toMatch(
       /state === "connected" && isRemoteWorkspace\(workspace\)[\s\S]{0,80}detectConnectionCapabilities/,
     );
-    // Control Room is the terminal emulator, so nothing launches another one.
     expect(appSource).not.toContain("wt.exe");
     expect(terminalSource).not.toContain("wt.exe");
   });
 
   it("runs local and remote sessions through one terminal implementation", () => {
-    // One xterm host, one lifecycle: the pane picks the start call and nothing
-    // else, so resize, acknowledgement, and cleanup cannot drift apart.
     expect(terminalSource).toContain("api.startLocalSession(");
     expect(terminalSource).toContain("api.startSession(");
     expect(terminalSource.match(/new Terminal\(/g)).toHaveLength(1);
     expect(terminalSource.match(/new ResizeObserver\(/g)).toHaveLength(1);
-    // Both shell kinds report processing, but only a Saved Connection can
-    // reach command-history capture. TerminalPane's behavioral tests also
-    // send real markers to the local handler and assert no history is saved.
     expect(terminalSource).toContain("if (!connectionIdRef.current) return true;");
     expect(terminalSource).toContain("registerOscHandler(133");
     expect(terminalSource).toContain("registerOscHandler(633");
@@ -263,21 +229,12 @@ describe("application hierarchy", () => {
   });
 
   it("parks Rename and Close while the workspace strip drags", () => {
-    // Hover and the held focus reveal the tab tools, so mid-drag they would
-    // float over the lifted chip. The strip keeps them parked until it rests.
     expect(stylesSource).toMatch(
       /\.session-tab-scroll-region\.dragging \.session-tab-close,\s*\.session-tab-scroll-region\.dragging \.session-tab-rename\s*\{[^}]*opacity: 0;/,
     );
   });
 
   it("grants a native permission for every window control the frontend uses", () => {
-    // The same deny-by-default ACL that made baseline export dead on arrival.
-    // A window method with no matching permission fails only in a built app,
-    // and the tests here render the controls with a stub. Following the
-    // binding rather than naming the methods means a fourth control fails here
-    // instead of doing nothing when a user clicks it.
-    // `core:default` already allows reading window state and listening for
-    // window events; only the controls need their own grants.
     const called = calledWindowMethods().filter((method) => !/^(is|on)[A-Z]/.test(method));
     expect(windowCapabilities.permissions).toContain("core:default");
     expect(called).toEqual(["close", "minimize", "startResizeDragging", "toggleMaximize"]);
@@ -296,12 +253,6 @@ describe("application hierarchy", () => {
   });
 
   it("grants a native permission for every dialog the frontend opens", () => {
-    // Tauri's ACL is deny-by-default, so a plugin call with no matching
-    // permission fails at runtime rather than at build time and nothing in the
-    // test suite notices: the frontend mocks the plugin, and Rust never sees
-    // the call. Baseline export shipped that way, calling `save` while only
-    // `open` was granted. Deriving the expectation from the imports means the
-    // next dialog added to the app fails here instead of in the user's hands.
     const imported = importedDialogFunctions();
     expect(imported.length).toBeGreaterThan(0);
     for (const name of imported) {
@@ -313,8 +264,6 @@ describe("application hierarchy", () => {
   });
 
   it("keeps one application-wide update lifecycle", () => {
-    // Update checking is not per-Workspace work: one hook, mounted once, so the
-    // schedule cannot multiply with panes or connections.
     expect(appSource.match(/useAppUpdater\(/g)).toHaveLength(1);
     const panes = ["LogsPane", "ServicesPane", "PortsPane", "DockerPane"];
     for (const pane of panes) {

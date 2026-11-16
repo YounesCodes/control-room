@@ -3,7 +3,6 @@ export function isGraphDirection(key: string): key is GraphDirection {
   return ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key);
 }
 
-/** Choose by canvas centers, independent of DOM order and camera movement. */
 export function spatialGraphNeighbor(
   direction: GraphDirection,
   currentId: string | null,

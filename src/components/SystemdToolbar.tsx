@@ -435,8 +435,6 @@ export function SystemdToolbar({
   );
 }
 
-/** The toolbar's layout while the first unit list is read: its controls only
- *  act on units, so they stand as placeholders until units arrive. */
 export function SystemdToolbarSkeleton({ graph }: { graph: boolean }) {
   return (
     <div className="systemd-toolbar" data-mode={graph ? "graph" : "inventory"}>

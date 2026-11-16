@@ -16,8 +16,6 @@ afterEach(() => {
   motionOverride = undefined;
 });
 
-// Relative colors may serialize as color(srgb ...) rather than rgba(...).
-// Let the canvas resolve the thumb color to RGBA regardless of serialization.
 const pixel = (section: HTMLElement) => {
   const context = document.createElement("canvas").getContext("2d")!;
   context.fillStyle = getComputedStyle(section, "::-webkit-scrollbar-thumb").backgroundColor;
@@ -26,7 +24,6 @@ const pixel = (section: HTMLElement) => {
 };
 const hidden = (section: HTMLElement) => expect.poll(() => pixel(section)[3]).toBe(0);
 
-// Stretch the transition so the test can reliably sample the fade in progress.
 const stretchTransitions = () => {
   motionOverride = document.createElement("style");
   motionOverride.textContent = "*, *::before, *::after { transition-duration: 10s !important; }";
@@ -100,8 +97,6 @@ it.each(["div", "textarea"])("fades a %s thumb on actual hover and leave", async
         animation instanceof CSSTransition && animation.transitionProperty === "--scrollbar-thumb",
     );
   expect(fade).toBeDefined();
-  // Inspect a known midpoint of the real hover transition. Sampling its first
-  // pixel makes reversal checks depend on runner and pointer latency.
   fade!.pause();
   fade!.currentTime = 5_000;
   const revealing = alpha();

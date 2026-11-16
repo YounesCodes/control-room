@@ -126,9 +126,6 @@ describe("Local Terminal Mode in the real App", () => {
       await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
       await split("vertically");
       await split("horizontally");
-      // Pane tabs reveal Rename and Close exactly like every other tab: hidden
-      // at rest, slid in by the hover (or keyboard focus) that also drags the
-      // trailing session dot aside.
       const paneTabs = [
         ...container!.querySelectorAll<HTMLElement>(".session-pane-tabs .session-tab-wrap"),
       ];
@@ -159,8 +156,6 @@ describe("Local Terminal Mode in the real App", () => {
             ?.closest("button"),
         ).toBe(control);
       }
-      // The group tab needs no tooltip: the Panes row lists its terminals. A pane tab
-      // near the window's left edge still keeps its tooltip inside the window.
       const groupButton = container!.querySelector<HTMLButtonElement>(".session-tab-group-main")!;
       expect(groupButton.hasAttribute("title")).toBe(false);
       await userEvent.hover(paneTabs[0].querySelector<HTMLElement>(".session-tab-main")!);
@@ -168,8 +163,6 @@ describe("Local Terminal Mode in the real App", () => {
       expect(
         page.getByRole("tooltip").element().getBoundingClientRect().left,
       ).toBeGreaterThanOrEqual(8);
-      // A pane tab's tools exist for the pointer only once the tab is hovered
-      // or focused, so drive the pointer there like a user would first.
       const paneTabByLabel = (label: string) =>
         paneTabs.find((tab) => tab.querySelector(".session-tab-label")?.textContent === label)!;
       await userEvent.hover(paneTabByLabel("Command Prompt 2"));
@@ -240,7 +233,6 @@ describe("Local Terminal Mode in the real App", () => {
       context.fillRect(0, 0, 1, 1);
       const expected = [...context.getImageData(0, 0, 1, 1).data].slice(0, 3);
       context.drawImage(bitmap, 0, 0);
-      // At the window border the frame sits one pixel in so it is never swallowed.
       const inset = (side: string) => (pane.classList.contains(`edge-${side}`) ? 1 : 0);
       const [left, right, bottom] = [
         inset("left"),
@@ -264,7 +256,6 @@ describe("Local Terminal Mode in the real App", () => {
         );
       }
       const bounds = pane.getBoundingClientRect();
-      // Stay clear of the split dividers' intentional mouse hit areas.
       const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + 30);
       expect(pane.contains(hit)).toBe(true);
       expect(hit, "The painted frame must leave terminal input clickable").not.toBe(pane);
@@ -292,7 +283,6 @@ describe("Local Terminal Mode in the real App", () => {
       await vi.waitFor(() =>
         expect(paneRow.querySelector(".session-tab-wrap.active .session-tab-main")).toBe(first),
       );
-      // Group tools sit on the group tab and reveal like Workspace tab tools.
       const groupTab = container!.querySelector<HTMLElement>(".session-tab-group")!;
       const groupTools = [
         ...groupTab.querySelectorAll<HTMLButtonElement>(".session-tab-rename, .session-tab-close"),
@@ -403,16 +393,12 @@ describe("Local Terminal Mode in the real App", () => {
         .querySelector('[aria-label="Find in terminal"]')!
         .getBoundingClientRect();
       expect(find.left - newTerminal.right).toBeLessThanOrEqual(1);
-      // Strip buttons own the window's top edge so their hover fills the full
-      // header height; the overlay drag strip stays the hit target above them.
       expect(newTerminal.top).toBe(strip.top);
       expect(find.top).toBe(strip.top);
       const scrollBack = container!
         .querySelector('[aria-label="Scroll terminals left"]')!
         .getBoundingClientRect();
       expect(scrollBack.top).toBe(strip.top);
-      // Tabs fill the header's full height too, so their highlight reaches
-      // the top edge under the drag overlay.
       const firstTab = container!.querySelector(
         ".session-tab-content > .session-tab-wrap, .session-tab-content > .session-tab-group",
       ) as HTMLElement | null;
@@ -443,13 +429,9 @@ describe("Local Terminal Mode in the real App", () => {
     const picker = container!
       .querySelector('[aria-label="All terminals"] svg')!
       .getBoundingClientRect();
-    // The two glyphs sit far closer to each other than to any neighboring
-    // control, so the pair reads as one button rather than two fused ones.
     const innerGap = chevronBox.left - plusBox.right;
     expect(innerGap).toBeLessThanOrEqual(4);
     expect(plusBox.left - picker.right).toBeGreaterThan(innerGap * 2);
-    // The chevron is the control's menu affordance: quieter than the plus and
-    // smaller than the neighboring All-terminals picker chevron.
     expect(getComputedStyle(menuChevron).color).not.toBe(getComputedStyle(plus).color);
     expect(chevronBox.height).toBeLessThan(picker.height);
   });
@@ -461,22 +443,17 @@ describe("Local Terminal Mode in the real App", () => {
     await page.getByRole("button", { name: "Scratchpad" }).click();
     const dialog = page.getByRole("dialog", { name: "Scratchpad" });
     await expect.element(dialog).toBeVisible();
-    // An anchored overlay: the strip that opened it neither moves nor resizes.
     const stripAfter = container!.querySelector(".session-tabs")!.getBoundingClientRect();
     expect(stripAfter.top).toBe(stripBefore.top);
     expect(stripAfter.height).toBe(stripBefore.height);
     const popoverElement = dialog.element();
     const popover = popoverElement.getBoundingClientRect();
     expect(popover.top).toBeGreaterThanOrEqual(stripAfter.bottom);
-    // A gutter keeps the popover's border readable instead of merging with
-    // the window's.
     expect(window.innerWidth - popover.right).toBeGreaterThanOrEqual(4);
     expect(popover.width).toBeLessThanOrEqual(370);
-    // Opens on the terminal's context, driven entirely from the keyboard.
     await expect.element(page.getByRole("textbox", { name: "Terminal note" })).toHaveFocus();
     await userEvent.keyboard("{Escape}");
     await expect.element(page.getByRole("button", { name: "Scratchpad" })).toHaveFocus();
-    // Keep the original node so closing and inertness remain observable after removal.
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(popoverElement).toHaveAttribute("data-closing");
     expect(popoverElement).toHaveAttribute("inert");
@@ -547,7 +524,6 @@ describe("Local Terminal Mode in the real App", () => {
     mountApp(true);
     await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
     await split("vertically");
-    // Display scaling leaves the terminal area a fraction of a pixel short of a whole size.
     const content = container!.querySelector<HTMLElement>(".workspace-content")!;
     content.style.flex = "none";
     content.style.width = "calc(100% - 0.4px)";
@@ -577,7 +553,6 @@ describe("Local Terminal Mode in the real App", () => {
     await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
     await split("vertically");
     await split("horizontally");
-    // Split the left column too, so the grid's horizontal dividers line up.
     await userEvent.click(
       container!.querySelector<HTMLElement>(".session-pane-tabs .session-tab-main")!,
     );
@@ -600,7 +575,6 @@ describe("Local Terminal Mode in the real App", () => {
       JSON.stringify(paneBounds().map((r) => [r.left, r.top, r.width, r.height]));
     expect(grid().topLeft.width, layout()).toBeCloseTo(grid().bottomLeft.width, 0);
     expect(grid().topLeft.height, layout()).toBeCloseTo(grid().topRight.height, 0);
-    // The crossed vertical divider is offered as two halves, one per row.
     const handles = [
       ...container!.querySelectorAll<HTMLElement>(
         '.terminal-layout-divider[aria-orientation="vertical"]',
@@ -613,7 +587,6 @@ describe("Local Terminal Mode in the real App", () => {
     )!;
     top.focus();
     await userEvent.keyboard("{Shift>}{ArrowLeft}{/Shift}");
-    // The same handle keeps focus through the regrouping, so a second step lands too.
     await vi.waitFor(() => expect(document.activeElement).toBe(top));
     await userEvent.keyboard("{Shift>}{ArrowLeft}{/Shift}");
     await vi.waitFor(() => expect(grid().topLeft.width).toBeCloseTo(before.topLeft.width - 100, 0));
@@ -622,7 +595,6 @@ describe("Local Terminal Mode in the real App", () => {
     expect(after.topRight.width).toBeCloseTo(before.topRight.width + 100, 0);
     expect(after.bottomLeft.width).toBeCloseTo(before.bottomLeft.width, 0);
     expect(after.bottomRight.width).toBeCloseTo(before.bottomRight.width, 0);
-    // Heights still resize per column: the rows were not merged into one line.
     expect(after.topLeft.height).toBeCloseTo(before.topLeft.height, 0);
     await page.screenshot({ path: "../../test-results/terminal-grid-row-resize.png" });
   });
@@ -637,9 +609,6 @@ describe("Local Terminal Mode in the real App", () => {
       .click();
     await page.getByRole("button", { name: "New terminal", exact: true }).click();
     await page.getByRole("button", { name: /^Split right,/ }).click();
-    // Joining a group adds the pane row above the terminals. The surface must follow
-    // the shorter area at once: a frame of overflow would flash a scrollbar, narrow the
-    // terminals by its width, and resize every session. Observing adds no delay.
     const content = container!.querySelector<HTMLElement>(".workspace-content")!;
     const widths = new Set<number>([content.clientWidth]);
     const watcher = new ResizeObserver(() => widths.add(content.clientWidth));
@@ -653,7 +622,6 @@ describe("Local Terminal Mode in the real App", () => {
     await vi.waitFor(() =>
       expect(Number(divider.element().getAttribute("aria-valuenow"))).toBeCloseTo(initial + 50, 0),
     );
-    // The existing terminal is the second tree leaf but the first mounted pane.
     await vi.waitFor(() => expect(paneBounds()[0].width).toBeCloseTo(initial - 50, 0));
     watcher.disconnect();
     expect([...widths]).toHaveLength(1);

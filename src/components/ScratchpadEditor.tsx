@@ -93,9 +93,7 @@ export function ScratchpadEditor({
   }, [connectionId, loadVersion, ownerId, scope]);
 
   useLayoutEffect(() => {
-    // The note arrives after the textarea mounted and may already hold focus,
-    // where assigning its value leaves the caret at the end. Open it at the
-    // top instead, like a note that was there from the start.
+    // Assigning a focused textarea's value leaves the caret at the end.
     if (loaded) textareaRef.current?.setSelectionRange(0, 0);
   }, [loaded]);
 
@@ -219,8 +217,6 @@ export function ScratchpadEditor({
     return () => window.clearTimeout(timer);
   }, [loadFailed, loaded, ownerId, scope, text]);
 
-  // Reported through a ref so a compact caller can copy or paste the current
-  // text without re-running the autosave effect on every callback identity.
   const onTextChangeRef = useRef(onTextChange);
   onTextChangeRef.current = onTextChange;
   useEffect(() => {
@@ -250,8 +246,6 @@ export function ScratchpadEditor({
     }
   }
 
-  // A loading note keeps the editor's own layout, read-only, so opening the
-  // popover or switching its note never swaps in a differently sized panel.
   if (loaded && loadFailed && !text && error) {
     return (
       <ErrorState

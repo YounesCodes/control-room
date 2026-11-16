@@ -23,8 +23,6 @@ const MAX_TAGS_PER_CONNECTION: usize = 5;
 const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
 const MAX_HISTORY_CWD_BYTES: usize = 32_767;
 const MAX_SCRATCHPAD_CHARS: usize = 16_384;
-/// Pages earlier releases could save as a tab's view. Saved state that still
-/// names one is rewritten on load rather than discarded.
 const REMOVED_WORKSPACE_VIEWS: [&str; 3] = ["overview", "boot", "baselines"];
 
 pub struct Database {
@@ -740,7 +738,6 @@ impl Database {
             .ok()
             .and_then(|mut value| {
                 if let Some(object) = value.as_object_mut() {
-                    // Tabs left on a removed page reopen on their terminal.
                     if let Some(workspaces) = object
                         .get_mut("workspaces")
                         .and_then(serde_json::Value::as_array_mut)
@@ -1005,14 +1002,11 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
             return Err("Workspace state contains invalid identifiers".into());
         }
         match (&workspace.connection_id, &workspace.local_shell_id) {
-            // A remote Workspace names the Saved Connection it belongs to.
             (Some(connection_id), None) => {
                 if Uuid::parse_str(connection_id).is_err() {
                     return Err("Workspace state contains invalid identifiers".into());
                 }
             }
-            // A local Workspace names a Local Shell Profile, which is a fixed
-            // vocabulary rather than an id the app minted.
             (None, Some(shell_id)) => {
                 if LocalShellKind::from_profile_id(shell_id).is_none() {
                     return Err("Workspace state names an unknown local shell".into());
@@ -1142,8 +1136,6 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
     if !LOG_TAIL_OPTIONS.contains(&settings.default_log_tail) {
         return Err("Unsupported default log tail count".into());
     }
-    // The list is a set of known profile ids, so it can never grow past the
-    // ids this release knows, plus room for an accidental duplicate or two.
     if settings.hidden_local_shells.len() > 16 {
         return Err("Too many hidden local terminals".into());
     }
@@ -1390,14 +1382,6 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
     }
-    // Versions 7 to 9 have no step. Released databases may report 8 or 9, so
-    // the numbers stay taken: renumbering a later step into the gap would
-    // re-run it on installs already past it.
-    // Local terminal workspaces get their own scratchpad scope (#138). The
-    // owner is the workspace UUID the frontend persists and restores verbatim,
-    // so a note follows its terminal tab across restarts. There is no Saved
-    // Connection behind such a note, so connection_id stays NULL and nothing
-    // cascades when the tab is eventually closed.
     if version < 10 {
         let transaction = connection
             .transaction()
@@ -1455,7 +1439,6 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
         if let Some(mut value) =
             payload.and_then(|payload| serde_json::from_str::<serde_json::Value>(&payload).ok())
         {
-            // Preserve the entire palette if any of its colors was customized.
             let old = [
                 ("terminalForeground", "#f2f2ee"),
                 ("terminalRed", "#ff6f7d"),
@@ -1618,9 +1601,6 @@ fn migrate(connection: &mut Connection) -> Result<(), String> {
             .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
     }
-    // Releases up to 0.9.4 created a Baselines table. It is dropped outside
-    // the numbered steps so `user_version` stays put and the previous release
-    // can still open the file. Dropping the table also drops its index.
     connection
         .execute_batch("DROP TABLE IF EXISTS host_baselines;")
         .map_err(|error| error.to_string())?;
@@ -1921,8 +1901,6 @@ mod tests {
             Some(r#"{"version":"0.7.0"}"#.to_string())
         );
 
-        // Writing again replaces rather than accumulating: this is one notice,
-        // not a release history.
         database
             .set_app_metadata("pending_update_notice", r#"{"version":"0.8.0"}"#)
             .unwrap();
@@ -1954,8 +1932,6 @@ mod tests {
             .set_app_metadata("pending_update_notice", "{}")
             .unwrap();
 
-        // The updater notice lives beside Settings and Workspace state under its
-        // own key, so neither can clobber the other.
         assert_eq!(database.get_settings().unwrap().terminal_font_size, 17);
         database
             .delete_app_metadata("pending_update_notice")
@@ -1998,8 +1974,6 @@ mod tests {
             4,
             "existing selections stay unchanged"
         );
-        // A retired Storage choice must not make the rest of an older
-        // settings record unreadable. The UI filters it before sampling.
         settings.host_metrics = vec![
             crate::models::HeaderMetric::Cpu,
             crate::models::HeaderMetric::Disk,
@@ -2023,9 +1997,6 @@ mod tests {
         let path = directory.path().join("control-room.db");
         let database = Database::open(&path).unwrap();
 
-        // A payload from a build with no automatic_update_checks field at all.
-        // AppSettings carries #[serde(default)], so the field fills in from
-        // Default rather than the whole payload being discarded.
         let legacy = r##"{"terminalFontFamily":"Consolas","terminalFontSize":15,"terminalScrollback":9000,"terminalRightClickPaste":true,"terminalForeground":"#f2f2ee","terminalRed":"#ff6f7d","terminalGreen":"#52cf91","terminalYellow":"#e8c56c","terminalBlue":"#55aef2","terminalMagenta":"#c793ff","terminalCyan":"#65d4d1","defaultLogTail":500,"globalHistoryEnabled":false,"globalSudoEnabled":true}"##;
         database.set_app_metadata("settings", legacy).unwrap();
 
@@ -2311,10 +2282,6 @@ mod tests {
                 .is_none()
         );
 
-        // A local terminal workspace owns a note keyed by its persisted
-        // workspace UUID. It survives Saved Connection changes because no
-        // connection is involved, and deleting the connection above must not
-        // have touched it.
         let workspace_id = "22222222-2222-4222-8222-222222222222";
         let local_note = database
             .save_scratchpad_note(ScratchpadNoteInput {
@@ -2549,8 +2516,6 @@ mod tests {
         assert_eq!(legacy.id, "legacy");
         assert_eq!(legacy.group_id, None);
         assert!(legacy.tags.is_empty());
-        // A database written before elevation existed must come back with sudo
-        // off, never inherited from some other host.
         assert!(!legacy.sudo_enabled);
         let version: i64 = database
             .connection
@@ -2816,12 +2781,6 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
 
-        // Exactly what v0.7.0 wrote, including terminalRightClickPaste, which no
-        // longer exists: right-click behaviour became built in rather than a
-        // preference. AppSettings does not deny unknown fields, so serde drops
-        // the retired key and every other value survives. Needing a migration
-        // for a removed boolean would have been the wrong shape of fix, and
-        // failing to parse would have silently reset the whole payload.
         let stored = r##"{"terminalFontFamily":"Cascadia Mono","terminalFontSize":16,"terminalScrollback":7500,"terminalRightClickPaste":true,"terminalForeground":"#f2f2ee","terminalRed":"#ff6f7d","terminalGreen":"#52cf91","terminalYellow":"#e8c56c","terminalBlue":"#55aef2","terminalMagenta":"#c793ff","terminalCyan":"#65d4d1","defaultLogTail":1000,"globalHistoryEnabled":false,"globalSudoEnabled":true,"automaticUpdateChecks":false}"##;
         database.set_app_metadata("settings", stored).unwrap();
 
@@ -2907,9 +2866,6 @@ mod tests {
     fn a_local_terminal_id_the_frontend_made_up_is_refused_when_saving_settings() {
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
-        // The same shape of refusal as any other profile id: a path, a program
-        // name, or an id from a future release is an error rather than a
-        // silently stored value the launchers would then have to interpret.
         let settings = AppSettings {
             hidden_local_shells: vec!["C:\\Windows\\System32\\cmd.exe".into()],
             ..AppSettings::default()
@@ -3270,8 +3226,6 @@ mod tests {
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
         let workspace_id = Uuid::new_v4().to_string();
         let connection_id = Uuid::new_v4().to_string();
-        // Exactly the shape older releases persisted: a remote tab with no
-        // notion of a local shell.
         let legacy = format!(
             r#"{{"workspaces":[{{"id":"{workspace_id}","label":null,"connectionId":"{connection_id}","view":"terminal","historyPaused":false}}],"activeWorkspaceId":"{workspace_id}","terminalLayout":{{"kind":"leaf","workspaceId":"{workspace_id}"}}}}"#
         );
@@ -3308,10 +3262,6 @@ mod tests {
         );
     }
 
-    /// A downgrade must not touch a database a newer release wrote. Its tables
-    /// can hold columns and shapes this build does not understand, and the
-    /// migration steps would run against them. Refusing outright is what keeps
-    /// a downgrade from being a data loss.
     #[test]
     fn a_database_from_a_newer_release_is_refused_rather_than_migrated() {
         let directory = tempfile::tempdir().unwrap();
@@ -3335,7 +3285,6 @@ mod tests {
             "unexpected error: {error}"
         );
 
-        // And it left the file alone.
         let connection = Connection::open(&path).unwrap();
         let version: i64 = connection
             .query_row("PRAGMA user_version", [], |row| row.get(0))
@@ -3343,9 +3292,6 @@ mod tests {
         assert_eq!(version, LATEST_SCHEMA_VERSION + 1);
     }
 
-    /// Opening the same database twice runs the migration twice. The second
-    /// pass has to be a no-op: a step that re-ran would drop or reset whatever
-    /// it created the first time.
     #[test]
     fn opening_an_up_to_date_database_again_changes_nothing() {
         let directory = tempfile::tempdir().unwrap();
@@ -3383,11 +3329,6 @@ mod tests {
         assert_eq!(third.list_history(&saved.id, None, 50).unwrap().len(), 1);
     }
 
-    /// Versions 7 to 9 have no step. 7 was never released, and 8 and 9 only
-    /// built the removed Baselines table, but released databases can report
-    /// either. Renumbering a later step into the gap would re-run it on every
-    /// install already past it. The gap is permanent, and this is what says so
-    /// to whoever tries to tidy it.
     #[test]
     fn the_unused_schema_versions_stay_unused() {
         let migrations = include_str!("database.rs")
@@ -3413,9 +3354,6 @@ mod tests {
         assert_eq!(LATEST_SCHEMA_VERSION, 15);
     }
 
-    /// An install that ran a release with Baselines opens with the same schema
-    /// a fresh install gets, keeps everything else, and stays at the same
-    /// `user_version` so the previous release can still open it.
     #[test]
     fn baselines_storage_is_dropped_from_existing_databases() {
         let directory = tempfile::tempdir().unwrap();
@@ -3465,8 +3403,6 @@ mod tests {
         assert_eq!(version, LATEST_SCHEMA_VERSION);
     }
 
-    /// Tabs saved on Overview, Boot, or Baselines reopen on their terminal
-    /// instead of failing validation and taking every saved tab with them.
     #[test]
     fn saved_tabs_on_removed_pages_reopen_on_their_terminal() {
         let directory = tempfile::tempdir().unwrap();
@@ -3518,9 +3454,6 @@ mod tests {
         }
     }
 
-    /// A Saved Connection owns everything collected about that host. Deleting
-    /// it has to take all of it, or a later connection could surface a
-    /// stranger's history.
     #[test]
     fn deleting_a_connection_takes_everything_collected_about_it() {
         let directory = tempfile::tempdir().unwrap();
@@ -3567,8 +3500,6 @@ mod tests {
         );
         assert!(database.get_capabilities(&saved.id).unwrap().is_none());
 
-        // Every table that names a connection is drained, not only the ones
-        // this test happens to write to.
         let connection = database.connection.lock();
         let tables = tables_referencing_connections(&connection);
         assert!(
@@ -3660,9 +3591,6 @@ mod tests {
         );
     }
 
-    /// Restore reads whatever is on disk, including what an interrupted write
-    /// or an older bug left there. A payload it cannot trust is dropped and the
-    /// app starts with no Workspaces, rather than failing to start at all.
     #[test]
     fn workspace_state_that_cannot_be_trusted_is_discarded_rather_than_fatal() {
         let workspace_id = Uuid::new_v4().to_string();
@@ -3726,8 +3654,6 @@ mod tests {
                 "{name} should restore as no Workspaces"
             );
 
-            // And the unusable payload is gone, so it is not re-read on every
-            // start for the life of the install.
             let remaining: i64 = database
                 .connection
                 .lock()
@@ -3743,10 +3669,6 @@ mod tests {
             );
         }
 
-        // An empty JSON array is the one payload that is not rejected: serde
-        // reads a struct from a sequence, so it fills every field with its
-        // default. That is a valid empty state, and restoring as no Workspaces
-        // is the right answer for it too.
         let directory = tempfile::tempdir().unwrap();
         let database = Database::open(&directory.path().join("control-room.db")).unwrap();
         database
@@ -3763,9 +3685,6 @@ mod tests {
         );
     }
 
-    /// Split nesting is bounded because restore walks it recursively. The bound
-    /// is checked at its edges, since an off-by-one here is either a stack
-    /// overflow on load or a layout the user built and cannot reopen.
     #[test]
     fn split_nesting_is_accepted_up_to_its_bound_and_refused_past_it() {
         let workspace_id = Uuid::new_v4().to_string();
@@ -3808,8 +3727,6 @@ mod tests {
         );
     }
 
-    /// Both split directions round-trip, because a horizontal split that came
-    /// back vertical would rearrange a saved Workspace without saying so.
     #[test]
     fn both_split_directions_survive_a_restart() {
         let directory = tempfile::tempdir().unwrap();
@@ -3841,8 +3758,6 @@ mod tests {
                 }),
             };
             let state = PersistedWorkspaceState {
-                // One remote and one local pane in the same split, which is the
-                // mixed Workspace the tab strip actually produces.
                 workspaces: vec![
                     pane(&left, Some(saved.id.clone()), None),
                     pane(&right, None, Some("git-bash".into())),
@@ -3906,9 +3821,6 @@ mod tests {
         }
     }
 
-    /// Restored Workspaces come back disconnected, so nothing persisted may
-    /// describe a Terminal Session. A session id or a live state on disk is
-    /// what an auto-reconnect would be built out of.
     #[test]
     fn nothing_a_workspace_persists_describes_a_running_session() {
         let directory = tempfile::tempdir().unwrap();
@@ -3951,9 +3863,6 @@ mod tests {
         }
     }
 
-    /// Nothing Control Room stores is a credential or a transcript. This reads
-    /// the schema rather than the code, so a column added to hold one fails
-    /// here whatever the comment above it says.
     #[test]
     fn no_persisted_column_exists_to_hold_a_secret_or_a_transcript() {
         let directory = tempfile::tempdir().unwrap();
@@ -4001,10 +3910,6 @@ mod tests {
         }
     }
 
-    /// A one-shot sudo password reaches Rust as a request argument and dies
-    /// with the request. This walks the raw database file after every write
-    /// path has run, because a value that never reached a column can still sit
-    /// in a page a delete left behind.
     #[test]
     fn a_full_round_of_writes_leaves_no_credential_in_the_database_file() {
         const SECRET: &str = "CONTROL-ROOM-FAKE-SUDO-PASSWORD";
@@ -4014,8 +3919,6 @@ mod tests {
         let database = Database::open(&path).unwrap();
         let saved = database.create_connection(input("Laptop")).unwrap();
 
-        // Everything a Workspace writes while the user works. None of these
-        // take a credential, which is the point.
         database
             .add_history(HistoryInput {
                 connection_id: saved.id.clone(),
@@ -4058,8 +3961,6 @@ mod tests {
                 .any(|window| window == SECRET.as_bytes()),
             "a credential reached the database file"
         );
-        // The fixture is real, so a search that could never match is not what
-        // made this pass.
         assert!(
             bytes.windows(6).any(|window| window == b"Laptop"),
             "the file did not contain what was written to it"

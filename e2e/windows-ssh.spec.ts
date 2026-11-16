@@ -10,7 +10,6 @@ import type {
   HeaderMetrics,
 } from "../src/types";
 
-// Opt-in fixture identity stays in environment variables, outside the repository.
 const host = process.env.CONTROL_ROOM_WINDOWS_TEST_HOST;
 const user = process.env.CONTROL_ROOM_WINDOWS_TEST_USER;
 (host && user ? describe : describe.skip)("Windows SSH shell journeys", () => {

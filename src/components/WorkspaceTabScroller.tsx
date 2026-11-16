@@ -30,14 +30,8 @@ interface WorkspaceTabScrollerProps {
   activeTabId: string | null;
   arrangementKey: string;
   menuLabel?: string;
-  /// Moves tab `id` to `targetIndex`, expressed in whole-strip positions.
-  /// Absent rejects reordering: group rows and the pane strip pass none.
   onReorder?: (id: string, targetIndex: number) => void;
-  /// The application modifier for keyboard reordering: Cmd on macOS, Ctrl elsewhere.
   reorderModifier?: "control" | "meta";
-  /// Carrying a lifted tab below the strip hands it here instead of reordering, so
-  /// the terminal view can take it (a Focus Mode split). `accepts` says which tabs may
-  /// leave; `move` and `drop` get pointer positions; `cancel` ends a carry.
   onDragOut?: TabDragOut;
 }
 
@@ -52,18 +46,13 @@ const MIN_TAB_WIDTH = 160;
 const MAX_TAB_WIDTH = 196;
 const OVERFLOW_BUTTON_WIDTH = 28;
 const OVERFLOW_CONTROLS_WIDTH = OVERFLOW_BUTTON_WIDTH * 3;
-/// A pointer this far from its origin counts as a drag, not a tab click.
 const DRAG_START_PX = 4;
-/// Holding the lifted tab this close to an overflowing strip's edge pages the window.
 const DRAG_EDGE_PX = 28;
 const DRAG_STEP_MS = 350;
-/// How far below the strip the pointer must go before a tab leaves it.
 const DRAG_OUT_PX = 12;
 
 interface DragGeometry {
   tabWidth: number;
-  /// How far into the tab the pointer went down, so the tab follows the same
-  /// point of the cursor for the whole drag.
   grabOffset: number;
   left: number;
   right: number;
@@ -85,15 +74,11 @@ interface ActiveDrag {
   id: string;
   fromIndex: number;
   pointerX: number;
-  /// Where the drag began, so a tab carried out of the strip waits in its own slot.
   startX: number;
-  /// True while the tab is carried below the strip toward the terminal view.
   out: boolean;
   geometry: DragGeometry;
 }
 
-/// Tabs sit at a uniform `geometry.tabWidth`, so the slot under the lifted
-/// tab's center is the drop target, clamped to the strip's ends.
 function dragTargetFrom(drag: ActiveDrag, sliceStart: number, total: number) {
   const { geometry } = drag;
   const center = drag.pointerX - geometry.grabOffset + geometry.tabWidth / 2;
@@ -221,8 +206,6 @@ export function WorkspaceTabScroller({
     if (timer !== null) window.clearInterval(timer);
   }
 
-  /// Holding the pointer at an overflowing strip's edge reveals the tabs beyond
-  /// the window one at a time, so any tab can reach the first or last position.
   function steerDragScroll(x: number, geometry: DragGeometry) {
     if (!overflow) {
       stopDragScroll();
@@ -239,8 +222,6 @@ export function WorkspaceTabScroller({
     dragScrollRef.current = { direction, timer };
   }
 
-  /// A lifted tab leaves the strip once the pointer is well below it and the owner
-  /// accepts that tab; until then it reorders as usual.
   function carriedOut(active: ActiveDrag, y: number) {
     return y > active.geometry.bottom + DRAG_OUT_PX && !!dragOutRef.current?.accepts(active.id);
   }
@@ -255,7 +236,6 @@ export function WorkspaceTabScroller({
     pointerYRef.current = null;
     if (x === null || y === null) return;
     const out = carriedOut(active, y);
-    // Carried out, the tab waits in its own slot while the terminal view previews.
     const next = { ...active, pointerX: out ? active.startX : x, out };
     activeDragRef.current = next;
     setDragging(next);
@@ -289,9 +269,7 @@ export function WorkspaceTabScroller({
   const stopDragScrollRef = useRef(stopDragScroll);
   stopDragScrollRef.current = stopDragScroll;
 
-  /// A dragged tab would still receive the click that follows its pointerup,
-  /// selecting it against the drag's own promise. One capture-phase swallow
-  /// eats exactly that click; the next macrotask disarms it for later clicks.
+  // A pointerup that ends a drag is still followed by a click.
   function armClickSuppression() {
     if (clickGuardRef.current) return;
     const swallow = (event: Event) => {
@@ -309,9 +287,6 @@ export function WorkspaceTabScroller({
     window.setTimeout(disarm, 0);
   }
 
-  // While a tab is lifted, Escape gives the motion one clear way out, and a
-  // release the strip never sees (a WebView without pointer capture, an
-  // interrupted gesture) ends the drag instead of leaving it mid-air.
   useEffect(() => {
     if (!dragging) return;
     const cancel = (event: KeyboardEvent) => {
@@ -331,8 +306,6 @@ export function WorkspaceTabScroller({
     };
   }, [dragging]);
 
-  // The strip going away mid-motion still schedules rAF frames, paging timers,
-  // and the click guard through its refs; release them once on teardown.
   useEffect(
     () => () => {
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
@@ -344,8 +317,6 @@ export function WorkspaceTabScroller({
     [],
   );
 
-  /// Resolves the strip tab a pointer or keyboard event acts on: only the main
-  /// tab button begins or moves a reorder, never Rename, Close, or the edges.
   function tabFromEvent(target: EventTarget | null) {
     const handle = (target as Element | null)?.closest(
       ".session-tab-main, .session-tab-group-main",
@@ -358,9 +329,6 @@ export function WorkspaceTabScroller({
     return { index, tab };
   }
 
-  /// Until a press becomes a drag the strip has no pointer capture, so a quick pull
-  /// straight down could leave it within a single event and never start the drag.
-  /// The window follows the press until it ends, wherever the pointer goes.
   function followPendingPress(pointerId: number) {
     const follow = (event: PointerEvent) => {
       if (event.pointerId === pointerId) moveDragRef.current(event);
@@ -391,8 +359,7 @@ export function WorkspaceTabScroller({
     grabbedHandleRef.current = (event.target as Element).closest<HTMLElement>(
       ".session-tab-main, .session-tab-group-main",
     );
-    // Capture is taken when the drag activates, not here: a pointerdown
-    // capture would retarget the plain click that selects a tab.
+    // Capturing on pointerdown would retarget the click that selects a tab.
     followPendingPress(event.pointerId);
     pendingDragRef.current = {
       pointerId: event.pointerId,
@@ -424,17 +391,12 @@ export function WorkspaceTabScroller({
     if (!pending || pending.pointerId !== event.pointerId) return;
     const dx = event.clientX - pending.startX;
     const dy = event.clientY - pending.startY;
-    // Nothing changes below the threshold, so a plain tab click never reads
-    // as the start of a drag.
     if (dx * dx + dy * dy < DRAG_START_PX * DRAG_START_PX) return;
     event.preventDefault();
     const content = contentRef.current;
     try {
       content?.setPointerCapture(event.pointerId);
-    } catch {
-      // Without capture the drag still tracks inside the strip; the window
-      // pointerup fallback in the drag effect ends it outside.
-    }
+    } catch {}
     armClickSuppression();
     activeDragRef.current = {
       pointerId: pending.pointerId,
@@ -448,8 +410,6 @@ export function WorkspaceTabScroller({
     pendingDragRef.current = null;
     setDragging(activeDragRef.current);
     steerDragScroll(event.clientX, activeDragRef.current.geometry);
-    // The move that starts the drag also counts: a quick pull straight down leaves
-    // the strip at once.
     pointerXRef.current = event.clientX;
     pointerYRef.current = event.clientY;
     if (frameRef.current === null) frameRef.current = requestAnimationFrame(flushDragFrame);
@@ -463,9 +423,7 @@ export function WorkspaceTabScroller({
     if (!active || active.pointerId !== event.pointerId) return;
     const out = carriedOut(active, event.clientY);
     finishDrag();
-    // macOS WebKit never focuses a pressed button, and a drag produces no
-    // click for the app shell to focus. Hand focus to the grabbed tab once the
-    // reorder renders, as Chromium already does on press.
+    // macOS WebKit never focuses a pressed button, and a drag produces no click.
     const handle = grabbedHandleRef.current;
     grabbedHandleRef.current = null;
     if (!out)
@@ -478,7 +436,6 @@ export function WorkspaceTabScroller({
     }
     if (!onReorder) return;
     const { geometry } = active;
-    // Dropping outside the strip rearranges nothing.
     const inside =
       event.clientX >= geometry.left &&
       event.clientX <= geometry.right &&
@@ -490,8 +447,6 @@ export function WorkspaceTabScroller({
     if (target !== active.fromIndex) onReorder(active.id, target);
   }
 
-  /// The application modifier plus Shift with an arrow key moves the focused tab one slot, the keyboard
-  /// path to the same reorder a drag performs.
   function reorderWithKeyboard(event: ReactKeyboardEvent<HTMLDivElement>) {
     if (!onReorder || count < 2 || activeDragRef.current) return;
     const modifier = reorderModifier === "meta" ? event.metaKey : event.ctrlKey;
@@ -540,8 +495,6 @@ export function WorkspaceTabScroller({
   }, [overflow, lastStart, pageSize]);
 
   const activeDrag = dragging;
-  // While a tab is lifted, every rendered tab is pinned absolutely, so the
-  // window can reach beyond the page for the drag without resizing others.
   const dragSliceStart = activeDrag ? Math.min(visibleStart, activeDrag.fromIndex) : visibleStart;
   const dragTarget = activeDrag ? dragTargetFrom(activeDrag, dragSliceStart, count) : null;
   const renderedTabs = activeDrag
@@ -601,9 +554,6 @@ export function WorkspaceTabScroller({
             if (slotIndex === activeDrag.fromIndex) {
               classes.push("session-tab-dragged");
               style.zIndex = 30;
-              // The lifted tab follows the pointer but never crosses the strip's
-              // borders: a pointer thrown far outside reads as the tab pinned
-              // at the nearest edge, not as a header sliding off the window.
               const followed = activeDrag.pointerX - geometry.grabOffset;
               const clamped = Math.max(
                 geometry.left,
@@ -611,8 +561,6 @@ export function WorkspaceTabScroller({
               );
               style.transform = `translate3d(${clamped - geometry.left - (activeDrag.fromIndex - dragSliceStart) * geometry.tabWidth}px, 0, 0)`;
             } else if (dragTarget !== null && dragTarget !== activeDrag.fromIndex) {
-              // The tabs between the lift and the drop slide one slot against
-              // the drag's direction, opening the gap the drop fills.
               const slides =
                 dragTarget < activeDrag.fromIndex
                   ? slotIndex >= dragTarget && slotIndex < activeDrag.fromIndex

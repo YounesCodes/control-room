@@ -64,7 +64,6 @@ describe("StepSlider", () => {
     await expect.element(slider).toHaveAttribute("aria-valuetext", "Every 10 seconds");
     expect(page.getByTestId("value").element().textContent).toBe("10");
     expect(selected()).toBe("10s");
-    // The label is the visible value; no popup repeats it.
     expect(host!.querySelector(".step-slider-bubble")).toBeNull();
     await page.screenshot({
       element: host!.querySelector(".settings-form")!,
@@ -85,19 +84,18 @@ describe("StepSlider", () => {
     const input = host!.querySelector<HTMLInputElement>("input[type=range]")!;
     const stops = [...host!.querySelectorAll(".step-slider-stop")];
     const ticks = [...host!.querySelectorAll(".step-slider-ticks > span")];
-    const thumb = 8; // half of the 16px thumb
+    const thumbHalfWidth = 8;
     const bounds = input.getBoundingClientRect();
     stops.forEach((stop, step) => {
-      const expected = bounds.left + thumb + ((bounds.width - thumb * 2) * step) / 3;
+      const expected =
+        bounds.left + thumbHalfWidth + ((bounds.width - thumbHalfWidth * 2) * step) / 3;
       expect(Math.abs(centre(stop) - expected)).toBeLessThanOrEqual(1);
       expect(Math.abs(centre(ticks[step]) - expected)).toBeLessThanOrEqual(1);
     });
     const fill = host!.querySelector(".step-slider-fill")!.getBoundingClientRect();
     expect(Math.abs(fill.right - centre(stops[2]))).toBeLessThanOrEqual(1);
     expect(ticks[2]).toHaveAttribute("data-selected");
-    // Tick labels sit below the thumb row, never under the circle.
     expect(ticks[0].getBoundingClientRect().top).toBeGreaterThanOrEqual(bounds.bottom + 4);
-    // Clicking a tick label chooses that stop.
     await userEvent.click(ticks[0]);
     expect(page.getByTestId("value").element().textContent).toBe("2");
   });

@@ -39,7 +39,6 @@ foreach ($entry in @(
     @{ name = 'elvish.exe'; id = 'elvish'; label = 'Elvish'; args = @() },
     @{ name = 'xonsh.exe'; id = 'xonsh'; label = 'Xonsh'; args = @('-i') }
 )) { Add-Shell $entry.id $entry.label (Find-Shell $entry.name) $entry.args }
-# Offer the configured OpenSSH shell even when it lives outside the usual paths.
 Add-Shell 'ssh-default' 'SSH default shell' $defaultShell @()
 $wslError = $null
 $wsl = Find-Shell 'wsl.exe'
@@ -67,7 +66,6 @@ $profileError = $null
 foreach ($file in $settingsFiles) {
     $terminalAvailable = $true
     try {
-        # Remove JSON comments and trailing commas while preserving quoted strings.
         $json = Get-Content -Raw -Encoding UTF8 -LiteralPath $file.FullName
         $json = [regex]::Replace($json, '(?s)"(?:\\.|[^"\\])*"|//[^\r\n]*|/\*.*?\*/', {
             param($match) if ($match.Value.StartsWith('"')) { $match.Value } else { '' }
@@ -88,7 +86,6 @@ foreach ($file in $settingsFiles) {
             $path = $tokens[0]
             if (!(Test-Path -LiteralPath $path -PathType Leaf)) { $path = Find-Shell $path }
             if (!$path -or !(Test-Path -LiteralPath $path -PathType Leaf)) { continue }
-            # A Terminal profile must launch a command-line shell, not wt or SSH.
             $basename = [IO.Path]::GetFileName($path).ToLowerInvariant()
             if ($basename -notin @('powershell.exe', 'pwsh.exe', 'cmd.exe', 'bash.exe', 'zsh.exe', 'fish.exe', 'nu.exe', 'elvish.exe', 'xonsh.exe', 'wsl.exe')) { continue }
             $arguments = @()
@@ -106,7 +103,6 @@ $dockerAvailable = Test-Path -LiteralPath $dockerPath -PathType Leaf
 $dockerAccessible = $false
 $dockerVersion = $null
 if ($dockerAvailable) {
-    # A stopped or remote Docker context must not hold the shell picker open.
     $dockerProcess = New-Object System.Diagnostics.Process
     $dockerProcess.StartInfo.FileName = $dockerPath
     $dockerProcess.StartInfo.Arguments = 'info --format "{{json .ServerVersion}}"'
