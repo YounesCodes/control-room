@@ -1,11 +1,10 @@
 name: macOS
 
 on:
+  # Required checks must report on documentation-only pull requests.
   pull_request:
-    paths-ignore: ["**/*.md", "LICENSE", ".gitignore", ".gitattributes"]
   push:
     branches: [main]
-    paths-ignore: ["**/*.md", "LICENSE", ".gitignore", ".gitattributes"]
   workflow_dispatch:
 
 permissions:
