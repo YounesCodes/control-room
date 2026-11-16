@@ -40,6 +40,10 @@ export function FontCatalogPicker({
   const installed = useRef<{ id: string; family: string } | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const catalogRequest = useRef(false);
+  // The chevron decides at press time: some pointers move focus to it before
+  // the click lands, and that blur would otherwise close the list first.
+  const toggleIntent = useRef<"open" | "close" | null>(null);
+  const keepClosed = useRef(false);
   const matching = (catalog?.fonts ?? [])
     .filter((font) => font.family.toLowerCase().includes((query ?? "").trim().toLowerCase()))
     .slice(0, 8);
@@ -240,6 +244,10 @@ export function FontCatalogPicker({
               spellCheck={false}
               onFocus={(event) => {
                 event.currentTarget.select();
+                if (keepClosed.current) {
+                  keepClosed.current = false;
+                  return;
+                }
                 setOpen(true);
                 if (!catalog && !loading) void loadCatalog();
               }}
@@ -305,15 +313,26 @@ export function FontCatalogPicker({
               aria-expanded={showingSuggestions}
               aria-controls="font-suggestions"
               disabled={disabled || busy}
-              // Keep focus in the field so closing the list never blurs it.
+              onPointerDown={() => {
+                toggleIntent.current = showingSuggestions ? "close" : "open";
+              }}
+              // Keep focus in the field so toggling the list never blurs it.
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
-                if (showingSuggestions) {
+                const intent = toggleIntent.current ?? (showingSuggestions ? "close" : "open");
+                toggleIntent.current = null;
+                const field = input.current;
+                if (intent === "close") {
                   setOpen(false);
                   setSelected(null);
+                  if (field && document.activeElement !== field) {
+                    keepClosed.current = true;
+                    field.focus();
+                    keepClosed.current = false;
+                  }
                   return;
                 }
-                input.current?.focus();
+                field?.focus();
                 setOpen(true);
                 if (!catalog && !loading) void loadCatalog();
               }}

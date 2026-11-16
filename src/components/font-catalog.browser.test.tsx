@@ -130,3 +130,20 @@ it("renders temporary faces, supports keyboard selection, and passes accessibili
     false,
   );
 });
+
+it("closes the open list from the chevron and reopens it from there", async () => {
+  await page.viewport(960, 640);
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  root.render(<Fixture />);
+  const input = page.getByRole("combobox", { name: "Font family" });
+  await input.click();
+  await expect.element(page.getByRole("listbox")).toBeVisible();
+  await page.getByRole("button", { name: "Hide font suggestions" }).click();
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  expect(document.querySelector('[role="listbox"]:not([hidden])')).toBeNull();
+  expect(document.activeElement).toBe(input.element());
+  await page.getByRole("button", { name: "Show font suggestions" }).click();
+  await expect.element(page.getByRole("listbox")).toBeVisible();
+});

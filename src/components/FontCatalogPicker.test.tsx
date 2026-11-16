@@ -89,6 +89,21 @@ describe("catalog font lifecycle", () => {
     expect(screen.queryByText("Loading font catalog…")).toBeNull();
   });
 
+  it("closes from the chevron even when the press moves focus to it first", async () => {
+    mount();
+    const field = screen.getByRole("combobox");
+    act(() => field.focus());
+    await screen.findByRole("option", { name: /Fira Mono/ });
+    const toggle = screen.getByRole("button", { name: "Hide font suggestions" });
+    // Some pointers focus the button before its click, which blurs the field.
+    fireEvent.pointerDown(toggle);
+    act(() => toggle.focus());
+    fireEvent.click(toggle);
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    expect(screen.queryByRole("option", { name: /Fira Mono/ })).toBeNull();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
   it("keeps the live preview on the current font when the list only opens", async () => {
     const { onPreview } = mount();
     await screen.findByRole("option", { name: /Fira Mono/ });
