@@ -3,6 +3,7 @@ import { FileClock, Network, RefreshCw } from "lucide-react";
 import { InspectorDisclosure } from "./InspectorDisclosure";
 import { SystemdCode } from "./SystemdCode";
 import { AnimatedNumber } from "./AnimatedNumber";
+import { Skeleton, SkeletonFields, SkeletonLines, SkeletonSections } from "./PanelState";
 import { useSystemdReads } from "../lib/systemd-inspection";
 import { systemdValue, systemdStateLabel } from "../lib/systemd-units";
 import type { CachedValue, LogSourceSelection, SystemdInspection, SystemdUnit } from "../types";
@@ -97,7 +98,14 @@ function Evidence({
   const content = section === "configuration" ? "unit files" : "effective properties";
   return (
     <>
-      {result?.loading && <p role="status">Reading {content}…</p>}
+      {result?.loading &&
+        (result.value ? (
+          <p role="status">Reading {content}…</p>
+        ) : (
+          <Skeleton label={`Reading ${content}…`}>
+            <SkeletonLines />
+          </Skeleton>
+        ))}
       {result?.error && (
         <p className="inline-warning" role="status">
           {result.value ? "Saved evidence. " : ""}
@@ -220,6 +228,8 @@ export function SystemdUnitInspector({
     };
   }, []);
   const p = result?.value?.properties ?? {};
+  // Nothing read yet: show where the fields will be rather than "Unavailable".
+  const pending = !result?.value && !result?.error;
   const type = unitId.split(".").at(-1);
   const active = p.ActiveState ?? summary?.activeState;
   const sub = p.SubState ?? summary?.subState;
@@ -316,9 +326,9 @@ export function SystemdUnitInspector({
         </span>
       </header>
       <div ref={bodyRef} className="port-inspector-body systemd-unit-reveal">
-        {result?.loading && (
+        {result?.loading && result.value && (
           <p className="systemd-read-status" role="status">
-            {result.value ? "Refreshing saved details…" : "Reading unit details…"}
+            Refreshing saved details…
           </p>
         )}
         {result?.error && (
@@ -337,111 +347,133 @@ export function SystemdUnitInspector({
             Details truncated at 128 KiB. Some relationships may be missing.
           </p>
         )}
-        {failed && (
-          <section className="systemd-failure-evidence">
-            <h3>Failure evidence</h3>
-            <Fields
-              rows={[
-                ["Result", p.Result],
-                [
-                  code === "2" || code === "3" ? "Signal" : "Exit status",
-                  code && code !== "0" ? p.ExecMainStatus : undefined,
-                ],
-              ]}
-            />
-          </section>
-        )}
-        {!!essentials.length && <Fields rows={essentials} />}
-        <InspectorDisclosure title="Configuration" open={configuration} onToggle={setConfiguration}>
-          {configuration && (
-            <>
-              <Fields
-                rows={[
-                  ["Unit file", p.FragmentPath],
-                  ["Source file", p.SourcePath],
-                  ["Drop-ins", p.DropInPaths === "" ? "None reported" : p.DropInPaths],
-                  ["Reload needed", p.NeedDaemonReload],
-                ]}
-              />
-              <p className="systemd-evidence-note">
-                Files on disk may differ from loaded properties until a daemon reload.
-              </p>
-              <Evidence
-                connectionId={connectionId}
-                cacheScope={cacheScope}
-                unit={unitId}
-                section="configuration"
-                revision={revision}
-              />
-            </>
-          )}
-        </InspectorDisclosure>
-        <InspectorDisclosure
-          title="Advanced"
-          open={advanced}
-          onToggle={(open) => {
-            if (open === advanced) return;
-            setAdvanced(open);
-            if (open && (type === "service" || type === "socket")) onRequestPorts?.();
-            if (!open) {
-              setEffective(false);
-            }
-          }}
-        >
-          {advanced && (
-            <>
-              <Fields
-                rows={[
-                  ["Substate", sub],
-                  ["Load state", p.LoadState ?? summary?.loadState],
-                  ["Enablement", p.UnitFileState ?? summary?.unitFileState ?? undefined],
-                  ...(!failed
-                    ? [
-                        ["Systemd result", p.Result] as [string, string | undefined],
-                        ["Exit status", code && code !== "0" ? p.ExecMainStatus : undefined] as [
-                          string,
-                          string | undefined,
-                        ],
-                      ]
-                    : []),
-                  ["Execution result", execution],
-                  ["Status", p.StatusText],
-                  ["Condition passed", p.ConditionResult],
-                  ["Assertion passed", p.AssertResult],
-                  ...runtime,
-                ].filter((row): row is [string, string] => row[1] !== undefined)}
-              />
-              <InspectorDisclosure
-                title="Effective properties"
-                open={effective}
-                onToggle={setEffective}
-              >
-                {effective && (
+        {pending ? (
+          // Nothing read yet: one skeleton holds every section in place, open
+          // or closed as the user left it, rather than showing "Unavailable".
+          <Skeleton label="Reading unit details…">
+            <SkeletonFields count={3} />
+            <SkeletonSections count={1} offset={3} />
+            {configuration && <SkeletonFields count={4} offset={4} />}
+            <SkeletonSections count={1} offset={configuration ? 8 : 4} />
+            {advanced && <SkeletonFields count={6} offset={configuration ? 9 : 5} />}
+          </Skeleton>
+        ) : (
+          <>
+            {failed && (
+              <section className="systemd-failure-evidence">
+                <h3>Failure evidence</h3>
+                <Fields
+                  rows={[
+                    ["Result", p.Result],
+                    [
+                      code === "2" || code === "3" ? "Signal" : "Exit status",
+                      code && code !== "0" ? p.ExecMainStatus : undefined,
+                    ],
+                  ]}
+                />
+              </section>
+            )}
+            {!!essentials.length && <Fields rows={essentials} />}
+            <InspectorDisclosure
+              title="Configuration"
+              open={configuration}
+              onToggle={setConfiguration}
+            >
+              {configuration && (
+                <>
+                  <Fields
+                    rows={[
+                      ["Unit file", p.FragmentPath],
+                      ["Source file", p.SourcePath],
+                      ["Drop-ins", p.DropInPaths === "" ? "None reported" : p.DropInPaths],
+                      ["Reload needed", p.NeedDaemonReload],
+                    ]}
+                  />
+                  <p className="systemd-evidence-note">
+                    Files on disk may differ from loaded properties until a daemon reload.
+                  </p>
                   <Evidence
                     connectionId={connectionId}
                     cacheScope={cacheScope}
                     unit={unitId}
-                    section="effectiveConfiguration"
+                    section="configuration"
                     revision={revision}
                   />
-                )}
-              </InspectorDisclosure>
-              <div className="systemd-inspector-links">
-                {onOpenPorts && (type === "service" || type === "socket") && (
-                  <button type="button" className="link-button" onClick={() => onOpenPorts(unitId)}>
-                    <Network size={13} />
-                    Ports
-                  </button>
-                )}
-              </div>
-              {result?.value && (
-                <p className="systemd-evidence-note">
-                  Collected {new Date(result.value.collectedAt).toLocaleTimeString()}
-                </p>
+                </>
               )}
-            </>
-          )}
-        </InspectorDisclosure>
+            </InspectorDisclosure>
+            <InspectorDisclosure
+              title="Advanced"
+              open={advanced}
+              onToggle={(open) => {
+                if (open === advanced) return;
+                setAdvanced(open);
+                if (open && (type === "service" || type === "socket")) onRequestPorts?.();
+                if (!open) {
+                  setEffective(false);
+                }
+              }}
+            >
+              {advanced && (
+                <>
+                  <Fields
+                    rows={[
+                      ["Substate", sub],
+                      ["Load state", p.LoadState ?? summary?.loadState],
+                      ["Enablement", p.UnitFileState ?? summary?.unitFileState ?? undefined],
+                      ...(!failed
+                        ? [
+                            ["Systemd result", p.Result] as [string, string | undefined],
+                            [
+                              "Exit status",
+                              code && code !== "0" ? p.ExecMainStatus : undefined,
+                            ] as [string, string | undefined],
+                          ]
+                        : []),
+                      ["Execution result", execution],
+                      ["Status", p.StatusText],
+                      ["Condition passed", p.ConditionResult],
+                      ["Assertion passed", p.AssertResult],
+                      ...runtime,
+                    ].filter((row): row is [string, string] => row[1] !== undefined)}
+                  />
+                  <InspectorDisclosure
+                    title="Effective properties"
+                    open={effective}
+                    onToggle={setEffective}
+                  >
+                    {effective && (
+                      <Evidence
+                        connectionId={connectionId}
+                        cacheScope={cacheScope}
+                        unit={unitId}
+                        section="effectiveConfiguration"
+                        revision={revision}
+                      />
+                    )}
+                  </InspectorDisclosure>
+                  <div className="systemd-inspector-links">
+                    {onOpenPorts && (type === "service" || type === "socket") && (
+                      <button
+                        type="button"
+                        className="link-button"
+                        onClick={() => onOpenPorts(unitId)}
+                      >
+                        <Network size={13} />
+                        Ports
+                      </button>
+                    )}
+                  </div>
+                  {result?.value && (
+                    <p className="systemd-evidence-note">
+                      Collected {new Date(result.value.collectedAt).toLocaleTimeString()}
+                    </p>
+                  )}
+                </>
+              )}
+            </InspectorDisclosure>
+          </>
+        )}
       </div>
       <div className="detail-actions">
         <button

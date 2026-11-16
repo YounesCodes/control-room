@@ -1,6 +1,12 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { GitBranch, X } from "lucide-react";
-import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
+import {
+  EmptyState,
+  ErrorState,
+  Skeleton,
+  SkeletonGraph,
+  SkeletonRows,
+} from "../components/PanelState";
 import {
   SystemdUnitInspector,
   type SystemdInspectorViewState,
@@ -8,7 +14,7 @@ import {
 import { SystemdInventory } from "../components/SystemdInventory";
 import { SystemdGraph } from "../components/SystemdGraph";
 import { SystemdPresence } from "../components/SystemdPresence";
-import { SystemdToolbar } from "../components/SystemdToolbar";
+import { SystemdToolbar, SystemdToolbarSkeleton } from "../components/SystemdToolbar";
 import { api, errorMessage } from "../lib/api";
 import { connectionTargetKey } from "../lib/connection-validation";
 import {
@@ -441,7 +447,32 @@ export function ServicesPane({
     />
   );
 
-  if (cache.loading && !cache.items.length) return <LoadingState label="Reading systemd units…" />;
+  const firstLoad = cache.loading && !cache.items.length;
+  // The first read sketches the whole explorer, toolbar included, in its own layout.
+  if (firstLoad)
+    return (
+      <section className="feature-page systemd-page">
+        <SystemdToolbarSkeleton graph={state.mode === "graph"} />
+        {state.mode === "graph" ? (
+          <div className="arch-canvas systemd-canvas">
+            <div className="arch-viewport">
+              <Skeleton label="Reading systemd units…" className="skeleton-graph-frame">
+                <SkeletonGraph />
+              </Skeleton>
+            </div>
+          </div>
+        ) : (
+          <div className="systemd-explorer-stage">
+            <div className="systemd-inventory services-page">
+              <Skeleton label="Reading systemd units…" className="dense-list">
+                <SkeletonRows count={14} state="status" />
+              </Skeleton>
+            </div>
+          </div>
+        )}
+      </section>
+    );
+
   if (cache.error && !cache.items.length)
     return (
       <ErrorState

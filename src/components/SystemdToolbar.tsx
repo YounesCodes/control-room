@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { GitBranch, List, RefreshCw, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { SystemdPresence } from "./SystemdPresence";
 import { Search } from "./MagnifierIcon";
+import { Bone, SkeletonText } from "./PanelState";
 import type { SystemdExplorerState } from "../types";
 import { SYSTEMD_INITIAL_VISIBLE } from "../lib/systemd-units";
 
@@ -430,6 +431,34 @@ export function SystemdToolbar({
           </div>
         </div>
       </SystemdPresence>
+    </div>
+  );
+}
+
+/** The toolbar's layout while the first unit list is read: its controls only
+ *  act on units, so they stand as placeholders until units arrive. */
+export function SystemdToolbarSkeleton({ graph }: { graph: boolean }) {
+  return (
+    <div className="systemd-toolbar" data-mode={graph ? "graph" : "inventory"}>
+      <header className="systemd-heading">
+        <h2>Systemd</h2>
+        <span className="systemd-unit-count">
+          <SkeletonText />
+        </span>
+        <div className="systemd-view-slot">
+          <Bone shape="control" width="226px" />
+        </div>
+        <div className="systemd-toolbar-tools">
+          <div className="systemd-mode-tools">
+            <Bone shape="control" width={graph ? "268px" : "134px"} />
+          </div>
+          <div className="systemd-toolbar-actions">
+            {!graph && <Bone shape="icon" />}
+            <Bone shape="icon" />
+            <Bone shape="icon" />
+          </div>
+        </div>
+      </header>
     </div>
   );
 }

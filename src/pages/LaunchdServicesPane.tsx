@@ -1,7 +1,15 @@
 import { ResizableSplit } from "../components/ResizablePanels";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FileClock, RefreshCw, Search } from "lucide-react";
-import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
+import {
+  Bone,
+  EmptyState,
+  ErrorState,
+  Skeleton,
+  SkeletonDetail,
+  SkeletonRows,
+  SkeletonText,
+} from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import { countSystemdUnits, filterSystemdUnits } from "../lib/systemd-units";
 import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
@@ -89,7 +97,32 @@ export function LaunchdServicesPane({
   }
 
   if (cache.loading && !cache.items.length)
-    return <LoadingState label="Reading launchd services…" />;
+    return (
+      <ResizableSplit name="Services" className="feature-page split-page services-page">
+        <div className="list-panel">
+          <header className="page-heading compact-heading">
+            <div>
+              <h2>Services</h2>
+              <p>
+                <SkeletonText />
+              </p>
+            </div>
+            <Bone shape="icon" />
+          </header>
+          <div className="systemd-list-controls">
+            <Bone shape="control" />
+            <Bone shape="control" width="104px" />
+            <Bone shape="control" width="104px" />
+          </div>
+          <Skeleton label="Reading launchd services…" className="dense-list">
+            <SkeletonRows count={14} lead />
+          </Skeleton>
+        </div>
+        <aside className="detail-panel">
+          <SkeletonDetail fields={4} />
+        </aside>
+      </ResizableSplit>
+    );
   if (cache.error && !cache.items.length) {
     return (
       <ErrorState

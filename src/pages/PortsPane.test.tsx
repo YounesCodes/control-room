@@ -177,31 +177,33 @@ describe("PortsPane", () => {
     expect(within(graph).getByRole("button", { name: /8080/ })).toBeTruthy();
   });
   it.each(["ports", "docker"])(
-    "uses a spinner while reading %s without graph data",
+    "sketches the canvas with a status while reading %s without graph data",
     async (source) => {
-      const { container: element } = renderPane(
+      renderPane(
         null,
         { ...sockets, items: [], loading: source === "ports" },
         { ...containers, items: [], loading: source === "docker" },
       );
-      expect(
-        screen.getByText(
-          source === "ports" ? "Reading listening ports…" : "Reading Docker containers…",
-        ),
-      ).toBeTruthy();
-      expect(element.querySelector(".panel-state .spinner")).toBeTruthy();
-      expect(element.querySelector(".panel-state svg")).toBeNull();
+      const graph = screen.getByRole("region", { name: "Ports graph" });
+      expect(within(graph).getByRole("status").textContent).toBe(
+        source === "ports" ? "Reading listening ports…" : "Reading Docker containers…",
+      );
+      expect(within(graph).queryByText("No ports match the current filters")).toBeNull();
     },
   );
 
+  it("keeps read ports on the canvas while Docker containers are still being read", () => {
+    renderPane(null, sockets, { ...containers, items: [], loading: true });
+    const graph = screen.getByRole("region", { name: "Ports graph" });
+    expect(within(graph).getByRole("button", { name: /443/ })).toBeTruthy();
+    expect(within(graph).getByRole("status").textContent).toBe("Reading Docker containers…");
+  });
+
   it("does not show a loader for a completed empty Ports snapshot", () => {
-    const { container: element } = renderPane(
-      null,
-      { ...sockets, items: [] },
-      { ...containers, items: [] },
-    );
-    expect(screen.getByText("No ports match the current filters")).toBeTruthy();
-    expect(element.querySelector(".panel-state .spinner")).toBeNull();
+    renderPane(null, { ...sockets, items: [] }, { ...containers, items: [] });
+    const graph = screen.getByRole("region", { name: "Ports graph" });
+    expect(within(graph).getByText("No ports match the current filters")).toBeTruthy();
+    expect(within(graph).queryByRole("status")).toBeNull();
   });
 
   it("says ports could not be read, not that filters hid them, when nothing loaded", () => {
@@ -214,15 +216,14 @@ describe("PortsPane", () => {
     expect(within(graph).getByText("Listening ports unavailable")).toBeTruthy();
     expect(screen.queryByText("No ports match the current filters")).toBeNull();
   });
-  it("shows a spinner before the first listener read has returned", () => {
-    const { container: element } = renderPane(
+  it("shows a loading status before the first listener read has returned", () => {
+    renderPane(
       null,
       { ...sockets, items: [], fetchedAt: null, loading: false },
       { ...containers, items: [] },
     );
-    expect(screen.getByText("Reading listening ports…")).toBeTruthy();
-    expect(element.querySelector(".panel-state .spinner")).toBeTruthy();
-    expect(element.querySelector(".panel-state svg")).toBeNull();
+    const graph = screen.getByRole("region", { name: "Ports graph" });
+    expect(within(graph).getByRole("status").textContent).toBe("Reading listening ports…");
   });
   it("keeps a genuine Docker daemon listener linked to its unit", async () => {
     const user = userEvent.setup();

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { ChevronDown } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
+import { Bone, Skeleton, boneWidth, wave } from "./PanelState";
 import type { CatalogFont, FontCatalog, FontProgress } from "../types";
 
 export function FontCatalogPicker({
@@ -39,11 +40,22 @@ export function FontCatalogPicker({
   const installed = useRef<{ id: string; family: string } | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const catalogRequest = useRef(false);
+  // The chevron decides at press time: some pointers move focus to it before
+  // the click lands, and that blur would otherwise close the list first.
+  const toggleIntent = useRef<"open" | "close" | null>(null);
+  const keepClosed = useRef(false);
   const matching = (catalog?.fonts ?? [])
     .filter((font) => font.family.toLowerCase().includes((query ?? "").trim().toLowerCase()))
     .slice(0, 8);
   const results = open ? matching : [];
-  const active = picked ?? results.find((font) => font.id === selected) ?? results[0];
+  // The list is on screen: suggestions, or their skeleton while the catalog loads.
+  const showingSuggestions = open && (results.length > 0 || loading);
+  // Opening the list previews nothing until a font is highlighted or a search
+  // is typed; the top match stands in only for a typed search.
+  const active =
+    picked ??
+    results.find((font) => font.id === selected) ??
+    (query !== null && query.trim() ? results[0] : undefined);
   const resultIds = results.map((font) => font.id).join(",");
 
   function cancelPreview() {
@@ -214,11 +226,12 @@ export function FontCatalogPicker({
     >
       <div className="font-family-control">
         <label>
-          <span>Font family</span>
+          <span id="font-family-label">Font family</span>
           <div className="font-family-input">
             <input
               ref={input}
               role="combobox"
+              aria-labelledby="font-family-label"
               aria-autocomplete="list"
               aria-expanded={open && results.length > 0}
               aria-controls="font-suggestions"
@@ -231,6 +244,10 @@ export function FontCatalogPicker({
               spellCheck={false}
               onFocus={(event) => {
                 event.currentTarget.select();
+                if (keepClosed.current) {
+                  keepClosed.current = false;
+                  return;
+                }
                 setOpen(true);
                 if (!catalog && !loading) void loadCatalog();
               }}
@@ -288,7 +305,40 @@ export function FontCatalogPicker({
                 }
               }}
             />
-            <ChevronDown size={13} strokeWidth={2.5} aria-hidden="true" />
+            <button
+              type="button"
+              className="font-family-toggle"
+              tabIndex={-1}
+              aria-label={showingSuggestions ? "Hide font suggestions" : "Show font suggestions"}
+              aria-expanded={showingSuggestions}
+              aria-controls="font-suggestions"
+              disabled={disabled || busy}
+              onPointerDown={() => {
+                toggleIntent.current = showingSuggestions ? "close" : "open";
+              }}
+              // Keep focus in the field so toggling the list never blurs it.
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                const intent = toggleIntent.current ?? (showingSuggestions ? "close" : "open");
+                toggleIntent.current = null;
+                const field = input.current;
+                if (intent === "close") {
+                  setOpen(false);
+                  setSelected(null);
+                  if (field && document.activeElement !== field) {
+                    keepClosed.current = true;
+                    field.focus();
+                    keepClosed.current = false;
+                  }
+                  return;
+                }
+                field?.focus();
+                setOpen(true);
+                if (!catalog && !loading) void loadCatalog();
+              }}
+            >
+              <ChevronDown size={13} strokeWidth={2.5} aria-hidden="true" />
+            </button>
           </div>
         </label>
         <ul
@@ -326,12 +376,24 @@ export function FontCatalogPicker({
             </li>
           ))}
         </ul>
+        {open && loading && !results.length && (
+          <Skeleton label="Loading font catalog…" className="font-suggestions">
+            <ul className="skeleton-list">
+              {Array.from({ length: 5 }, (_, index) => (
+                <li className="skeleton-row" key={index} style={wave(index)}>
+                  <Bone width={boneWidth(index, 150, "px")} />
+                  <Bone shape="caption" width={boneWidth(index + 4, 52, "px")} />
+                </li>
+              ))}
+            </ul>
+          </Skeleton>
+        )}
       </div>
       <small id="font-catalog-help">
         Search free fonts or enter installed font names and fallbacks. Previews do not install
         fonts.
       </small>
-      {loading && <p role="status">Loading font catalog…</p>}
+      {loading && (!open || !!results.length) && <p role="status">Loading font catalog…</p>}
       {catalog?.stale && <p role="status">Catalog unavailable. Showing fonts from this session.</p>}
       {catalogError && (
         <div className="inline-warning">

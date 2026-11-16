@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DockerContainer, DockerContainerDetails } from "../types";
@@ -65,6 +65,34 @@ const details: DockerContainerDetails = {
 
 describe("DockerContainerInspector", () => {
   afterEach(cleanup);
+
+  it("holds the detail fields in place while inspecting and keeps them during a refresh", () => {
+    const props = {
+      summary,
+      onRefresh: vi.fn(),
+      onRetryWithSudo: vi.fn(),
+      onViewLogs: vi.fn(),
+    };
+    const view = render(
+      <DockerContainerInspector
+        {...props}
+        cache={{ value: null, fetchedAt: null, loading: true, error: null }}
+      />,
+    );
+    const body = screen.getByRole("region", { name: "Container information" });
+    expect(within(body).getByRole("status").textContent).toBe("Inspecting container…");
+    expect(screen.getByRole("heading", { name: "gateway-1" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "View logs" })).toBeTruthy();
+
+    view.rerender(
+      <DockerContainerInspector
+        {...props}
+        cache={{ value: details, fetchedAt: Date.now(), loading: true, error: null }}
+      />,
+    );
+    expect(within(body).queryByRole("status")).toBeNull();
+    expect(within(body).getByText("Published ports", { selector: "summary" })).toBeTruthy();
+  });
 
   it("opens the exact published binding in Ports", async () => {
     const onOpenPort = vi.fn();

@@ -2,7 +2,15 @@ import { Search } from "../components/MagnifierIcon";
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
-import { EmptyState, ErrorState, LoadingState } from "../components/PanelState";
+import {
+  Bone,
+  EmptyState,
+  ErrorState,
+  Skeleton,
+  SkeletonDetail,
+  SkeletonRows,
+  SkeletonText,
+} from "../components/PanelState";
 import { ResizableSplit } from "../components/ResizablePanels";
 import type { SavedConnection, WindowsService } from "../types";
 
@@ -54,7 +62,32 @@ export function WindowsServicesPane({ connection }: { connection: SavedConnectio
     setSearch("");
     setState("all");
   };
-  if (loading && !services.length) return <LoadingState label="Reading Windows services..." />;
+  if (loading && !services.length)
+    return (
+      <ResizableSplit name="Services" className="feature-page split-page windows-services-page">
+        <div className="list-panel">
+          <header className="page-heading">
+            <div>
+              <h2>Services</h2>
+              <p>
+                <SkeletonText />
+              </p>
+            </div>
+            <Bone shape="button" width="93px" />
+          </header>
+          <div className="systemd-list-controls windows-service-list-controls">
+            <Bone shape="control" />
+            <Bone shape="control" width="110px" />
+          </div>
+          <Skeleton label="Reading Windows services…" className="dense-list">
+            <SkeletonRows count={14} lead />
+          </Skeleton>
+        </div>
+        <aside className="detail-panel">
+          <SkeletonDetail fields={4} />
+        </aside>
+      </ResizableSplit>
+    );
   if (error && !services.length)
     return (
       <ErrorState

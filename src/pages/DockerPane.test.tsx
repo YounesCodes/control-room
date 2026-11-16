@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -80,7 +80,7 @@ const details: DockerContainerDetails = {
 };
 
 describe("DockerPane container inspection", () => {
-  it("uses a spinner while reading and an empty state only after the read completes", () => {
+  it("sketches the canvas while reading and shows an empty state only after the read completes", () => {
     const props = {
       connection,
       detailsCache: {},
@@ -90,12 +90,12 @@ describe("DockerPane container inspection", () => {
     };
     const cache = { items: [], fetchedAt: Date.now(), loading: true, error: null };
     const { container: element, rerender } = render(<DockerPane {...props} cache={cache} />);
-    expect(screen.getByText("Reading Docker containers…")).toBeTruthy();
-    expect(element.querySelector(".panel-state .spinner")).toBeTruthy();
-    expect(element.querySelector(".panel-state svg")).toBeNull();
+    const graph = screen.getByRole("region", { name: "Docker graph" });
+    expect(within(graph).getByRole("status").textContent).toBe("Reading Docker containers…");
+    expect(screen.queryByText("No containers found")).toBeNull();
     rerender(<DockerPane {...props} cache={{ ...cache, loading: false }} />);
     expect(screen.getByText("No containers found")).toBeTruthy();
-    expect(element.querySelector(".panel-state .spinner")).toBeNull();
+    expect(within(graph).queryByRole("status")).toBeNull();
     rerender(<DockerPane {...props} cache={{ ...cache, items: [container] }} />);
     expect(element.querySelector(".arch-chip")).toBeTruthy();
     expect(element.querySelector(".panel-state")).toBeNull();

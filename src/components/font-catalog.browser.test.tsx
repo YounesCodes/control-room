@@ -71,13 +71,18 @@ it("renders temporary faces, supports keyboard selection, and passes accessibili
   expect(fieldInput.selectionEnd).toBe(fieldInput.value.length);
   await expect.element(page.getByRole("option", { name: /Fira Mono/ })).toBeVisible();
   expect(container.querySelector(".ansi-preview")!.getBoundingClientRect().top).toBe(previewTop);
+  // Opening loads the suggestion faces but keeps the live preview on the
+  // current font until a suggestion is highlighted.
+  await vi.waitFor(() =>
+    expect(document.fonts.check('14px "ControlRoomPreview-fira-mono"')).toBe(true),
+  );
+  expect(document.querySelector(".ansi-preview")?.getAttribute("style")).toContain("Consolas");
+  await userEvent.keyboard("{ArrowDown}");
   await vi.waitFor(() =>
     expect(document.querySelector(".ansi-preview")?.getAttribute("style")).toContain(
       "ControlRoomPreview-fira-mono",
     ),
   );
-  expect(document.fonts.check('14px "ControlRoomPreview-fira-mono"')).toBe(true);
-  await userEvent.keyboard("{ArrowDown}");
   await userEvent.keyboard("{ArrowDown}");
   await expect
     .element(page.getByRole("option", { name: /JetBrains Mono/ }))
@@ -124,4 +129,21 @@ it("renders temporary faces, supports keyboard selection, and passes accessibili
   expect([...document.fonts].some((face) => face.family.startsWith("ControlRoomPreview-"))).toBe(
     false,
   );
+});
+
+it("closes the open list from the chevron and reopens it from there", async () => {
+  await page.viewport(960, 640);
+  container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  root.render(<Fixture />);
+  const input = page.getByRole("combobox", { name: "Font family" });
+  await input.click();
+  await expect.element(page.getByRole("listbox")).toBeVisible();
+  await page.getByRole("button", { name: "Hide font suggestions" }).click();
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  expect(document.querySelector('[role="listbox"]:not([hidden])')).toBeNull();
+  expect(document.activeElement).toBe(input.element());
+  await page.getByRole("button", { name: "Show font suggestions" }).click();
+  await expect.element(page.getByRole("listbox")).toBeVisible();
 });

@@ -69,6 +69,69 @@ afterEach(() => {
 });
 
 describe("catalog font lifecycle", () => {
+  it("sketches suggestions under the field while the catalog loads", async () => {
+    let finish: (value: unknown) => void = () => {};
+    api.listCatalogFonts.mockReturnValueOnce(new Promise((resolve) => (finish = resolve)));
+    const user = userEvent.setup();
+    render(
+      <FontCatalogPicker
+        value="Consolas, monospace"
+        onChange={vi.fn()}
+        onUse={vi.fn(async () => {})}
+        onPreview={vi.fn()}
+        onBusyChange={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("combobox"));
+    expect(screen.getByRole("status").textContent).toBe("Loading font catalog…");
+    await act(async () => finish({ fonts, stale: false }));
+    expect(await screen.findByRole("option", { name: /Fira Mono/ })).toBeTruthy();
+    expect(screen.queryByText("Loading font catalog…")).toBeNull();
+  });
+
+  it("closes from the chevron even when the press moves focus to it first", async () => {
+    mount();
+    const field = screen.getByRole("combobox");
+    act(() => field.focus());
+    await screen.findByRole("option", { name: /Fira Mono/ });
+    const toggle = screen.getByRole("button", { name: "Hide font suggestions" });
+    // Some pointers focus the button before its click, which blurs the field.
+    fireEvent.pointerDown(toggle);
+    act(() => toggle.focus());
+    fireEvent.click(toggle);
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    expect(screen.queryByRole("option", { name: /Fira Mono/ })).toBeNull();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("keeps the live preview on the current font when the list only opens", async () => {
+    const { onPreview } = mount();
+    await screen.findByRole("option", { name: /Fira Mono/ });
+    await waitFor(() => expect(api.previewCatalogFont).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getAllByText("OFL-1.1").length).toBe(2));
+    expect(onPreview.mock.calls.every(([family]) => family === null)).toBe(true);
+    await userEvent.type(screen.getByRole("combobox"), "Jet");
+    await waitFor(() =>
+      expect(onPreview).toHaveBeenLastCalledWith('"ControlRoomPreview-jetbrains-mono", monospace'),
+    );
+  });
+
+  it("opens and closes suggestions from the chevron without leaving the field", async () => {
+    const user = userEvent.setup();
+    mount();
+    const field = screen.getByRole("combobox");
+    act(() => field.focus());
+    await screen.findByRole("option", { name: /Fira Mono/ });
+    await user.click(screen.getByRole("button", { name: "Hide font suggestions" }));
+    expect(screen.queryByRole("option", { name: /Fira Mono/ })).toBeNull();
+    expect(document.activeElement).toBe(field);
+    const toggle = screen.getByRole("button", { name: "Show font suggestions" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    await user.click(toggle);
+    expect(screen.getByRole("option", { name: /Fira Mono/ })).toBeTruthy();
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  });
+
   it("accepts an installed font and fallback list while the catalog is offline", async () => {
     api.listCatalogFonts.mockRejectedValueOnce("Offline");
     const props = mount();

@@ -13,7 +13,7 @@ import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ArrowDown, Eraser, FileClock, Pause, Play, Square, WrapText, X } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
-import { ErrorState, LoadingState } from "../components/PanelState";
+import { Bone, ErrorState, Skeleton, SkeletonLines } from "../components/PanelState";
 import { api, errorMessage } from "../lib/api";
 import { BoundedLogBuffer, logRenderDelay } from "../lib/log-buffer";
 import {
@@ -668,8 +668,45 @@ export function LogsPane({
   // Mac hosts can always stream the whole unified log, so a missing service
   // list does not block the view.
   const sourceListOptional = explicitSystemdSource || (macosHost && sourceType === "systemd");
+  // Until the first list of units or containers arrives, the whole tab is one
+  // skeleton in its own layout: every control acts on a source.
   if (sourceCache.loading && !sourceCache.items.length && !sourceListOptional)
-    return <LoadingState label="Finding available log sources…" />;
+    return (
+      <section className="feature-page logs-page">
+        <header className="page-heading compact-heading">
+          <div className="page-heading-title">
+            <h2>Logs</h2>
+            <Bone shape="caption" width="56px" />
+          </div>
+        </header>
+        <div className="log-controls">
+          <div className="skeleton-field">
+            <Bone shape="caption" width="44px" />
+            <Bone shape="control" width="96px" />
+          </div>
+          <div className="skeleton-field source-select">
+            <Bone shape="caption" width="36px" />
+            <Bone shape="control" width="100%" />
+          </div>
+          <div className="skeleton-field">
+            <Bone shape="caption" width="36px" />
+            <Bone shape="control" width="68px" />
+          </div>
+          <div className="log-transport">
+            <Bone shape="button" width="78px" />
+            <Bone shape="button" width="72px" />
+          </div>
+        </div>
+        <Skeleton label="Finding available log sources…" className="log-panel">
+          <div className="log-view-bar">
+            <Bone shape="control" width="420px" className="log-search" />
+            <Bone shape="control" width="190px" />
+            <Bone shape="icon" />
+          </div>
+          <SkeletonLines count={18} lead />
+        </Skeleton>
+      </section>
+    );
   if (sourceCache.error && !sourceCache.items.length && !sourceListOptional) {
     const dockerPermissionError =
       !windowsHost &&

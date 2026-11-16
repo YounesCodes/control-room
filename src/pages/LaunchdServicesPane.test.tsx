@@ -71,4 +71,35 @@ describe("LaunchdServicesPane", () => {
     expect(onViewLogs).toHaveBeenCalledWith({ type: "systemd", id: "gui/501/com.example.agent" });
     expect(api.listServices).not.toHaveBeenCalled();
   });
+
+  it("sketches services in place while reading and keeps them during a refresh", () => {
+    api.listServices.mockReturnValue(new Promise(() => {}));
+    const view = render(
+      <LaunchdServicesPane
+        connection={connection}
+        cache={{ items: [], fetchedAt: null, loading: true, error: null }}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Services" })).toBeTruthy();
+    expect(screen.getAllByRole("status").map((status) => status.textContent)).toContain(
+      "Reading launchd services…",
+    );
+    expect(screen.queryByText("No services found")).toBeNull();
+
+    view.rerender(
+      <LaunchdServicesPane
+        connection={connection}
+        cache={{
+          ...cache([unit("system/com.example.daemon", "daemon", "active", "running")]),
+          loading: true,
+        }}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /system\/com.example.daemon/ })).toBeTruthy();
+    expect(screen.queryByText("Reading launchd services…")).toBeNull();
+  });
 });

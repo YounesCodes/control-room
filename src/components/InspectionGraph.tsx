@@ -9,8 +9,8 @@ import {
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { Server, X } from "lucide-react";
-import { EmptyState, LoadingState } from "./PanelState";
+import { LoaderCircle, Server, X } from "lucide-react";
+import { EmptyState, SkeletonGraph } from "./PanelState";
 import { usePanZoom } from "../lib/use-pan-zoom";
 import {
   isGraphDirection,
@@ -347,7 +347,9 @@ export function InspectionGraph({
       >
         {!groups.length ? (
           loadingLabel ? (
-            <LoadingState label={loadingLabel} />
+            <div className="skeleton skeleton-graph-frame" aria-hidden="true">
+              <SkeletonGraph />
+            </div>
           ) : (
             <EmptyState title={emptyMessage} />
           )
@@ -459,6 +461,12 @@ export function InspectionGraph({
               ))}
             </div>
           </div>
+        )}
+        {loadingLabel && (
+          <p className="arch-loading-status" role="status">
+            <LoaderCircle size={13} className="spinning" aria-hidden="true" />
+            {loadingLabel}
+          </p>
         )}
       </div>
       {selected && (

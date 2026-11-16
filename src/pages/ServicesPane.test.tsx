@@ -562,6 +562,57 @@ describe("ServicesPane failed units view", () => {
       .mockImplementation((_connection, id) => Promise.resolve(systemdInspection(id)));
   });
 
+  it("sketches units in place while reading and keeps them during a refresh", () => {
+    const statuses = () => screen.queryAllByRole("status").map((status) => status.textContent);
+    const loading = { items: [], fetchedAt: null, loading: true, error: null };
+    const view = render(
+      <ServicesPane
+        connection={{ ...connection, id: "first-read-host" }}
+        cache={loading}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("heading", { name: "Systemd" })).toBeTruthy();
+    expect(screen.queryByText("0 units")).toBeNull();
+    expect(statuses()).toContain("Reading systemd units…");
+    expect(screen.queryByText("No units found")).toBeNull();
+
+    view.rerender(
+      <ServicesPane
+        connection={{ ...connection, id: "first-read-host" }}
+        cache={{ ...cache([unit("a.service", "service", "active", "running")]), loading: true }}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /a.service description/ })).toBeTruthy();
+    expect(statuses()).not.toContain("Reading systemd units…");
+  });
+
+  it("holds every inspector section in one skeleton until details are read", async () => {
+    api.inspectSystemdUnit.mockReset().mockReturnValue(new Promise(() => {}));
+    const user = userEvent.setup();
+    render(
+      <ServicesPane
+        connection={{ ...connection, id: "pending-fields-host" }}
+        cache={cache([unit("a.service", "service", "active", "running")])}
+        onCacheChange={vi.fn()}
+        onViewLogs={vi.fn()}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: /a.service description/ }));
+    const inspector = screen.getByRole("complementary", { name: "Unit details" });
+    expect(within(inspector).getByRole("heading", { name: "a.service" })).toBeTruthy();
+    expect(
+      within(inspector)
+        .getAllByRole("status")
+        .map((status) => status.textContent),
+    ).toEqual(["Reading unit details…"]);
+    expect(within(inspector).queryByText("Configuration", { selector: "summary" })).toBeNull();
+    expect(within(inspector).queryByText("Unavailable")).toBeNull();
+  });
+
   it("starts with a quiet list and reads details only after a row is selected", async () => {
     const user = userEvent.setup();
     render(

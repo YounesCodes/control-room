@@ -88,7 +88,14 @@ structured access succeeds in `connection-test` and fails in
 `connection-test-error`, groups and tags with existing
 entries in `groups` and without tags in `groups-no-tags`, Rename workspace in
 `rename`, and the host readings panel, with an unreported GPU, in `metrics`.
-Ports `warnings` fails every Ports read as an unreachable host does. Data is
+Ports `warnings` fails every Ports read as an unreachable host does. Loading
+holds one first read open so its skeleton stays on screen: the Systemd unit
+inspector in `systemd-inspector`, `windows-services`, the remote shell picker
+in `shell-picker`, `history`, Logs source discovery in `logs`, the Docker graph
+and container inspector in `docker` and `docker-inspector`, the Ports graph in
+`ports`, Ports with Docker containers still pending in `ports-discovering`,
+font suggestions in `font-suggestions`, and SSH environment in
+`ssh-diagnostics`. Data is
 synthetic and network requests outside the fixture server are blocked. No local
 environment files are loaded. Every scenario renders the real `App`, including
 its titlebar, rail, workspace tabs, and content constraints. Settings uses the
