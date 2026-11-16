@@ -168,7 +168,7 @@ jobs:
           args: --config src-tauri/tauri.release.conf.json
 
   macos:
-    name: Sign and notarize ${{ matrix.target }}
+    name: Sign ${{ matrix.target }}
     # Runs after Linux so each tauri-action merges into the feed the previous one wrote.
     needs: [windows, linux]
     if: vars.MACOS_RELEASES == 'true'
@@ -185,13 +185,6 @@ jobs:
             target: x86_64-apple-darwin
     runs-on: ${{ matrix.os }}
     timeout-minutes: 50
-    env:
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -199,21 +192,46 @@ jobs:
           node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
-      - name: Require Developer ID signing and notarization credentials
+      # With every Apple secret set, the release is Developer ID signed and
+      # notarized. With none set, it is ad-hoc signed, and Gatekeeper asks
+      # people to approve the first launch. A partial set is a mistake.
+      - name: Choose Developer ID or ad-hoc signing
+        id: signing
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          node --input-type=module <<'NODE'
-          const required = ['APPLE_CERTIFICATE', 'APPLE_CERTIFICATE_PASSWORD', 'APPLE_SIGNING_IDENTITY', 'APPLE_ID', 'APPLE_PASSWORD', 'APPLE_TEAM_ID'];
-          const missing = required.filter(key => !process.env[key]?.trim());
-          if (missing.length || process.env.APPLE_SIGNING_IDENTITY === '-') {
-            throw new Error(`macOS releases require Developer ID signing and notarization. Missing: ${missing.join(', ')}`);
-          }
-          NODE
+          names=(APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID)
+          missing=()
+          for name in "${names[@]}"; do
+            [[ -n ${!name//[[:space:]]/} ]] || missing+=("$name")
+          done
+          if (( ${#missing[@]} == ${#names[@]} )); then
+            # Only the identity is exported, so the bundler sees no empty
+            # certificate or notarization variables.
+            echo 'APPLE_SIGNING_IDENTITY=-' >> "$GITHUB_ENV"
+            echo 'mode=ad-hoc' >> "$GITHUB_OUTPUT"
+            echo '::notice::No Apple Developer credentials: building an ad-hoc signed, unnotarized release'
+          elif (( ${#missing[@]} == 0 )) && [[ $APPLE_SIGNING_IDENTITY != - ]]; then
+            for name in "${names[@]}"; do
+              delimiter="EOF_$(openssl rand -hex 16)"
+              printf '%s<<%s\n%s\n%s\n' "$name" "$delimiter" "${!name}" "$delimiter" >> "$GITHUB_ENV"
+            done
+            echo 'mode=developer-id' >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Set all Apple signing secrets for a notarized release, or none for an ad-hoc release. Missing: ${missing[*]:-a Developer ID identity}"
+            exit 1
+          fi
       - uses: Swatinem/rust-cache@v2.9.3
         with:
           workspaces: "./src-tauri -> target"
           cache-bin: false
       - run: npm ci
-      - name: Build signed and notarized app, DMG, and updater archive
+      - name: Build signed app, DMG, and updater archive
         uses: tauri-apps/tauri-action@v1.0.0
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -227,11 +245,14 @@ jobs:
       - name: Verify the signature and notarization
         env:
           TARGET: ${{ matrix.target }}
+          SIGNING: ${{ steps.signing.outputs.mode }}
         run: |
           app="src-tauri/target/$TARGET/release/bundle/macos/Control Room.app"
           codesign --verify --deep --strict "$app"
-          spctl --assess --type execute --verbose "$app"
-          xcrun stapler validate "$app"
+          if [[ $SIGNING == developer-id ]]; then
+            spctl --assess --type execute --verbose "$app"
+            xcrun stapler validate "$app"
+          fi
 
   publish:
     name: Verify all enabled platforms and publish
