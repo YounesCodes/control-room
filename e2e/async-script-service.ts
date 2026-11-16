@@ -1,10 +1,10 @@
-type Script = string | ((...args: any[]) => unknown);
+type Script = string | ((...args: never[]) => unknown);
 type AsyncScriptBrowser = {
   executeAsync?: unknown;
   executeAsyncScript: (script: string, args: unknown[]) => Promise<unknown>;
   addCommand: (
     name: string,
-    callback: (script: Script, ...args: any[]) => Promise<unknown>,
+    callback: (script: Script, ...args: unknown[]) => Promise<unknown>,
   ) => void;
 };
 
