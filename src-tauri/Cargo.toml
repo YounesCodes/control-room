@@ -52,6 +52,7 @@ tauri-plugin-wdio-webdriver = { version = "1.5", optional = true }
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
 tempfile = "3"
+ts-rs = "12.0.1"
 
 # Keep file and line info for this crate's panics and backtraces, but skip
 # full debug info, and drop it for dependencies. This keeps target/ small.

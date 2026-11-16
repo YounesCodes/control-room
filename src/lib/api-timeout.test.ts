@@ -1,6 +1,3 @@
-/// <reference types="node" />
-
-import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { invoke } = vi.hoisted(() => ({
@@ -12,35 +9,22 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke,
 }));
 
+import { REMOTE_COMMAND_TIMEOUT_SECONDS, REMOTE_QUEUE_WAIT_SECONDS } from "../generated/ipc";
 import { api, REMOTE_INSPECTION_TIMEOUT_MS, REMOTE_DISCOVERY_TIMEOUT_MS } from "./api";
 import { hostProcessing } from "./host-processing";
-
-const remoteSource = readFileSync(
-  new URL("../../src-tauri/src/remote.rs", import.meta.url),
-  "utf8",
-);
-
-function rustTimeoutSeconds(name: string): number {
-  const match = remoteSource.match(
-    new RegExp(`const ${name}: Duration = Duration::from_secs\\((\\d+)\\)`),
-  );
-  if (!match) throw new Error(`Missing Rust constant ${name}`);
-  return Number(match[1]);
-}
 
 const RUN_SSH_CLEANUP_SLACK_SECONDS = 6;
 
 describe("structured discovery timeout budget", () => {
   it("allows both platform discovery attempts plus queueing and cleanup", () => {
     expect(REMOTE_DISCOVERY_TIMEOUT_MS / 1000).toBeGreaterThanOrEqual(
-      2 * rustTimeoutSeconds("COMMAND_TIMEOUT") +
-        rustTimeoutSeconds("MAX_STRUCTURED_QUEUE_WAIT") +
+      2 * REMOTE_COMMAND_TIMEOUT_SECONDS +
+        REMOTE_QUEUE_WAIT_SECONDS +
         RUN_SSH_CLEANUP_SLACK_SECONDS,
     );
   });
   it("stays above the queue wait plus command timeout Rust allows so its classified failure wins", () => {
-    const budgetSeconds =
-      rustTimeoutSeconds("MAX_STRUCTURED_QUEUE_WAIT") + rustTimeoutSeconds("COMMAND_TIMEOUT");
+    const budgetSeconds = REMOTE_QUEUE_WAIT_SECONDS + REMOTE_COMMAND_TIMEOUT_SECONDS;
 
     expect(budgetSeconds).toBeGreaterThan(0);
     expect(REMOTE_INSPECTION_TIMEOUT_MS / 1000).toBeGreaterThanOrEqual(

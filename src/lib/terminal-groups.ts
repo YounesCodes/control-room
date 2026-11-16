@@ -1,10 +1,7 @@
-import { getTerminalLayoutIds, pruneTerminalLayout, type TerminalLayout } from "./terminal-layout";
+import type { PersistedTerminalGroup } from "../generated/ipc";
+import { getTerminalLayoutIds, pruneTerminalLayout } from "./terminal-layout";
 
-export interface TerminalGroup {
-  id: string;
-  name: string;
-  layout: TerminalLayout;
-}
+export type TerminalGroup = PersistedTerminalGroup;
 
 export function terminalGroupForWorkspace(
   groups: TerminalGroup[],

@@ -1,6 +1,6 @@
 import type { ScratchpadScope } from "../types";
 
-export const MAX_SCRATCHPAD_CHARS = 16_384;
+export { MAX_SCRATCHPAD_CHARS } from "../generated/ipc";
 const DRAFT_PREFIX = "control-room:scratchpad-draft";
 interface ScratchpadCoordinator {
   quiesce: () => Promise<void>;

@@ -227,7 +227,13 @@ beforeEach(async () => {
   sequence = 0;
   streamOutput = null;
   currentSettings = { ...fixtures.settings };
-  persisted = { workspaces: [], activeWorkspaceId: null, terminalGroups: [], terminalLayout: null };
+  persisted = {
+    panelSizes: {},
+    workspaces: [],
+    activeWorkspaceId: null,
+    terminalGroups: [],
+    terminalLayout: null,
+  };
   native.invoke.mockImplementation(respond);
   element = document.createElement("div");
   element.style.height = "100vh";
@@ -3887,6 +3893,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
 
   it("reorders a workspace tab by dragging and saves the new order", async () => {
     persisted = {
+      panelSizes: {},
       workspaces: [
         {
           id: "tab-a",
@@ -3932,6 +3939,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
 
   it("splits the focused terminal by dragging another tab onto it", async () => {
     persisted = {
+      panelSizes: {},
       workspaces: [
         {
           id: "tab-a",
@@ -4019,6 +4027,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       { ...fixtures.connection("host-c"), displayName: "Fixture Gamma" },
     ]);
     persisted = {
+      panelSizes: {},
       workspaces: [
         {
           id: "tab-a",
@@ -4077,6 +4086,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       { ...fixtures.connection("host-c"), displayName: "Fixture Gamma" },
     ]);
     persisted = {
+      panelSizes: {},
       workspaces: [
         {
           id: "tab-a",
@@ -4154,6 +4164,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
 
   it("keeps a dragged tab pinned inside the strip when the pointer leaves it", async () => {
     persisted = {
+      panelSizes: {},
       workspaces: [
         {
           id: "tab-a",
@@ -4223,6 +4234,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
 
   it("parks Rename and Close while the strip drags", async () => {
     persisted = {
+      panelSizes: {},
       workspaces: [
         {
           id: "tab-a",

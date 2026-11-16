@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct SavedConnection {
     pub id: String,
@@ -22,6 +23,7 @@ pub struct SavedConnection {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct SavedConnectionInput {
     pub display_name: String,
@@ -40,6 +42,7 @@ pub struct SavedConnectionInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionGroup {
     pub id: String,
@@ -49,6 +52,7 @@ pub struct ConnectionGroup {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionTag {
     pub id: String,
@@ -57,6 +61,7 @@ pub struct ConnectionTag {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(default, rename_all = "camelCase")]
 pub struct HostCapabilities {
     pub connection_id: String,
@@ -104,6 +109,7 @@ pub struct HostCapabilities {
 /// idle host. Samples are never persisted: the pane holds a short window of
 /// them in memory while it is open and drops them when it closes.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct HostResources {
     pub sampled_at: String,
@@ -123,6 +129,7 @@ pub struct HostResources {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct SystemdUnit {
     pub id: String,
@@ -135,6 +142,7 @@ pub struct SystemdUnit {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct DockerContainer {
     pub id: String,
@@ -151,20 +159,25 @@ pub struct DockerContainer {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ListeningSocket {
     pub id: String,
+    #[cfg_attr(test, ts(type = r#""tcp" | "udp""#))]
     pub protocol: String,
+    #[cfg_attr(test, ts(type = r#""ipv4" | "ipv6""#))]
     pub address_family: String,
     pub local_address: String,
     pub port: u16,
     pub process_name: Option<String>,
     pub process_id: Option<u32>,
     pub systemd_unit: Option<String>,
+    #[cfg_attr(test, ts(type = r#""known" | "unavailable" | "ambiguous""#))]
     pub ownership: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct DockerContainerDetails {
     pub id: String,
@@ -194,6 +207,7 @@ pub struct DockerContainerDetails {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct FirewallRule {
     pub to: String,
@@ -205,6 +219,7 @@ pub struct FirewallRule {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct DockerPublishedPort {
     pub container_port: String,
@@ -213,10 +228,12 @@ pub struct DockerPublishedPort {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct FirewallStatus {
     /// The supported firewall front-end that produced this snapshot.
     /// `None` means neither UFW nor firewalld was available.
+    #[cfg_attr(test, ts(type = r#""ufw" | "firewalld" | "windows" | "macos" | null"#))]
     pub backend: Option<String>,
     /// Whether a supported firewall front-end is installed.
     pub available: bool,
@@ -226,11 +243,13 @@ pub struct FirewallStatus {
     pub default_incoming: Option<String>,
     pub rules: Vec<FirewallRule>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub packet_filter: Option<PacketFilterStatus>,
     pub collected_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PacketFilterStatus {
     pub active: Option<bool>,
@@ -240,6 +259,7 @@ pub struct PacketFilterStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct DockerNetworkAttachment {
     pub name: String,
@@ -250,6 +270,7 @@ pub struct DockerNetworkAttachment {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionRemote {
     pub address: String,
@@ -257,6 +278,7 @@ pub struct ConnectionRemote {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ConnectionSummary {
     pub key: String,
@@ -272,6 +294,7 @@ pub struct ConnectionSummary {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct EstablishedConnections {
     pub groups: Vec<ConnectionSummary>,
@@ -282,6 +305,7 @@ pub struct EstablishedConnections {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct DockerMount {
     pub mount_type: String,
@@ -292,6 +316,7 @@ pub struct DockerMount {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryEntry {
     pub id: String,
@@ -306,6 +331,7 @@ pub struct HistoryEntry {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryInput {
     pub connection_id: String,
@@ -324,6 +350,7 @@ fn default_shell() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppSettings {
     pub automatic_terminal_titles: bool,
@@ -365,6 +392,7 @@ pub struct AppSettings {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "lowercase")]
 pub enum HeaderMetric {
     Cpu,
@@ -377,6 +405,7 @@ pub enum HeaderMetric {
 }
 
 #[derive(Debug, Default, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct HeaderMetrics {
     pub sampled_at: String,
@@ -395,6 +424,7 @@ pub struct HeaderMetrics {
 pub const LOG_TAIL_OPTIONS: [u16; 5] = [50, 100, 200, 500, 1000];
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsContract {
     pub current: AppSettings,
@@ -444,6 +474,7 @@ impl Default for AppSettings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct SessionStarted {
     pub session_id: String,
@@ -454,6 +485,7 @@ pub struct SessionStarted {
 /// by `id` and never by executable path, so `LocalShellKind` is the whole
 /// vocabulary of what may be started locally on supported client platforms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 pub enum LocalShellKind {
     #[serde(rename = "powershell-7")]
     PowerShell7,
@@ -570,6 +602,7 @@ impl LocalShellKind {
 /// A detected local shell, as offered to the frontend. `id` is the only part the
 /// frontend may send back.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct LocalShellProfile {
     pub id: String,
@@ -579,6 +612,7 @@ pub struct LocalShellProfile {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub enum AdministratorTerminalStatus {
     Available,
@@ -589,6 +623,7 @@ pub enum AdministratorTerminalStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct LocalShellCatalog {
     pub profiles: Vec<LocalShellProfile>,
@@ -596,6 +631,7 @@ pub struct LocalShellCatalog {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct LocalSessionStarted {
     pub session_id: String,
@@ -603,40 +639,87 @@ pub struct LocalSessionStarted {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct SessionStateEvent {
     pub session_id: String,
-    pub state: String,
-    pub category: Option<String>,
+    pub state: SessionState,
+    pub category: Option<SessionEndCategory>,
     pub reason: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "lowercase")]
+pub enum SessionState {
+    Connected,
+    Disconnected,
+    Error,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "kebab-case")]
+pub enum SessionEndCategory {
+    Authentication,
+    HostResolution,
+    ConnectionRefused,
+    ConnectionTimeout,
+    HostKey,
+    ConnectionLost,
+    Process,
+    RemoteExit,
+    UserDisconnect,
+    LocalExit,
+    UserStop,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct StreamStarted {
     pub stream_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct StreamStateEvent {
     pub stream_id: String,
-    pub state: String,
+    pub state: StreamState,
     pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "lowercase")]
+pub enum StreamState {
+    Stopped,
+    Error,
 }
 
 /// Something a running stream reported on stderr that changes what its output
 /// means, sent while the stream continues.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct StreamNoticeEvent {
     pub stream_id: String,
-    pub notice: String,
+    pub notice: StreamNotice,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "kebab-case")]
+pub enum StreamNotice {
+    JournalRestricted,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct EnvironmentInfo {
+    #[cfg_attr(test, ts(type = r#""windows" | "macos" | "linux" | "unsupported""#))]
     pub platform: String,
     pub ssh_path: Option<String>,
     pub ssh_config_path: String,
@@ -647,6 +730,7 @@ pub struct EnvironmentInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(default, rename_all = "camelCase")]
 pub struct PersistedWorkspaceState {
     pub panel_sizes: std::collections::BTreeMap<String, u32>,
@@ -657,6 +741,7 @@ pub struct PersistedWorkspaceState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PersistedTerminalGroup {
     pub id: String,
@@ -668,6 +753,7 @@ pub struct PersistedTerminalGroup {
 /// remote Workspace, `local_shell_id` for a local one. Payloads written before
 /// Local Terminal existed carry only `connection_id`, which still deserializes.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PersistedWorkspace {
     pub id: String,
@@ -677,15 +763,31 @@ pub struct PersistedWorkspace {
     #[serde(default)]
     pub local_shell_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
     pub remote_shell: Option<crate::windows_ssh::RemoteShellProfile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub container: Option<ContainerTerminalTarget>,
+    #[cfg_attr(test, ts(type = r#"PersistedWorkspaceView"#))]
     pub view: String,
     pub history_paused: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerTerminalTarget {
+    pub id: String,
+    pub name: String,
+    pub image: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ScratchpadNote {
     pub id: String,
+    #[cfg_attr(test, ts(type = r#"ScratchpadScope"#))]
     pub scope: String,
     pub owner_id: String,
     pub connection_id: Option<String>,
@@ -695,8 +797,10 @@ pub struct ScratchpadNote {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct ScratchpadNoteInput {
+    #[cfg_attr(test, ts(type = r#"ScratchpadScope"#))]
     pub scope: String,
     pub owner_id: String,
     pub connection_id: Option<String>,
@@ -704,6 +808,7 @@ pub struct ScratchpadNoteInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum PersistedTerminalLayout {
     Leaf {
@@ -711,8 +816,10 @@ pub enum PersistedTerminalLayout {
         workspace_id: String,
     },
     Split {
+        #[cfg_attr(test, ts(type = r#""vertical" | "horizontal""#))]
         direction: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[cfg_attr(test, ts(optional))]
         ratio: Option<f64>,
         first: Box<PersistedTerminalLayout>,
         second: Box<PersistedTerminalLayout>,

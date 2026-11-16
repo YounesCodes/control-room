@@ -23,6 +23,7 @@ pub const PENDING_NOTICE_KEY: &str = "pending_update_notice";
 /// human-readable notes, and a date. No URL, no signature, no raw feed JSON,
 /// because the frontend has no decision to make with any of them.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct AppUpdateInfo {
     /// The version running right now, read from the Tauri package metadata
@@ -36,6 +37,7 @@ pub struct AppUpdateInfo {
 /// The one-time "What's new" notice, written just before an install replaces
 /// this process and read once by the version that install produced.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct PendingUpdateNotice {
     pub version: String,
@@ -46,7 +48,12 @@ pub struct PendingUpdateNotice {
 /// Download progress, shaped so an unknown content length stays representable
 /// rather than being faked as zero.
 #[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase", tag = "event")]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "event"
+)]
 pub enum UpdateProgress {
     Started { content_length: Option<u64> },
     Progress { downloaded: u64, total: Option<u64> },
@@ -56,6 +63,7 @@ pub enum UpdateProgress {
 /// Which step failed. Collapsing these into one message would hide the only
 /// distinction that matters: a signature failure is not a flaky network.
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub enum UpdateFailureKind {
     Check,
@@ -67,6 +75,7 @@ pub enum UpdateFailureKind {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateFailure {
     pub kind: UpdateFailureKind,
@@ -425,6 +434,17 @@ pub fn current_app_version(app: AppHandle) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn download_progress_fields_reach_the_frontend_in_camel_case() {
+        assert_eq!(
+            serde_json::to_value(UpdateProgress::Started {
+                content_length: Some(100)
+            })
+            .unwrap(),
+            serde_json::json!({ "event": "started", "contentLength": 100 })
+        );
+    }
 
     #[test]
     fn a_second_check_is_refused_while_one_is_running() {

@@ -25,7 +25,8 @@ use crate::{
         ConnectionRemote, ConnectionSummary, DockerContainer, DockerContainerDetails, DockerMount,
         DockerNetworkAttachment, DockerPublishedPort, EstablishedConnections, FirewallRule,
         FirewallStatus, HostCapabilities, HostResources, LOG_TAIL_OPTIONS, ListeningSocket,
-        SavedConnection, StreamNoticeEvent, StreamStarted, StreamStateEvent, SystemdUnit,
+        SavedConnection, StreamNotice, StreamNoticeEvent, StreamStarted, StreamState,
+        StreamStateEvent, SystemdUnit,
     },
     ssh::{
         background_command, connection_arguments, detect_ssh_path, ssh_not_found_message,
@@ -38,12 +39,11 @@ use crate::{
 mod distro_matrix_tests;
 
 const OUTPUT_LIMIT: u64 = 5 * 1024 * 1024;
-const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
+pub(crate) const COMMAND_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_STRUCTURED_OPERATIONS_PER_CONNECTION: usize = 2;
-const MAX_STRUCTURED_QUEUE_WAIT: Duration = Duration::from_secs(4);
+pub(crate) const MAX_STRUCTURED_QUEUE_WAIT: Duration = Duration::from_secs(4);
 const STREAM_DIAGNOSTIC_LIMIT: usize = 64 * 1024;
 const JOURNAL_RESTRICTED_HINT: &[u8] = b"not seeing messages from other users and the system";
-pub const JOURNAL_RESTRICTED_NOTICE: &str = "journal-restricted";
 const MAX_FIREWALL_RULES: usize = 200;
 const MAX_CONNECTION_ROWS: usize = 4000;
 const MAX_CONNECTION_GROUPS: usize = 200;
@@ -1896,7 +1896,12 @@ impl StreamManager {
                         }
                         let _ = output_reader.join();
                         let _ = stderr_reader.join();
-                        emit_stream_state(&wait_app, &wait_id, "error", Some(error.to_string()));
+                        emit_stream_state(
+                            &wait_app,
+                            &wait_id,
+                            StreamState::Error,
+                            Some(error.to_string()),
+                        );
                         break;
                     }
                 }
@@ -1976,7 +1981,7 @@ fn docker_log_command(container: &str, lines: u16, follow: bool) -> String {
 
 fn read_stream_diagnostics(
     mut reader: impl Read,
-    mut on_notice: impl FnMut(&'static str),
+    mut on_notice: impl FnMut(StreamNotice),
 ) -> Vec<u8> {
     let mut diagnostics = Vec::new();
     let mut buffer = [0_u8; 16 * 1024];
@@ -1993,7 +1998,7 @@ fn read_stream_diagnostics(
                 .any(|window| window == JOURNAL_RESTRICTED_HINT)
         {
             restricted = true;
-            on_notice(JOURNAL_RESTRICTED_NOTICE);
+            on_notice(StreamNotice::JournalRestricted);
         }
     }
     diagnostics
@@ -2005,32 +2010,35 @@ fn classify_stream_exit(
     success: bool,
     exit_code: i32,
     diagnostics: &[u8],
-) -> (&'static str, Option<String>) {
+) -> (StreamState, Option<String>) {
     if let Some(failure) = failure {
-        return ("error", Some(failure));
+        return (StreamState::Error, Some(failure));
     }
     if stop_requested || success {
-        return ("stopped", None);
+        return (StreamState::Stopped, None);
     }
-    ("error", Some(classify_failure(exit_code, diagnostics)))
+    (
+        StreamState::Error,
+        Some(classify_failure(exit_code, diagnostics)),
+    )
 }
 
-fn emit_stream_notice(app: &AppHandle, stream_id: &str, notice: &str) {
+fn emit_stream_notice(app: &AppHandle, stream_id: &str, notice: StreamNotice) {
     let _ = app.emit(
         "stream-notice",
         StreamNoticeEvent {
             stream_id: stream_id.into(),
-            notice: notice.into(),
+            notice,
         },
     );
 }
 
-fn emit_stream_state(app: &AppHandle, stream_id: &str, state: &str, reason: Option<String>) {
+fn emit_stream_state(app: &AppHandle, stream_id: &str, state: StreamState, reason: Option<String>) {
     let _ = app.emit(
         "stream-state-changed",
         StreamStateEvent {
             stream_id: stream_id.into(),
-            state: state.into(),
+            state,
             reason,
         },
     );
@@ -2988,7 +2996,7 @@ esac
             read_stream_diagnostics(Trickle(Cursor::new(stderr.to_vec())), |notice| {
                 notices.push(notice)
             });
-        assert_eq!(notices, [JOURNAL_RESTRICTED_NOTICE]);
+        assert_eq!(notices, [StreamNotice::JournalRestricted]);
         assert_eq!(diagnostics, stderr);
 
         let mut unrelated = Vec::new();
@@ -3003,11 +3011,11 @@ esac
     fn requested_stream_stop_is_not_reported_as_a_failure() {
         assert_eq!(
             classify_stream_exit(true, None, false, 1, b"killed"),
-            ("stopped", None)
+            (StreamState::Stopped, None)
         );
         assert_eq!(
             classify_stream_exit(false, Some("pipe failed".into()), false, 1, b""),
-            ("error", Some("pipe failed".into()))
+            (StreamState::Error, Some("pipe failed".into()))
         );
     }
 

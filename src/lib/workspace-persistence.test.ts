@@ -7,7 +7,11 @@ import {
   dockTerminalLayout,
   orientTerminalLayout,
 } from "./terminal-layout";
-import { persistWorkspaceState, restoreWorkspaceState } from "./workspace-persistence";
+import {
+  persistWorkspaceState,
+  restoreWorkspaceState,
+  type RestorableWorkspaceState,
+} from "./workspace-persistence";
 import {
   createContainerWorkspace,
   createLocalWorkspace,
@@ -70,6 +74,8 @@ describe("Workspace restoration", () => {
   });
   it("round-trips independent nested split sizes in a mixed local and remote group", () => {
     const state: PersistedWorkspaceState = {
+      panelSizes: {},
+      terminalLayout: null,
       workspaces: ["local", "remote", "logs"].map((id) => ({
         id,
         label: null,
@@ -198,7 +204,7 @@ describe("Workspace restoration", () => {
     expect((restored.workspaces[0] as RemoteWorkspace).container).toBeUndefined();
   });
   it("restores tabs and splits with fresh connection requests and no session IDs", () => {
-    const state: PersistedWorkspaceState = {
+    const state: RestorableWorkspaceState = {
       workspaces: [
         {
           id: "workspace-a",
@@ -252,7 +258,7 @@ describe("Workspace restoration", () => {
   });
 
   it("drops Workspaces for deleted connections and prunes their split leaves", () => {
-    const state: PersistedWorkspaceState = {
+    const state: RestorableWorkspaceState = {
       workspaces: [
         {
           id: "workspace-a",
@@ -296,6 +302,8 @@ describe("Workspace restoration", () => {
 
   it("restores multiple groups and keeps the first claim for duplicate membership", () => {
     const state: PersistedWorkspaceState = {
+      panelSizes: {},
+      terminalLayout: null,
       workspaces: ["a", "b", "c"].map((id) => ({
         id,
         label: null,
@@ -328,7 +336,7 @@ describe("Workspace restoration", () => {
   });
 
   it("requests a fresh local shell alongside a restored remote session", () => {
-    const state: PersistedWorkspaceState = {
+    const state: RestorableWorkspaceState = {
       workspaces: [
         {
           id: "workspace-a",
@@ -392,7 +400,7 @@ describe("Workspace restoration", () => {
   });
 
   it("drops a local Workspace whose shell is no longer installed", () => {
-    const state: PersistedWorkspaceState = {
+    const state: RestorableWorkspaceState = {
       workspaces: [
         {
           id: "workspace-a",
@@ -428,7 +436,7 @@ describe("Workspace restoration", () => {
   });
 
   it("restores legacy local Scratchpad pages and unsupported local views to Terminal", () => {
-    const state: PersistedWorkspaceState = {
+    const state: RestorableWorkspaceState = {
       workspaces: [
         {
           id: "workspace-a",

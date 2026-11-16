@@ -8,6 +8,8 @@ mod documentation;
 mod fonts;
 mod header_metrics;
 mod history;
+#[cfg(test)]
+mod ipc_contract;
 #[cfg_attr(target_os = "linux", path = "local_shell_linux.rs")]
 mod local_shell;
 mod macos_remote;

@@ -163,6 +163,7 @@ const containerTerminals =
       }))
     : [];
 const workspace: PersistedWorkspaceState = {
+  panelSizes: {},
   workspaces: workspaceView
     ? [
         {

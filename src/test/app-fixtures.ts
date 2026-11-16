@@ -10,6 +10,10 @@ import type {
 } from "../types";
 
 export const settings: AppSettings = {
+  automaticTerminalTitles: true,
+  hostMetricsEnabled: false,
+  hostMetrics: ["cpu", "ram", "gpu", "diskIo", "uptime"],
+  hostMetricsIntervalSeconds: 5,
   terminalFontFamily: "Consolas",
   terminalFontSize: 14,
   terminalScrollback: 10000,
@@ -62,6 +66,12 @@ export function capabilities(id = "host-a"): HostCapabilities {
     dockerAccessible: true,
     dockerAccessibleWithSudo: false,
     passwordlessSudo: false,
+    osFamily: null,
+    launchdAvailable: false,
+    unifiedLogAvailable: false,
+    dockerContext: null,
+    dockerEndpoint: null,
+    dockerRemote: false,
     dockerVersion: "29.0",
     runningServiceCount: 1,
     runningContainerCount: 1,

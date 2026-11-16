@@ -1,19 +1,8 @@
-export type TerminalSplitDirection = "vertical" | "horizontal";
+import type { PersistedTerminalLayout } from "../generated/ipc";
 
-export type TerminalLayout = TerminalLayoutLeaf | TerminalLayoutSplit;
+export type TerminalLayout = PersistedTerminalLayout;
 
-interface TerminalLayoutLeaf {
-  kind: "leaf";
-  workspaceId: string;
-}
-
-interface TerminalLayoutSplit {
-  kind: "split";
-  direction: TerminalSplitDirection;
-  ratio?: number;
-  first: TerminalLayout;
-  second: TerminalLayout;
-}
+export type TerminalSplitDirection = Extract<TerminalLayout, { kind: "split" }>["direction"];
 
 export interface TerminalPaneRect {
   left: number;

@@ -128,6 +128,10 @@ function PaletteFixture({ onSettings }: { onSettings: () => void }) {
 }
 
 const settings: AppSettings = {
+  automaticTerminalTitles: true,
+  hostMetricsEnabled: false,
+  hostMetrics: ["cpu", "ram", "gpu", "diskIo", "uptime"],
+  hostMetricsIntervalSeconds: 5,
   terminalFontFamily: "Consolas, monospace",
   terminalFontSize: 14,
   terminalScrollback: 10_000,
@@ -153,6 +157,8 @@ const environment: EnvironmentInfo = {
   sshConfigPath: "C:/Users/test/.ssh/config",
   sshAgentAvailable: false,
   platformSupported: true,
+  desktopOs: "windows",
+  inAppUpdates: true,
 };
 
 function SettingsFixture() {

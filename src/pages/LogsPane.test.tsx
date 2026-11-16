@@ -71,6 +71,10 @@ const connection: SavedConnection = {
   lastConnectedAt: null,
 };
 const settings: AppSettings = {
+  automaticTerminalTitles: true,
+  hostMetricsEnabled: false,
+  hostMetrics: ["cpu", "ram", "gpu", "diskIo", "uptime"],
+  hostMetricsIntervalSeconds: 5,
   terminalFontFamily: "Cascadia Mono",
   terminalFontSize: 14,
   terminalScrollback: 10_000,

@@ -35,6 +35,9 @@ import type {
   SystemdReadSection,
   PendingUpdateNotice,
   UpdateProgress,
+  SessionStarted,
+  LocalSessionStarted,
+  StreamStarted,
 } from "../types";
 
 export const REMOTE_INSPECTION_TIMEOUT_MS = 30_000;
@@ -150,7 +153,7 @@ export const api = {
     remoteShellId: string | null = null,
     containerId: string | null = null,
   ) =>
-    invoke<{ sessionId: string; connectionId: string }>("start_session", {
+    invoke<SessionStarted>("start_session", {
       connectionId,
       remoteShellId,
       containerId,
@@ -160,7 +163,7 @@ export const api = {
     }),
   listLocalShells: () => invoke<LocalShellCatalog>("list_local_shells"),
   startLocalSession: (shellId: string, cols: number, rows: number, output: Channel<ArrayBuffer>) =>
-    invoke<{ sessionId: string; shellId: string }>("start_local_session", {
+    invoke<LocalSessionStarted>("start_local_session", {
       shellId,
       cols,
       rows,
@@ -225,7 +228,7 @@ export const api = {
     sudoPassword: string | null,
     output: Channel<ArrayBuffer>,
   ) =>
-    invokeHostOperation<{ streamId: string }>(
+    invokeHostOperation<StreamStarted>(
       "start_journal_stream",
       {
         connectionId,
@@ -245,7 +248,7 @@ export const api = {
     sudoPassword: string | null,
     output: Channel<ArrayBuffer>,
   ) =>
-    invokeHostOperation<{ streamId: string }>(
+    invokeHostOperation<StreamStarted>(
       "start_docker_log_stream",
       {
         connectionId,

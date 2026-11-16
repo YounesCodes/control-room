@@ -273,14 +273,12 @@ export function LogsPane({
       return;
     }
     if (payload.state === "error") setError(payload.reason ?? "Log stream failed");
-    if (payload.state !== "running") {
-      wantsStreamRef.current = false;
-      finishDecoder();
-      drainPausedBuffer();
-      streamIdRef.current = null;
-      startingRef.current = false;
-      setStreamStatus("stopped");
-    }
+    wantsStreamRef.current = false;
+    finishDecoder();
+    drainPausedBuffer();
+    streamIdRef.current = null;
+    startingRef.current = false;
+    setStreamStatus("stopped");
   }
 
   function applyStreamNotice(payload: StreamNoticeEvent) {

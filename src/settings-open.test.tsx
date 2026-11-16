@@ -45,6 +45,10 @@ import { App } from "./App";
 import type { AppSettings, LocalShellProfile, SettingsContract } from "./types";
 
 const settings: AppSettings = {
+  automaticTerminalTitles: true,
+  hostMetricsEnabled: false,
+  hostMetrics: ["cpu", "ram", "gpu", "diskIo", "uptime"],
+  hostMetricsIntervalSeconds: 5,
   terminalFontFamily: "Cascadia Mono, Consolas, monospace",
   terminalFontSize: 14,
   terminalScrollback: 10_000,

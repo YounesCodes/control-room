@@ -13,6 +13,12 @@ import type {
   Workspace,
 } from "../types";
 
+export type RestorableWorkspaceState = Omit<
+  PersistedWorkspaceState,
+  "panelSizes" | "terminalGroups"
+> &
+  Partial<Pick<PersistedWorkspaceState, "panelSizes" | "terminalGroups">>;
+
 interface RestoredWorkspaceState {
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
@@ -23,7 +29,7 @@ const LEGACY_TERMINAL_GROUP_ID = "00000000-0000-4000-8000-000000000001";
 
 export function restoreWorkspaceState(
   connections: SavedConnection[],
-  state: PersistedWorkspaceState,
+  state: RestorableWorkspaceState,
   localShells: LocalShellProfile[] = [],
 ): RestoredWorkspaceState {
   const connectionsById = new Map(connections.map((connection) => [connection.id, connection]));
