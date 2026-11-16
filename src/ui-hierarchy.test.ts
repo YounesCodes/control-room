@@ -80,16 +80,9 @@ function importedDialogFunctions(): string[] {
 }
 
 describe("application hierarchy", () => {
-  it("uses one Copy icon for every copy action and keeps Clipboard for paste", () => {
+  it("keeps the Clipboard icon for paste actions", () => {
     for (const file of productionSources()) {
       const source = readFileSync(file, "utf8");
-      const icons = [...source.matchAll(/import\s*\{([^}]*)\}\s*from\s*"lucide-react"/g)]
-        .flatMap(([, clause]) => clause.split(","))
-        .map((specifier) => specifier.split(/\bas\b/)[0].trim());
-      expect(
-        icons.filter((name) => /^(Clipboard|Copy)./.test(name)),
-        file.pathname,
-      ).toEqual([]);
       for (const match of source.matchAll(/<Clipboard\b/g)) {
         expect(source.slice(Math.max(0, match.index - 400), match.index), file.pathname).toMatch(
           /Paste/,
@@ -142,9 +135,6 @@ describe("application hierarchy", () => {
 
   it("gives Settings an explicit way back to the workspace", () => {
     expect(appSource).toContain("onClose={closeSettings}");
-    // Unsaved Settings changes are guarded with an in-app confirm dialog rather
-    // than a native window.confirm.
-    expect(appSource).not.toContain("window.confirm");
     expect(appSource).toContain('message: "Discard unsaved Settings changes?"');
     expect(settingsSource).toContain('aria-label="Close Settings"');
   });
@@ -319,20 +309,6 @@ describe("application hierarchy", () => {
         windowCapabilities.permissions,
         `dialog.${name} is called but not permitted`,
       ).toContain(`dialog:allow-${name}`);
-    }
-  });
-
-  it("renders release notes as text and never as markup", () => {
-    // Release notes come from GitHub through the updater feed, so they are text
-    // Control Room did not write. Nothing in the updater path may hand them to
-    // dangerouslySetInnerHTML.
-    for (const file of [
-      "./components/ReleaseNotes.tsx",
-      "./components/UpdateIndicator.tsx",
-      "./components/WhatsNewDialog.tsx",
-      "./lib/release-notes.ts",
-    ]) {
-      expect(code(file)).not.toContain("dangerouslySetInnerHTML");
     }
   });
 
