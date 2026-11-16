@@ -1166,6 +1166,20 @@ describe("TerminalPane sessions", () => {
     );
   });
 
+  it("draws bold output at regular weight in the configured colors", async () => {
+    renderPane({ ...createLocalWorkspace(shell), state: "connected", sessionId: "local-session" });
+    await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalled());
+
+    expect(xterm.terminalOptions).toMatchObject({
+      fontWeightBold: "normal",
+      drawBoldTextInBrightColors: false,
+      theme: expect.objectContaining({
+        red: settings.terminalRed,
+        brightRed: settings.terminalRed,
+      }),
+    });
+  });
+
   it("reports output that arrives in a background terminal", async () => {
     const onActivity = vi.fn();
     render(
