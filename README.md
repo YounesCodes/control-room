@@ -34,3 +34,5 @@ Open `src-tauri/target/release/bundle/macos/Control Room.app`, or install the DM
 ## Documentation
 
 **[Quick start](https://younescodes.github.io/control-room/start-here/quick-start/)**
+
+<!-- Temporary check for the documentation-only CI path. -->
