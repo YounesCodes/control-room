@@ -23,6 +23,10 @@ import { SettingsPane } from "./SettingsPane";
 import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
 
 const settings: AppSettings = {
+  automaticTerminalTitles: true,
+  hostMetricsEnabled: false,
+  hostMetrics: ["cpu", "ram", "gpu", "diskIo", "uptime"],
+  hostMetricsIntervalSeconds: 5,
   terminalFontFamily: "Cascadia Mono, Consolas, monospace",
   terminalFontSize: 14,
   terminalScrollback: 10_000,
@@ -48,6 +52,8 @@ const environment: EnvironmentInfo = {
   sshConfigPath: "C:/Users/test/.ssh/config",
   sshAgentAvailable: true,
   platformSupported: true,
+  desktopOs: "windows",
+  inAppUpdates: true,
 };
 
 const powershell: LocalShellProfile = {

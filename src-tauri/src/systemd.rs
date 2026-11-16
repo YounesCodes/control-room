@@ -11,6 +11,7 @@ const TEXT_LIMIT: usize = 128 * 1024;
 const PROPERTIES: &str = "Id,Description,LoadState,ActiveState,SubState,UnitFileState,FragmentPath,SourcePath,DropInPaths,NeedDaemonReload,Requires,Wants,RequiredBy,WantedBy,After,Before,Triggers,TriggeredBy,MainPID,ControlPID,Type,Result,ExecMainCode,ExecMainStatus,ExecMainStartTimestamp,ExecMainExitTimestamp,ActiveEnterTimestamp,ActiveEnterTimestampMonotonic,Restart,NRestarts,MemoryCurrent,CPUUsageNSec,TasksCurrent,ExecStart,StatusText,ConditionResult,AssertResult,NextElapseUSecRealtime,NextElapseUSecMonotonic,LastTriggerUSec,TimersCalendar,TimersMonotonic,Unit,Listen,Accept,NAccepted,NConnections,Where,What,Options";
 
 #[derive(Clone, Copy, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(rename = "SystemdReadSection"))]
 #[serde(rename_all = "camelCase")]
 pub enum UnitReadSection {
     Properties,
@@ -20,6 +21,7 @@ pub enum UnitReadSection {
 }
 
 #[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(rename = "SystemdInspection"))]
 #[serde(rename_all = "camelCase")]
 pub struct UnitInspection {
     id: String,

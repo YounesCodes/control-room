@@ -16,7 +16,10 @@ use uuid::Uuid;
 use crate::{
     database::Database,
     local_shell::{self, ResolvedLocalShell},
-    models::{LocalSessionStarted, SavedConnection, SessionStarted, SessionStateEvent},
+    models::{
+        LocalSessionStarted, SavedConnection, SessionEndCategory, SessionStarted, SessionState,
+        SessionStateEvent,
+    },
     ssh::{connection_arguments, detect_ssh_path, ssh_not_found_message},
 };
 
@@ -328,7 +331,7 @@ impl SessionManager {
                                 emit_state(
                                     &output_app,
                                     &output_session_id,
-                                    "connected",
+                                    SessionState::Connected,
                                     None,
                                     None,
                                 );
@@ -407,8 +410,8 @@ impl SessionManager {
                 Err(error) => emit_state(
                     &wait_app,
                     &wait_session_id,
-                    "error",
-                    Some("process".into()),
+                    SessionState::Error,
+                    Some(SessionEndCategory::Process),
                     Some(format!("Terminal process wait failed: {error}")),
                 ),
             }
@@ -509,15 +512,15 @@ fn map_pty_kill_result(result: std::io::Result<()>) -> Result<(), String> {
 fn emit_state(
     app: &AppHandle,
     session_id: &str,
-    state: &str,
-    category: Option<String>,
+    state: SessionState,
+    category: Option<SessionEndCategory>,
     reason: Option<String>,
 ) {
     let _ = app.emit(
         "session-state-changed",
         SessionStateEvent {
             session_id: session_id.into(),
-            state: state.into(),
+            state,
             category,
             reason,
         },
@@ -553,17 +556,25 @@ fn classify_session_exit(
     exit_code: u32,
     hint: Option<TerminalFailureHint>,
     connected: bool,
-) -> (&'static str, Option<String>, Option<String>) {
+) -> (SessionState, Option<SessionEndCategory>, Option<String>) {
     if stop_requested {
-        return ("disconnected", Some("user-disconnect".into()), None);
+        return (
+            SessionState::Disconnected,
+            Some(SessionEndCategory::UserDisconnect),
+            None,
+        );
     }
     if let Some(reason) = process_failure {
-        return ("error", Some("process".into()), Some(reason));
+        return (
+            SessionState::Error,
+            Some(SessionEndCategory::Process),
+            Some(reason),
+        );
     }
     if success {
         return (
-            "disconnected",
-            Some("remote-exit".into()),
+            SessionState::Disconnected,
+            Some(SessionEndCategory::RemoteExit),
             Some("SSH session ended.".into()),
         );
     }
@@ -574,31 +585,44 @@ fn classify_session_exit(
     };
     if connected && hint.is_none() {
         return (
-            "disconnected",
-            Some("remote-exit".into()),
+            SessionState::Disconnected,
+            Some(SessionEndCategory::RemoteExit),
             Some(format!("The remote shell exited with code {exit_code}.")),
         );
     }
     let (category, reason) = match hint {
-        Some(TerminalFailureHint::Authentication) => {
-            ("authentication", "SSH authentication failed")
-        }
-        Some(TerminalFailureHint::HostResolution) => {
-            ("host-resolution", "SSH host could not be resolved")
-        }
-        Some(TerminalFailureHint::ConnectionRefused) => {
-            ("connection-refused", "SSH connection was refused")
-        }
-        Some(TerminalFailureHint::ConnectionTimeout) => {
-            ("connection-timeout", "SSH connection timed out")
-        }
-        Some(TerminalFailureHint::HostKey) => ("host-key", "SSH host-key verification failed"),
-        Some(TerminalFailureHint::ConnectionLost) => ("connection-lost", "SSH connection was lost"),
-        None => ("remote-exit", "SSH session ended unexpectedly"),
+        Some(TerminalFailureHint::Authentication) => (
+            SessionEndCategory::Authentication,
+            "SSH authentication failed",
+        ),
+        Some(TerminalFailureHint::HostResolution) => (
+            SessionEndCategory::HostResolution,
+            "SSH host could not be resolved",
+        ),
+        Some(TerminalFailureHint::ConnectionRefused) => (
+            SessionEndCategory::ConnectionRefused,
+            "SSH connection was refused",
+        ),
+        Some(TerminalFailureHint::ConnectionTimeout) => (
+            SessionEndCategory::ConnectionTimeout,
+            "SSH connection timed out",
+        ),
+        Some(TerminalFailureHint::HostKey) => (
+            SessionEndCategory::HostKey,
+            "SSH host-key verification failed",
+        ),
+        Some(TerminalFailureHint::ConnectionLost) => (
+            SessionEndCategory::ConnectionLost,
+            "SSH connection was lost",
+        ),
+        None => (
+            SessionEndCategory::RemoteExit,
+            "SSH session ended unexpectedly",
+        ),
     };
     (
-        "error",
-        Some(category.into()),
+        SessionState::Error,
+        Some(category),
         Some(format!("{reason} (exit code {exit_code})")),
     )
 }
@@ -609,19 +633,31 @@ fn classify_local_exit(
     success: bool,
     exit_code: u32,
     label: &str,
-) -> (&'static str, Option<String>, Option<String>) {
+) -> (SessionState, Option<SessionEndCategory>, Option<String>) {
     if stop_requested {
-        return ("disconnected", Some("user-stop".into()), None);
+        return (
+            SessionState::Disconnected,
+            Some(SessionEndCategory::UserStop),
+            None,
+        );
     }
     if let Some(reason) = process_failure {
-        return ("error", Some("process".into()), Some(reason));
+        return (
+            SessionState::Error,
+            Some(SessionEndCategory::Process),
+            Some(reason),
+        );
     }
     let reason = if success {
         format!("{label} exited.")
     } else {
         format!("{label} exited with code {exit_code}.")
     };
-    ("disconnected", Some("local-exit".into()), Some(reason))
+    (
+        SessionState::Disconnected,
+        Some(SessionEndCategory::LocalExit),
+        Some(reason),
+    )
 }
 
 #[cfg(test)]
@@ -639,6 +675,8 @@ mod tests {
     use portable_pty::CommandBuilder;
     #[cfg(any(windows, target_os = "macos"))]
     use portable_pty::{PtySize, native_pty_system};
+
+    use crate::models::{SessionEndCategory, SessionState};
 
     use super::{
         CONNECTED_MARKER, MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OUTPUT_READ_BUFFER_BYTES, OutputFlow,
@@ -739,7 +777,11 @@ mod tests {
                 Some(TerminalFailureHint::ConnectionLost),
                 true,
             ),
-            ("disconnected", Some("user-disconnect".into()), None)
+            (
+                SessionState::Disconnected,
+                Some(SessionEndCategory::UserDisconnect),
+                None
+            )
         );
     }
 
@@ -767,8 +809,8 @@ mod tests {
 
         let (state, category, _) =
             classify_session_exit(false, None, false, 1, detector.hint, detector.established());
-        assert_eq!(state, "disconnected");
-        assert_eq!(category.as_deref(), Some("remote-exit"));
+        assert_eq!(state, SessionState::Disconnected);
+        assert_eq!(category, Some(SessionEndCategory::RemoteExit));
     }
 
     #[test]
@@ -790,8 +832,8 @@ mod tests {
             detector.hint,
             detector.established(),
         );
-        assert_eq!(state, "error");
-        assert_eq!(category.as_deref(), Some("connection-lost"));
+        assert_eq!(state, SessionState::Error);
+        assert_eq!(category, Some(SessionEndCategory::ConnectionLost));
     }
 
     #[test]
@@ -800,8 +842,8 @@ mod tests {
             assert_eq!(
                 classify_session_exit(false, None, true, 0, None, connected),
                 (
-                    "disconnected",
-                    Some("remote-exit".into()),
+                    SessionState::Disconnected,
+                    Some(SessionEndCategory::RemoteExit),
                     Some("SSH session ended.".into())
                 ),
                 "connected: {connected}"
@@ -836,8 +878,8 @@ mod tests {
         let (state, category, reason) =
             classify_session_exit(false, None, false, 1, detector.hint, true);
 
-        assert_eq!(state, "disconnected");
-        assert_eq!(category.as_deref(), Some("remote-exit"));
+        assert_eq!(state, SessionState::Disconnected);
+        assert_eq!(category, Some(SessionEndCategory::RemoteExit));
         assert!(
             reason.as_deref().is_some_and(|reason| reason.contains("1")),
             "the shell's exit status is still worth reporting: {reason:?}"
@@ -853,8 +895,8 @@ mod tests {
         let (state, category, _) =
             classify_session_exit(false, None, false, 255, detector.hint, false);
 
-        assert_eq!(state, "error");
-        assert_eq!(category.as_deref(), Some("authentication"));
+        assert_eq!(state, SessionState::Error);
+        assert_eq!(category, Some(SessionEndCategory::Authentication));
     }
 
     #[test]
@@ -868,8 +910,8 @@ mod tests {
             true,
         );
 
-        assert_eq!(state, "error");
-        assert_eq!(category.as_deref(), Some("connection-lost"));
+        assert_eq!(state, SessionState::Error);
+        assert_eq!(category, Some(SessionEndCategory::ConnectionLost));
     }
 
     #[test]
@@ -882,8 +924,8 @@ mod tests {
             Some(TerminalFailureHint::Authentication),
             false,
         );
-        assert_eq!(state, "error");
-        assert_eq!(category.as_deref(), Some("authentication"));
+        assert_eq!(state, SessionState::Error);
+        assert_eq!(category, Some(SessionEndCategory::Authentication));
         assert!(reason.unwrap().starts_with("SSH authentication failed"));
     }
 
@@ -1002,7 +1044,11 @@ mod tests {
                 Some(TerminalFailureHint::ConnectionLost),
                 true,
             ),
-            ("disconnected", Some("user-disconnect".into()), None)
+            (
+                SessionState::Disconnected,
+                Some(SessionEndCategory::UserDisconnect),
+                None
+            )
         );
         assert_eq!(
             classify_local_exit(
@@ -1012,7 +1058,11 @@ mod tests {
                 255,
                 "Git Bash",
             ),
-            ("disconnected", Some("user-stop".into()), None)
+            (
+                SessionState::Disconnected,
+                Some(SessionEndCategory::UserStop),
+                None
+            )
         );
     }
 
@@ -1029,8 +1079,8 @@ mod tests {
         for hint in startup_only {
             let (state, category, reason) =
                 classify_session_exit(false, None, false, 42, Some(hint), true);
-            assert_eq!(state, "disconnected", "{hint:?}");
-            assert_eq!(category.as_deref(), Some("remote-exit"), "{hint:?}");
+            assert_eq!(state, SessionState::Disconnected, "{hint:?}");
+            assert_eq!(category, Some(SessionEndCategory::RemoteExit), "{hint:?}");
             assert_eq!(
                 reason.as_deref(),
                 Some("The remote shell exited with code 42."),
@@ -1039,8 +1089,8 @@ mod tests {
 
             let (state, category, _) =
                 classify_session_exit(false, None, false, 42, Some(hint), false);
-            assert_eq!(state, "error", "{hint:?}");
-            assert_ne!(category.as_deref(), Some("remote-exit"), "{hint:?}");
+            assert_eq!(state, SessionState::Error, "{hint:?}");
+            assert_ne!(category, Some(SessionEndCategory::RemoteExit), "{hint:?}");
         }
 
         let (state, category, _) = classify_session_exit(
@@ -1052,16 +1102,19 @@ mod tests {
             true,
         );
         assert_eq!(
-            (state, category.as_deref()),
-            ("error", Some("connection-lost"))
+            (state, category),
+            (
+                SessionState::Error,
+                Some(SessionEndCategory::ConnectionLost)
+            )
         );
     }
 
     #[test]
     fn a_failed_startup_with_no_recognised_diagnostic_is_still_an_error() {
         let (state, category, reason) = classify_session_exit(false, None, false, 255, None, false);
-        assert_eq!(state, "error");
-        assert_eq!(category.as_deref(), Some("remote-exit"));
+        assert_eq!(state, SessionState::Error);
+        assert_eq!(category, Some(SessionEndCategory::RemoteExit));
         assert_eq!(
             reason.as_deref(),
             Some("SSH session ended unexpectedly (exit code 255)")
@@ -1081,7 +1134,7 @@ mod tests {
         ] {
             let (state, category, reason) =
                 classify_session_exit(false, None, false, 77, hint, false);
-            assert_eq!(state, "error", "{hint:?}");
+            assert_eq!(state, SessionState::Error, "{hint:?}");
             assert!(category.is_some(), "{hint:?}");
             assert!(
                 reason
@@ -1097,10 +1150,10 @@ mod tests {
         for success in [true, false] {
             let (state, category, _) =
                 classify_local_exit(false, None, success, 1, "Windows PowerShell");
-            assert_eq!(state, "disconnected", "success: {success}");
+            assert_eq!(state, SessionState::Disconnected, "success: {success}");
             assert_eq!(
-                category.as_deref(),
-                Some("local-exit"),
+                category,
+                Some(SessionEndCategory::LocalExit),
                 "success: {success}"
             );
         }
@@ -1384,16 +1437,16 @@ mod tests {
         assert_eq!(
             classify_local_exit(false, None, true, 0, "PowerShell 7"),
             (
-                "disconnected",
-                Some("local-exit".into()),
+                SessionState::Disconnected,
+                Some(SessionEndCategory::LocalExit),
                 Some("PowerShell 7 exited.".into())
             )
         );
         assert_eq!(
             classify_local_exit(false, None, false, 1, "Git Bash"),
             (
-                "disconnected",
-                Some("local-exit".into()),
+                SessionState::Disconnected,
+                Some(SessionEndCategory::LocalExit),
                 Some("Git Bash exited with code 1.".into())
             )
         );
@@ -1403,7 +1456,11 @@ mod tests {
     fn stopping_a_local_shell_is_not_reported_as_a_failure() {
         assert_eq!(
             classify_local_exit(true, None, false, 1, "Command Prompt"),
-            ("disconnected", Some("user-stop".into()), None)
+            (
+                SessionState::Disconnected,
+                Some(SessionEndCategory::UserStop),
+                None
+            )
         );
     }
 
@@ -1416,8 +1473,8 @@ mod tests {
             1,
             "Git Bash",
         );
-        assert_eq!(state, "error");
-        assert_eq!(category.as_deref(), Some("process"));
+        assert_eq!(state, SessionState::Error);
+        assert_eq!(category, Some(SessionEndCategory::Process));
         assert_eq!(
             reason.as_deref(),
             Some("Terminal output failed: pipe closed")
@@ -1582,8 +1639,11 @@ mod tests {
             shell.label(),
         );
         assert_eq!(
-            (state, category.as_deref()),
-            ("disconnected", Some("user-stop"))
+            (state, category),
+            (
+                SessionState::Disconnected,
+                Some(SessionEndCategory::UserStop)
+            )
         );
     }
 

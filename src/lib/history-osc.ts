@@ -1,8 +1,7 @@
+import { MAX_HISTORY_COMMAND_BYTES, MAX_HISTORY_CWD_BYTES } from "../generated/ipc";
 import { decodeBase64Utf8 } from "./format";
 
 const MAX_HISTORY_OSC_CHARS = 1_500_000;
-const MAX_HISTORY_COMMAND_BYTES = 1024 * 1024;
-const MAX_HISTORY_CWD_BYTES = 32_767;
 
 type HistoryOscEvent =
   | { kind: "start"; startedAt: string; cwd: string | null; command: string }

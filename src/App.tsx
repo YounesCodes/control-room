@@ -189,6 +189,8 @@ const emptyEnvironment: EnvironmentInfo = {
   sshConfigPath: "~/.ssh/config",
   sshAgentAvailable: false,
   platformSupported: true,
+  desktopOs: "",
+  inAppUpdates: true,
 };
 
 function administratorTerminalNote(status: AdministratorTerminalStatus): string {

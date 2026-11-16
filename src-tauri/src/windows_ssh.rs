@@ -13,6 +13,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteShellProfile {
     pub id: String,
@@ -20,8 +21,10 @@ pub struct RemoteShellProfile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct RemoteShellCatalog {
+    #[cfg_attr(test, ts(type = r#""linux" | "windows" | "macos""#))]
     pub platform: String,
     pub shells: Vec<RemoteShellProfile>,
     pub windows_terminal_available: bool,

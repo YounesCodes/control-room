@@ -178,6 +178,7 @@ exit 2
 "##;
 
 #[derive(serde::Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS), ts(rename = "HistoryIntegrationStatus"))]
 #[serde(rename_all = "kebab-case")]
 pub enum IntegrationStatus {
     Installed,

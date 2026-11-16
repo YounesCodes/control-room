@@ -39,6 +39,7 @@ pub struct FontState {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 pub struct CatalogFont {
     pub id: String,
     pub family: String,
@@ -52,14 +53,20 @@ pub struct CatalogFont {
 }
 
 #[derive(Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 pub struct FontCatalog {
     fonts: Vec<CatalogFont>,
     stale: bool,
 }
 
 #[derive(Clone, Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct FontProgress {
+    #[cfg_attr(
+        test,
+        ts(type = r#""downloadingRegular" | "downloadingBold" | "installing" | "ready""#)
+    )]
     pub stage: &'static str,
     pub completed: u64,
     pub total: Option<u64>,

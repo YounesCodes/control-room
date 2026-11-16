@@ -78,9 +78,14 @@ vi.mock("./components/TerminalPane", () => ({
 
 import { App } from "./App";
 import { capabilities } from "./test/app-fixtures";
+import type { RestorableWorkspaceState } from "./lib/workspace-persistence";
 import type { AppSettings, PersistedWorkspaceState, SavedConnection } from "./types";
 
 const settings: AppSettings = {
+  automaticTerminalTitles: true,
+  hostMetricsEnabled: false,
+  hostMetrics: ["cpu", "ram", "gpu", "diskIo", "uptime"],
+  hostMetricsIntervalSeconds: 5,
   terminalFontFamily: "Consolas",
   terminalFontSize: 14,
   terminalScrollback: 10_000,
@@ -118,7 +123,7 @@ function connection(id: string, displayName: string): SavedConnection {
   };
 }
 
-function restoredState(connectionIds: string[]): PersistedWorkspaceState {
+function restoredState(connectionIds: string[]): RestorableWorkspaceState {
   return {
     workspaces: connectionIds.map((connectionId, index) => ({
       id: `workspace-${index}`,
@@ -223,6 +228,7 @@ function activeTabLabel() {
 
 function restoredGroupedState(): PersistedWorkspaceState {
   return {
+    panelSizes: {},
     workspaces: ["a", "b", "c", "d", "e"].map((connectionId, index) => ({
       id: `workspace-${index}`,
       label: null,

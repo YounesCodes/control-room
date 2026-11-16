@@ -20,9 +20,19 @@ const MAX_IDENTITY_PATH_CHARS: usize = 32_767;
 const MAX_GROUP_NAME_CHARS: usize = 60;
 const MAX_TAG_NAME_CHARS: usize = 32;
 const MAX_TAGS_PER_CONNECTION: usize = 5;
-const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
-const MAX_HISTORY_CWD_BYTES: usize = 32_767;
-const MAX_SCRATCHPAD_CHARS: usize = 16_384;
+pub(crate) const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
+pub(crate) const MAX_HISTORY_CWD_BYTES: usize = 32_767;
+pub(crate) const MAX_SCRATCHPAD_CHARS: usize = 16_384;
+pub(crate) const SCRATCHPAD_SCOPES: [&str; 3] = ["connection", "global", "local"];
+pub(crate) const PERSISTED_WORKSPACE_VIEWS: [&str; 7] = [
+    "terminal",
+    "services",
+    "ports",
+    "docker",
+    "logs",
+    "history",
+    "scratchpad",
+];
 const REMOVED_WORKSPACE_VIEWS: [&str; 3] = ["overview", "boot", "baselines"];
 
 pub struct Database {
@@ -912,7 +922,7 @@ fn validate_scratchpad_owner(
     owner_id: &str,
     connection_id: Option<&str>,
 ) -> Result<(), String> {
-    if scope != "connection" && scope != "global" && scope != "local" {
+    if !SCRATCHPAD_SCOPES.contains(&scope) {
         return Err("Scratchpad scope is invalid".into());
     }
     if scope == "global" {
@@ -998,6 +1008,17 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
         {
             return Err("Workspace state contains an invalid remote shell".into());
         }
+        if let Some(container) = &workspace.container
+            && (workspace.connection_id.is_none()
+                || workspace.remote_shell.is_some()
+                || container.id.len() > 128
+                || crate::ssh::validate_container_id(&container.id).is_err()
+                || [&container.name, &container.image].into_iter().any(|text| {
+                    text.is_empty() || text.len() > 512 || text.chars().any(char::is_control)
+                }))
+        {
+            return Err("Workspace state contains an invalid container terminal".into());
+        }
         if Uuid::parse_str(&workspace.id).is_err() || !ids.insert(workspace.id.as_str()) {
             return Err("Workspace state contains invalid identifiers".into());
         }
@@ -1021,17 +1042,7 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
         {
             return Err("Workspace label is invalid".into());
         }
-        if ![
-            "terminal",
-            "services",
-            "ports",
-            "docker",
-            "logs",
-            "history",
-            "scratchpad",
-        ]
-        .contains(&workspace.view.as_str())
-        {
+        if !PERSISTED_WORKSPACE_VIEWS.contains(&workspace.view.as_str()) {
             return Err("Workspace view is invalid".into());
         }
     }
@@ -3034,6 +3045,7 @@ mod tests {
                 connection_id: None,
                 local_shell_id: Some("git-bash".into()),
                 remote_shell: None,
+                container: None,
                 view: "terminal".into(),
                 history_paused: false,
             }],
@@ -3110,6 +3122,7 @@ mod tests {
                 connection_id: Some(saved.id),
                 local_shell_id: None,
                 remote_shell: None,
+                container: None,
                 view: "ports".into(),
                 history_paused: false,
             }],
@@ -3136,6 +3149,7 @@ mod tests {
                 connection_id: None,
                 local_shell_id: Some("powershell-7".into()),
                 remote_shell: None,
+                container: None,
                 view: "terminal".into(),
                 history_paused: false,
             }],
@@ -3180,6 +3194,7 @@ mod tests {
                 connection_id,
                 local_shell_id,
                 remote_shell: None,
+                container: None,
                 view: "terminal".into(),
                 history_paused: false,
             }],
@@ -3709,6 +3724,7 @@ mod tests {
                     connection_id: Some(Uuid::new_v4().to_string()),
                     local_shell_id: None,
                     remote_shell: None,
+                    container: None,
                     view: "terminal".into(),
                     history_paused: false,
                 }],
@@ -3741,6 +3757,7 @@ mod tests {
                 connection_id,
                 local_shell_id: shell,
                 remote_shell: None,
+                container: None,
                 view: "terminal".into(),
                 history_paused: false,
             }
@@ -3777,6 +3794,71 @@ mod tests {
                 database.get_workspace_state().unwrap(),
                 state,
                 "{direction}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_container_terminal_survives_a_restart_and_rejects_an_invalid_target() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("control-room.db");
+        let saved = Database::open(&path)
+            .unwrap()
+            .create_connection(input("Docker host"))
+            .unwrap();
+        let workspace_id = Uuid::new_v4().to_string();
+        let container = crate::models::ContainerTerminalTarget {
+            id: "a".repeat(64),
+            name: "web".into(),
+            image: "nginx:1.27".into(),
+        };
+        let state = PersistedWorkspaceState {
+            workspaces: vec![crate::models::PersistedWorkspace {
+                id: workspace_id.clone(),
+                label: None,
+                connection_id: Some(saved.id.clone()),
+                local_shell_id: None,
+                remote_shell: None,
+                container: Some(container.clone()),
+                view: "terminal".into(),
+                history_paused: false,
+            }],
+            active_workspace_id: Some(workspace_id),
+            ..Default::default()
+        };
+        Database::open(&path)
+            .unwrap()
+            .save_workspace_state(&state)
+            .unwrap();
+        let restored = Database::open(&path)
+            .unwrap()
+            .get_workspace_state()
+            .unwrap();
+        assert_eq!(restored.workspaces[0].container, Some(container.clone()));
+
+        let invalid = |change: fn(&mut crate::models::PersistedWorkspace)| {
+            let mut state = state.clone();
+            change(&mut state.workspaces[0]);
+            validate_workspace_state(&state).unwrap_err()
+        };
+        for error in [
+            invalid(|workspace| workspace.container.as_mut().unwrap().id = "-rm".into()),
+            invalid(|workspace| {
+                workspace.container.as_mut().unwrap().name = "web
+"
+                .into()
+            }),
+            invalid(|workspace| workspace.container.as_mut().unwrap().image = String::new()),
+            invalid(|workspace| {
+                workspace.remote_shell = Some(crate::windows_ssh::RemoteShellProfile {
+                    id: "wsl:Ubuntu".into(),
+                    label: "Ubuntu".into(),
+                })
+            }),
+        ] {
+            assert_eq!(
+                error,
+                "Workspace state contains an invalid container terminal"
             );
         }
     }
@@ -3835,6 +3917,7 @@ mod tests {
                     connection_id: Some(saved.id),
                     local_shell_id: None,
                     remote_shell: None,
+                    container: None,
                     view: "terminal".into(),
                     history_paused: false,
                 }],
@@ -4044,6 +4127,7 @@ mod tests {
                     connection_id: Some(Uuid::new_v4().to_string()),
                     local_shell_id: None,
                     remote_shell: None,
+                    container: None,
                     view: view.into(),
                     history_paused: false,
                 }],

@@ -83,6 +83,10 @@ import type {
 } from "./types";
 
 const settings: AppSettings = {
+  automaticTerminalTitles: true,
+  hostMetricsEnabled: false,
+  hostMetrics: ["cpu", "ram", "gpu", "diskIo", "uptime"],
+  hostMetricsIntervalSeconds: 5,
   terminalFontFamily: "Consolas",
   terminalFontSize: 14,
   terminalScrollback: 10_000,
@@ -140,6 +144,8 @@ function connection(id: string, displayName: string): SavedConnection {
 }
 
 const emptyState: PersistedWorkspaceState = {
+  panelSizes: {},
+  terminalGroups: [],
   workspaces: [],
   activeWorkspaceId: null,
   terminalLayout: null,
