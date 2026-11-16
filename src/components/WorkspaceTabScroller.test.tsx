@@ -223,6 +223,17 @@ describe("WorkspaceTabScroller reordering", () => {
     vi.useRealTimers();
   });
 
+  it("moves the native window from the strip around the tabs but not from a tab", () => {
+    const { container } = render(<Strip labels={["A", "B"]} />);
+    const tab = mainButton(container, "A");
+    const stripBehindTabs = tab.closest(".session-tab-wrap")!.parentElement!;
+
+    expect(stripBehindTabs.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(stripBehindTabs.parentElement!.hasAttribute("data-tauri-drag-region")).toBe(true);
+    expect(tab.closest("[data-tauri-drag-region]")).toBe(stripBehindTabs);
+    expect(tab.hasAttribute("data-tauri-drag-region")).toBe(false);
+  });
+
   it("treats a below-threshold press as a plain click, without reordering", () => {
     const onReorder = vi.fn();
     const { container } = render(<Strip labels={["A", "B", "C", "D"]} onReorder={onReorder} />);

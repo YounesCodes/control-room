@@ -43,6 +43,36 @@ const noDynamicTauriImport = {
   selector: String.raw`ImportExpression:matches([source.value=/^@tauri-apps\x2f/], [source.quasis.0.value.cooked=/^@tauri-apps\x2f/])`,
   message: "Use approved named imports for Tauri APIs. " + ipcMessage,
 };
+const terminalImplementation = "src/components/TerminalPane.tsx";
+const noXtermOutsideTerminalPane = {
+  selector: String.raw`ImportDeclaration[importKind='value'][source.value=/^@xterm\x2f/] > :matches(ImportSpecifier[importKind='value'], ImportDefaultSpecifier, ImportNamespaceSpecifier)`,
+  message:
+    "Create xterm terminals only in TerminalPane so local and SSH sessions share one implementation. Type imports are fine.",
+};
+const updaterLifecycle = "src/hooks/use-app-updater.ts";
+const updaterOwner = "src/App.tsx";
+const noUpdaterCallsOutsideLifecycle = {
+  selector:
+    "MemberExpression[object.name='api'][property.name=/^(checkForUpdate|downloadUpdate|installUpdate)$/]",
+  message: "Check, download and install updates only through the useAppUpdater lifecycle.",
+};
+const noUpdaterHookOutsideApp = {
+  selector: String.raw`ImportDeclaration[importKind='value'][source.value=/(^|\x2f)use-app-updater$/] > ImportSpecifier[importKind='value'][imported.name='useAppUpdater']`,
+  message: "Call useAppUpdater once, in App, so the app keeps one update lifecycle.",
+};
+const pasteIconOnly = {
+  selector:
+    "JSXOpeningElement[name.name='Clipboard']:not(JSXElement:has(> JSXOpeningElement:has(> JSXAttribute[name.name='aria-label'][value.value=/^Paste\\b/])) > JSXElement > JSXOpeningElement)",
+  message: "Use the Clipboard icon only as the direct icon of a control labelled Paste.",
+};
+const appSyntax = [
+  noDynamicTauriImport,
+  noXtermOutsideTerminalPane,
+  noUpdaterCallsOutsideLifecycle,
+  noUpdaterHookOutsideApp,
+  pasteIconOnly,
+];
+const withoutSyntax = (...excluded) => appSyntax.filter((rule) => !excluded.includes(rule));
 
 export default tseslint.config(
   { ignores: ["dist", "node_modules", "src-tauri/target", "docs", ".claude"] },
@@ -79,7 +109,25 @@ export default tseslint.config(
           ],
         },
       ],
-      "no-restricted-syntax": ["error", noDynamicTauriImport],
+      "no-restricted-syntax": ["error", ...appSyntax],
+    },
+  },
+  {
+    files: [terminalImplementation],
+    rules: {
+      "no-restricted-syntax": ["error", ...withoutSyntax(noXtermOutsideTerminalPane)],
+    },
+  },
+  {
+    files: [updaterLifecycle],
+    rules: {
+      "no-restricted-syntax": ["error", ...withoutSyntax(noUpdaterCallsOutsideLifecycle)],
+    },
+  },
+  {
+    files: [updaterOwner],
+    rules: {
+      "no-restricted-syntax": ["error", ...withoutSyntax(noUpdaterHookOutsideApp)],
     },
   },
   {
@@ -104,7 +152,7 @@ export default tseslint.config(
     rules: {
       "no-restricted-syntax": [
         "error",
-        noDynamicTauriImport,
+        ...appSyntax,
         {
           selector:
             "JSXAttribute[name.name='dangerouslySetInnerHTML'], Property:matches([key.name='dangerouslySetInnerHTML'], [key.value='dangerouslySetInnerHTML'])",
