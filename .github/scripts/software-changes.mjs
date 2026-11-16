@@ -33,7 +33,10 @@ if (process.argv.includes("--check")) {
   let software = true;
   let frontend = false;
   if (valid(BASE_SHA) && valid(HEAD_SHA)) {
-    const paths = execFileSync("git", ["diff", "--name-only", "-z", BASE_SHA, HEAD_SHA], {
+    const revisions =
+      EVENT_NAME === "pull_request" ? [BASE_SHA + "..." + HEAD_SHA] : [BASE_SHA, HEAD_SHA];
+    // Count the old path of a moved file so moving code into docs still runs CI.
+    const paths = execFileSync("git", ["diff", "--no-renames", "--name-only", "-z", ...revisions], {
       encoding: "utf8",
     })
       .split("\0")

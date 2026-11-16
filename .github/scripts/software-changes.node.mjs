@@ -77,7 +77,7 @@ test("pushes and other events never skip jobs as frontend-only", () => {
   }
 });
 
-test("the CLI writes both outputs from a git diff", () => {
+test("the CLI classifies PR and push diffs", () => {
   const dir = mkdtempSync(join(tmpdir(), "software-changes-"));
   try {
     const git = (...args) =>
@@ -93,14 +93,15 @@ test("the CLI writes both outputs from a git diff", () => {
     git("add", ".");
     git("commit", "-q", "-m", "styles");
     const head = git("rev-parse", "HEAD");
-    const run = (eventName) => {
-      const output = join(dir, `output-${eventName}`);
+    const run = (eventName, baseSha = base, headSha = head) => {
+      const output = join(dir, "output");
+      writeFileSync(output, "");
       execFileSync(process.execPath, [script, "--check"], {
         cwd: dir,
         env: {
           ...process.env,
-          BASE_SHA: base,
-          HEAD_SHA: head,
+          BASE_SHA: baseSha,
+          HEAD_SHA: headSha,
           EVENT_NAME: eventName,
           GITHUB_OUTPUT: output,
         },
@@ -109,6 +110,19 @@ test("the CLI writes both outputs from a git diff", () => {
     };
     assert.equal(run("pull_request"), "software=true\nfrontend_only=true\n");
     assert.equal(run("push"), "software=true\nfrontend_only=false\n");
+
+    git("checkout", "-q", "--detach", base);
+    writeFileSync(join(dir, "README.md"), "# Docs\n");
+    git("add", "README.md");
+    git("commit", "-qm", "docs");
+    const docsHead = git("rev-parse", "HEAD");
+    assert.equal(run("pull_request", head, docsHead), "software=false\nfrontend_only=false\n");
+
+    git("checkout", "-q", "--detach", head);
+    git("mv", "src/styles.css", "styles.md");
+    git("commit", "-qm", "move styles");
+    const movedHead = git("rev-parse", "HEAD");
+    assert.equal(run("pull_request", head, movedHead), "software=true\nfrontend_only=true\n");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
