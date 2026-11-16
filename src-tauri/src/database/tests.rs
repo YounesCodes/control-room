@@ -1853,10 +1853,10 @@ fn split_nesting_is_accepted_up_to_its_bound_and_refused_past_it() {
         }
     };
 
-    assert!(validate_workspace_state(&nested(15)).is_ok());
-    assert!(validate_workspace_state(&nested(16)).is_ok());
+    assert!(validate_workspace_state(&nested(MAX_SPLIT_DEPTH_FOR_UNIQUE_WORKSPACES - 1)).is_ok());
+    assert!(validate_workspace_state(&nested(MAX_SPLIT_DEPTH_FOR_UNIQUE_WORKSPACES)).is_ok());
     assert_eq!(
-        validate_workspace_state(&nested(17)).unwrap_err(),
+        validate_workspace_state(&nested(MAX_SPLIT_DEPTH_FOR_UNIQUE_WORKSPACES + 1)).unwrap_err(),
         "Terminal split layout is too deeply nested"
     );
 }

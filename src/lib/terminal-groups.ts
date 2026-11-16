@@ -52,7 +52,7 @@ export function renameTerminalGroup(
   groupId: string,
   name: string,
 ): TerminalGroup[] {
-  const trimmed = name.trim();
+  const trimmed = name.replace(/\p{Cc}+/gu, " ").trim();
   if (!trimmed) return groups;
   return groups.map((group) => (group.id === groupId ? { ...group, name: trimmed } : group));
 }
