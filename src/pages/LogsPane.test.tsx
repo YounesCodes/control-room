@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 
+import { useState } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   AppSettings,
   CachedList,
+  DockerContainer,
   LogSourceSelection,
   SavedConnection,
   SystemdUnit,
@@ -219,6 +221,47 @@ describe("LogsPane reading position", () => {
     await screen.findByText("Permission denied by Docker");
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(api.startJournalStream).not.toHaveBeenCalled();
+  });
+
+  it("lists Docker log sources with sudo when the Docker socket denies access", async () => {
+    const denied = "permission denied while trying to connect to the Docker daemon socket";
+    api.listContainers.mockImplementation(async (_id: string, password: string | null) => {
+      if (!password) throw new Error(denied);
+      return [{ id: "container-a", name: "api" }];
+    });
+    function StatefulLogs() {
+      const [containersCache, setContainersCache] = useState<CachedList<DockerContainer>>({
+        items: [],
+        fetchedAt: null,
+        loading: false,
+        error: null,
+      });
+      return (
+        <LogsPane
+          connection={connection}
+          settings={settings}
+          logTailOptions={[200]}
+          servicesCache={servicesCache}
+          containersCache={containersCache}
+          selectedSource={{ type: "docker", id: "container-a" }}
+          onServicesCacheChange={vi.fn()}
+          onContainersCacheChange={setContainersCache}
+          onSourceChange={vi.fn()}
+        />
+      );
+    }
+    render(<StatefulLogs />);
+
+    await screen.findByText(denied);
+    await userEvent.click(screen.getByRole("button", { name: "Retry with sudo" }));
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(within(dialog).getByLabelText(/password/i), "example-password");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => expect(screen.queryByText(denied)).toBeNull());
+    expect(api.listContainers).toHaveBeenLastCalledWith(connection.id, "example-password");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("button", { name: "Start" })).toBeTruthy();
   });
 
   it("separates receiving lines, wrapping, and keeping the viewport at the latest line", async () => {
