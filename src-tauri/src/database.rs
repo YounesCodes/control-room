@@ -34,6 +34,8 @@ pub(crate) const PERSISTED_WORKSPACE_VIEWS: [&str; 7] = [
     "scratchpad",
 ];
 const REMOVED_WORKSPACE_VIEWS: [&str; 3] = ["overview", "boot", "baselines"];
+const MAX_PERSISTED_WORKSPACES: usize = 100;
+const MAX_SPLIT_DEPTH_FOR_UNIQUE_WORKSPACES: usize = MAX_PERSISTED_WORKSPACES - 1;
 
 pub struct Database {
     connection: Mutex<Connection>,
@@ -992,8 +994,10 @@ fn validate_workspace_state(state: &PersistedWorkspaceState) -> Result<(), Strin
     {
         return Err("Workspace state contains invalid panel sizes".into());
     }
-    if state.workspaces.len() > 100 {
-        return Err("Workspace state cannot contain more than 100 Workspaces".into());
+    if state.workspaces.len() > MAX_PERSISTED_WORKSPACES {
+        return Err(format!(
+            "Workspace state cannot contain more than {MAX_PERSISTED_WORKSPACES} Workspaces"
+        ));
     }
     let mut ids = std::collections::HashSet::new();
     for workspace in &state.workspaces {
@@ -1096,7 +1100,7 @@ fn validate_persisted_layout(
     workspace_ids: &std::collections::HashSet<&str>,
     depth: usize,
 ) -> Result<(), String> {
-    if depth > 16 {
+    if depth > MAX_SPLIT_DEPTH_FOR_UNIQUE_WORKSPACES {
         return Err("Terminal split layout is too deeply nested".into());
     }
     match layout {
@@ -1878,3 +1882,6 @@ fn validate_history_input(input: &HistoryInput) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod layout_properties;
