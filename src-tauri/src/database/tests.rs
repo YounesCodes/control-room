@@ -1,3 +1,4 @@
+use super::migrations::{LATEST_SCHEMA_VERSION, MIGRATIONS, RETIRED_SCHEMA_VERSIONS};
 use super::*;
 
 fn input(name: &str) -> SavedConnectionInput {
@@ -1464,26 +1465,12 @@ fn opening_an_up_to_date_database_again_changes_nothing() {
 
 #[test]
 fn the_unused_schema_versions_stay_unused() {
-    let migrations = include_str!("../database.rs")
-        .split_once("fn migrate(")
-        .expect("migrate is missing")
-        .1
-        .split_once("fn map_connection(")
-        .expect("migrate is not terminated")
-        .0;
-
-    for unused in [7, 8, 9] {
-        assert!(
-            !migrations.contains(&format!("PRAGMA user_version = {unused};")),
-            "step {unused} must stay empty"
-        );
-    }
-    for released in [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 15] {
-        assert!(
-            migrations.contains(&format!("PRAGMA user_version = {released};")),
-            "migration step {released} disappeared"
-        );
-    }
+    let versions: Vec<i64> = MIGRATIONS
+        .iter()
+        .map(|migration| migration.version)
+        .collect();
+    assert_eq!(versions, [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 15]);
+    assert_eq!(RETIRED_SCHEMA_VERSIONS, [7, 8, 9]);
     assert_eq!(LATEST_SCHEMA_VERSION, 15);
 }
 
