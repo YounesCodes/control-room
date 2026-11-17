@@ -6,7 +6,6 @@ import { runAxe } from "../test/axe";
 import { Plus } from "lucide-react";
 import {
   ConnectionSection,
-  observeLayoutFallback,
   PanelLayoutContext,
   ResizeDivider,
   ResizableSplit,
@@ -639,26 +638,7 @@ describe("resizable connection panels in Chromium", () => {
     );
   });
 
-  it("reads current layout when the fallback observer attaches after a size change", async () => {
-    const element = document.createElement("div");
-    mountNode = element;
-    element.style.width = "120px";
-    document.body.append(element);
-    root = createRoot(element);
-    let measuredWidth = element.style.width;
-    element.style.width = "200px";
-    const stop = observeLayoutFallback(element, () => {
-      measuredWidth = element.style.width;
-    });
-    try {
-      await expect.poll(() => measuredWidth).toBe("200px");
-    } finally {
-      stop();
-    }
-  });
-
-  it("refits the Ports graph on window resize without ResizeObserver", async () => {
-    vi.stubGlobal("ResizeObserver", undefined);
+  it("refits the Ports graph on window resize", async () => {
     await page.viewport(1280, 900);
     mount();
     await page.getByRole("button", { name: "Open ports" }).click();

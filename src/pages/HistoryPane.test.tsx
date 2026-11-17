@@ -591,22 +591,91 @@ describe("HistoryPane", () => {
       expect(trigger.getAttribute("aria-expanded")).toBe("false");
     });
   });
-  it("keeps a deleted row mounted until its successful collapse completes", async () => {
+  function stubRowCollapse() {
+    let finishCollapse!: () => void;
+    const collapse = {
+      effect: { getComputedTiming: () => ({ endTime: 160 }) },
+      finished: new Promise<void>((resolve) => {
+        finishCollapse = resolve;
+      }),
+    };
+    const loopingIndicator = {
+      effect: { getComputedTiming: () => ({ endTime: Number.POSITIVE_INFINITY }) },
+      finished: new Promise<void>(() => undefined),
+    };
+    const getAnimations = vi.fn(function (this: HTMLElement) {
+      return this.matches(".history-row[data-removing]") ? [collapse, loopingIndicator] : [];
+    });
+    Object.defineProperty(HTMLElement.prototype, "getAnimations", {
+      value: getAnimations,
+      configurable: true,
+    });
+    return {
+      getAnimations,
+      finishCollapse: () => finishCollapse(),
+      restore: () => Reflect.deleteProperty(HTMLElement.prototype, "getAnimations"),
+    };
+  }
+
+  it("keeps a deleted row mounted until its collapse animation finishes", async () => {
     api.historyIntegrationStatus.mockResolvedValue("installed");
-    let finish!: () => void;
-    api.deleteHistory.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          finish = resolve;
-        }),
-    );
-    const view = render(<HistoryPane {...props()} />);
+    const animations = stubRowCollapse();
+    try {
+      let finish!: () => void;
+      api.deleteHistory.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      const view = render(<HistoryPane {...props()} />);
+      await screen.findByText("docker ps");
+      await userEvent.click(screen.getByRole("button", { name: "Delete history entry" }));
+      expect(view.container.querySelector(".history-row")?.hasAttribute("data-removing")).toBe(
+        false,
+      );
+      await act(async () => finish());
+      expect(view.container.querySelector(".history-row[data-removing]")).not.toBeNull();
+      expect(animations.getAnimations).toHaveBeenCalledWith({ subtree: true });
+      await act(() => new Promise((resolve) => setTimeout(resolve, 300)));
+      expect(screen.getByText("docker ps")).toBeTruthy();
+      await act(async () => animations.finishCollapse());
+      expect(screen.queryByText("docker ps")).toBeNull();
+    } finally {
+      animations.restore();
+    }
+  });
+
+  it("applies a history refresh only after a deleted row finishes collapsing", async () => {
+    api.historyIntegrationStatus.mockResolvedValue("installed");
+    const animations = stubRowCollapse();
+    try {
+      const view = render(<HistoryPane {...props()} />);
+      await screen.findByText("docker ps");
+      await userEvent.click(screen.getByRole("button", { name: "Delete history entry" }));
+      await waitFor(() =>
+        expect(view.container.querySelector(".history-row[data-removing]")).not.toBeNull(),
+      );
+      const readCount = api.history.mock.calls.length;
+      api.history.mockResolvedValue([{ ...historyEntry, id: "new-entry", command: "uptime" }]);
+      notifyHistoryChanged(connection.id);
+      await act(() => new Promise((resolve) => setTimeout(resolve, 300)));
+      expect(api.history).toHaveBeenCalledTimes(readCount);
+      expect(screen.getByText("docker ps")).toBeTruthy();
+      await act(async () => animations.finishCollapse());
+      await screen.findByText("uptime");
+      expect(api.history).toHaveBeenCalledTimes(readCount + 1);
+      expect(screen.queryByText("docker ps")).toBeNull();
+    } finally {
+      animations.restore();
+    }
+  });
+
+  it("removes a deleted row at once when nothing animates its collapse", async () => {
+    api.historyIntegrationStatus.mockResolvedValue("installed");
+    render(<HistoryPane {...props()} />);
     await screen.findByText("docker ps");
     await userEvent.click(screen.getByRole("button", { name: "Delete history entry" }));
-    expect(view.container.querySelector(".history-row")?.hasAttribute("data-removing")).toBe(false);
-    await act(async () => finish());
-    expect(view.container.querySelector(".history-row[data-removing]")).not.toBeNull();
-    expect(screen.getByText("docker ps")).toBeTruthy();
     await waitFor(() => expect(screen.queryByText("docker ps")).toBeNull());
   });
 

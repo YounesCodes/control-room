@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { EmptyState } from "./PanelState";
-import { observeLayoutFallback } from "./ResizablePanels";
 import type { SystemdExplorerState, SystemdUnit } from "../types";
 import { systemdStateLabel } from "../lib/systemd-units";
 
@@ -51,7 +50,7 @@ export function SystemdInventory({
     if (!element) return;
     const measure = () => setWindow({ top: element.scrollTop, height: element.clientHeight });
     measure();
-    if (typeof ResizeObserver === "undefined") return observeLayoutFallback(element, measure);
+    if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();

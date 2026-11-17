@@ -16,51 +16,6 @@ export const PanelLayoutContext = createContext<{
   setSize: (key: string, size: number | null) => void;
 }>({ sizes: {}, setSize: () => undefined });
 
-export function observeLayoutFallback(element: HTMLElement, measure: () => void) {
-  let frame: number | null = null;
-  let watchFrame: number | null = null;
-  let disposed = false;
-  const snapshot = () => {
-    const rect = element.getBoundingClientRect();
-    return { width: rect.width, height: rect.height };
-  };
-  let last = snapshot();
-  const schedule = () => {
-    if (disposed) return;
-    if (frame !== null) cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => {
-      frame = null;
-      if (disposed) return;
-      last = snapshot();
-      measure();
-    });
-  };
-  const watch = () => {
-    if (disposed) return;
-    const current = snapshot();
-    if (current.width !== last.width || current.height !== last.height) {
-      schedule();
-    }
-    watchFrame = requestAnimationFrame(watch);
-  };
-  const observer = new MutationObserver(schedule);
-  for (let ancestor: HTMLElement | null = element; ancestor; ancestor = ancestor.parentElement) {
-    observer.observe(ancestor, { attributes: true, attributeFilter: ["style", "class"] });
-  }
-  window.addEventListener("resize", schedule);
-  schedule();
-  watchFrame = requestAnimationFrame(watch);
-  return () => {
-    disposed = true;
-    observer.disconnect();
-    window.removeEventListener("resize", schedule);
-    if (frame !== null) cancelAnimationFrame(frame);
-    if (watchFrame !== null) cancelAnimationFrame(watchFrame);
-    frame = null;
-    watchFrame = null;
-  };
-}
-
 function usePanelDimension(dimension: "width" | "height") {
   const [element, ref] = useState<HTMLDivElement | null>(null);
   const [size, setSize] = useState(0);
@@ -69,9 +24,7 @@ function usePanelDimension(dimension: "width" | "height") {
     const measure = () =>
       setSize(dimension === "width" ? element.clientWidth : element.clientHeight);
     measure();
-    if (typeof ResizeObserver === "undefined") {
-      return observeLayoutFallback(element, measure);
-    }
+    if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
     observer.observe(element);
     return () => observer.disconnect();
@@ -102,10 +55,7 @@ function useCapabilitiesHeight(container: HTMLDivElement | null, present: boolea
     }
     const measure = () => setHeight(naturalSectionHeight(section));
     measure();
-    if (typeof ResizeObserver === "undefined") {
-      const content = section.firstElementChild;
-      return observeLayoutFallback(content instanceof HTMLElement ? content : section, measure);
-    }
+    if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
     for (const child of section.children) observer.observe(child);
     return () => observer.disconnect();
