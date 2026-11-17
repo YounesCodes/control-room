@@ -4,7 +4,13 @@ import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import registry from "./scenarios.json";
 import map from "./features.json";
-import type { EntryPoint, Feature, FixtureAction, FixtureReference } from "./features";
+import type {
+  ClientPlatform,
+  EntryPoint,
+  Feature,
+  FixtureAction,
+  FixtureReference,
+} from "./features";
 import "@xterm/xterm/css/xterm.css";
 import "@fontsource-variable/inter/opsz.css";
 import "../../styles.css";
@@ -31,7 +37,12 @@ import { App } from "../../App";
 
 let mounted: { root: Root; element: HTMLElement } | null = null;
 let mounts = 0;
-const appModifier = navigator.platform.startsWith("Mac") ? "Meta" : "Control";
+const platform: ClientPlatform = navigator.platform.startsWith("Mac")
+  ? "macos"
+  : navigator.platform.startsWith("Linux")
+    ? "linux"
+    : "windows";
+const appModifier = platform === "macos" ? "Meta" : "Control";
 
 afterEach(() => {
   mounted?.root.unmount();
@@ -109,7 +120,8 @@ const cases = (map.features as Feature[]).flatMap((feature) => {
 });
 
 describe("feature map entry points", () => {
-  it.each(cases)("%s: %s", async (_, __, entry, shortcuts) => {
+  it.for(cases)("%s: %s", async ([, , entry, shortcuts], { skip }) => {
+    if (entry.platforms && !entry.platforms.includes(platform)) skip();
     await resolve(entry, shortcuts);
   });
 });

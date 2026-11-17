@@ -1,5 +1,7 @@
 import type registry from "./scenarios.json";
 
+export type ClientPlatform = "windows" | "linux" | "macos";
+
 export type FixtureReference = { scenario: string; state: string };
 
 export type FixtureAction = { role: string; name: string; key?: string };
@@ -11,6 +13,7 @@ type Located = {
   open?: FixtureAction[];
   fixture?: FixtureReference;
   viewport?: keyof typeof registry.viewports;
+  platforms?: ClientPlatform[];
 };
 
 export type EntryPoint =

@@ -332,7 +332,8 @@
           "within": {
             "role": "group",
             "name": "Window actions"
-          }
+          },
+          "platforms": ["windows", "linux"]
         },
         {
           "kind": "toolbar",
@@ -341,7 +342,8 @@
           "within": {
             "role": "group",
             "name": "Window actions"
-          }
+          },
+          "platforms": ["windows", "linux"]
         },
         {
           "kind": "toolbar",
@@ -350,7 +352,8 @@
           "within": {
             "role": "group",
             "name": "Window actions"
-          }
+          },
+          "platforms": ["windows", "linux"]
         }
       ]
     },
