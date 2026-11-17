@@ -13,7 +13,6 @@ import { SystemdGraphExits } from "./SystemdGraphExits";
 import { SystemdPresence } from "./SystemdPresence";
 import { GraphControls } from "./GraphControls";
 import { usePanZoom } from "../lib/use-pan-zoom";
-import { observeLayoutFallback } from "./ResizablePanels";
 import { SYSTEMD_INITIAL_VISIBLE, systemdStateLabel, type SystemdEdge } from "../lib/systemd-units";
 import type { SystemdUnit } from "../types";
 import { layoutSystemdGraph } from "../lib/systemd-graph-layout";
@@ -181,7 +180,7 @@ export function SystemdGraph({
       if (!interrupted.current || !frameSelectedRef.current(false))
         fitRef.current(false, overview.current);
     };
-    if (typeof ResizeObserver === "undefined") return observeLayoutFallback(viewport, resize);
+    if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(resize);
     observer.observe(viewport);
     return () => observer.disconnect();

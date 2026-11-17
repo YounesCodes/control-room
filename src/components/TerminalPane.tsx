@@ -9,6 +9,7 @@ import { ChevronDown, ChevronUp, RotateCw, X } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
 import { notifyHistoryChanged } from "../lib/history-events";
+import { nextFrameOrTimeout } from "../lib/animation-timing";
 import {
   BoundedByteQueue,
   isControlRoomShortcut,
@@ -592,16 +593,7 @@ export function TerminalPane({
         pass++
       ) {
         startupPhase("layout");
-        await new Promise<void>((resolve) => {
-          const timeout = window.setTimeout(() => {
-            window.cancelAnimationFrame(frame);
-            resolve();
-          }, WEBKIT_SUSPENDED_FRAME_TIMEOUT_MS);
-          const frame = window.requestAnimationFrame(() => {
-            window.clearTimeout(timeout);
-            resolve();
-          });
-        });
+        await nextFrameOrTimeout(WEBKIT_SUSPENDED_FRAME_TIMEOUT_MS);
         if (disposed || generation !== sessionGenerationRef.current) return null;
         fitRef.current?.fit();
         smallestCols = Math.min(smallestCols, terminal.cols);

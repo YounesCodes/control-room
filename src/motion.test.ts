@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { POPOVER_EXIT_MS } from "./hooks/use-popover-exit";
-import { REMOVE_COLLAPSE_MS } from "./pages/HistoryPane";
 
 const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const appSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
@@ -22,7 +21,6 @@ function motionTokenMs(token: string): number {
 describe("motion guardrails", () => {
   it("keeps JavaScript exit timers equal to the CSS motion tokens they wait for", () => {
     expect(POPOVER_EXIT_MS).toBe(motionTokenMs("--motion-fast"));
-    expect(REMOVE_COLLAPSE_MS).toBe(motionTokenMs("--motion-med"));
   });
 
   it("never animates the terminal surface", () => {

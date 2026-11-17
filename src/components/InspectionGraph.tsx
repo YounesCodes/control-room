@@ -1,5 +1,4 @@
 import { GraphControls } from "./GraphControls";
-import { observeLayoutFallback } from "./ResizablePanels";
 import {
   useCallback,
   useEffect,
@@ -165,7 +164,7 @@ export function InspectionGraph({
       measure();
       fit();
     };
-    if (typeof ResizeObserver === "undefined") return observeLayoutFallback(viewport, resize);
+    if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(resize);
     observer.observe(viewport);
     if (controlsRef.current) observer.observe(controlsRef.current);

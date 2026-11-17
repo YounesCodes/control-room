@@ -1,5 +1,5 @@
 import { Search } from "../components/MagnifierIcon";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   Copy,
@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Bone, EmptyState, ErrorState, Skeleton, boneWidth, wave } from "../components/PanelState";
+import { finiteAnimationsSettled } from "../lib/animation-timing";
 import { api, errorMessage } from "../lib/api";
 import { notifyHistoryChanged, onHistoryChanged } from "../lib/history-events";
 import type { HistoryEntry, HistoryIntegrationStatus, SavedConnection } from "../types";
@@ -44,7 +45,6 @@ const MORE_MENU_WIDTH = 240;
 const MORE_MENU_HEIGHT = 132;
 const COPY_FEEDBACK_MS = 1500;
 const HISTORY_REFRESH_MS = 75;
-export const REMOVE_COLLAPSE_MS = 160;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -104,6 +104,7 @@ function HistoryEntryRow({
   onCopy,
   onPaste,
   onDelete,
+  onRemoved,
 }: {
   entry: HistoryEntry;
   search: string;
@@ -113,10 +114,23 @@ function HistoryEntryRow({
   onCopy: (entry: HistoryEntry) => void;
   onPaste: (command: string) => void;
   onDelete: (entry: HistoryEntry) => void;
+  onRemoved: (id: string) => void;
 }) {
+  const rowRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const row = rowRef.current;
+    if (!removing || !row) return;
+    let current = true;
+    void finiteAnimationsSettled(row).then(() => {
+      if (current) onRemoved(entry.id);
+    });
+    return () => {
+      current = false;
+    };
+  }, [removing, entry.id, onRemoved]);
   const startedAt = new Date(entry.startedAt);
   return (
-    <article className="history-row" data-removing={removing ? "" : undefined}>
+    <article ref={rowRef} className="history-row" data-removing={removing ? "" : undefined}>
       <div className="history-row-inner">
         <time title={startedAt.toLocaleString()}>
           {startedAt.toLocaleTimeString([], {
@@ -194,6 +208,7 @@ export function HistoryPane({
 }) {
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [removingIds, setRemovingIds] = useState<ReadonlySet<string>>(new Set());
+  const [refreshRequested, setRefreshRequested] = useState(false);
   const [integration, setIntegration] = useState<HistoryIntegrationStatus | null>(null);
   const [integrationError, setIntegrationError] = useState<string | null>(null);
   const [integrationLoading, setIntegrationLoading] = useState(false);
@@ -223,12 +238,12 @@ export function HistoryPane({
   const moreMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const removalTimersRef = useRef(new Map<string, number>());
 
   const mutationGeneration = useRef(0);
   useEffect(() => {
     setEntries([]);
     setRemovingIds(new Set());
+    setRefreshRequested(false);
     setWorking(false);
     setLoading(true);
     setHasLoaded(false);
@@ -243,8 +258,6 @@ export function HistoryPane({
     return () => {
       mutationGeneration.current += 1;
       if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
-      for (const timer of removalTimersRef.current.values()) window.clearTimeout(timer);
-      removalTimersRef.current.clear();
     };
   }, [connection.id]);
 
@@ -290,25 +303,37 @@ export function HistoryPane({
   useEffect(() => {
     const searchTimer = window.setTimeout(() => void loadHistory(), search ? 180 : 0);
     let refreshTimer: number | undefined;
-    const refreshAfterRemovalsCollapse = () => {
-      refreshTimer = undefined;
-      if (removalTimersRef.current.size > 0) {
-        refreshTimer = window.setTimeout(refreshAfterRemovalsCollapse, REMOVE_COLLAPSE_MS);
-      } else {
-        void loadHistory(true);
-      }
-    };
     const unsubscribe = onHistoryChanged(connection.id, () => {
-      refreshTimer ??= window.setTimeout(refreshAfterRemovalsCollapse, HISTORY_REFRESH_MS);
+      refreshTimer ??= window.setTimeout(() => {
+        refreshTimer = undefined;
+        setRefreshRequested(true);
+      }, HISTORY_REFRESH_MS);
     });
     return () => {
       window.clearTimeout(searchTimer);
       window.clearTimeout(refreshTimer);
+      setRefreshRequested(false);
       unsubscribe();
       loadRequestRef.current += 1;
       historyReadPendingRef.current = false;
     };
   }, [connection.id, search]);
+
+  const collapsing = entries.some((entry) => removingIds.has(entry.id));
+  useEffect(() => {
+    if (!refreshRequested || collapsing) return;
+    setRefreshRequested(false);
+    void loadHistory(true);
+  }, [refreshRequested, collapsing]);
+
+  const finishRemoval = useCallback((id: string) => {
+    setEntries((current) => current.filter((item) => item.id !== id));
+    setRemovingIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     setIntegration(null);
@@ -524,19 +549,6 @@ export function HistoryPane({
         if (generation !== mutationGeneration.current) return;
         if (invalidateHistoryRead()) notifyHistoryChanged(connection.id);
         setRemovingIds((current) => new Set(current).add(entry.id));
-        const timer = window.setTimeout(() => {
-          removalTimersRef.current.delete(entry.id);
-          if (generation !== mutationGeneration.current) return;
-          setEntries((current) => current.filter((item) => item.id !== entry.id));
-          setRemovingIds((current) => {
-            const next = new Set(current);
-            next.delete(entry.id);
-            return next;
-          });
-        }, REMOVE_COLLAPSE_MS);
-        const previousTimer = removalTimersRef.current.get(entry.id);
-        if (previousTimer !== undefined) window.clearTimeout(previousTimer);
-        removalTimersRef.current.set(entry.id, timer);
       } catch (caught) {
         if (generation === mutationGeneration.current) setError(errorMessage(caught));
       }
@@ -891,6 +903,7 @@ export function HistoryPane({
                 onCopy={copyEntry}
                 onPaste={onPaste}
                 onDelete={remove}
+                onRemoved={finishRemoval}
               />
             ))}
           </section>
