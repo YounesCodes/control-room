@@ -173,21 +173,35 @@ export async function nativeKey(shortcut: string) {
       { timeout: 5000 },
     );
 }
+function xprop(...args: string[]) {
+  return execFileSync("xprop", ["-notype", ...args], { encoding: "utf8", timeout: 5000 });
+}
+function managedLinuxWindow(pid: number) {
+  const clients = xprop("-root", "_NET_CLIENT_LIST").match(/0x[0-9a-f]+/gi) ?? [];
+  for (const id of clients) {
+    let properties: string;
+    try {
+      properties = xprop("-id", id, "_NET_WM_PID", "_NET_WM_NAME");
+    } catch {
+      continue;
+    }
+    if (
+      properties.match(/^_NET_WM_PID\D*(\d+)$/m)?.[1] === String(pid) &&
+      /^_NET_WM_NAME[^"]*"Control Room"$/m.test(properties)
+    )
+      return id;
+  }
+  throw new Error(`No managed "Control Room" window belongs to process ${pid}`);
+}
 export async function focusNativeApp() {
   requireMacDesktop();
   const pid = (await runtime()).appPid;
   if (windows) powershell("focus", String(pid));
   else if (mac) await ipc("plugin:window|set_focus", { label: "main" });
-  else {
-    const id = execFileSync(
-      "xdotool",
-      ["search", "--onlyvisible", "--pid", String(pid), "--name", "^Control Room$"],
-      { encoding: "utf8", timeout: 5000 },
-    )
-      .trim()
-      .split("\n")[0];
-    execFileSync("xdotool", ["windowactivate", "--sync", id], { timeout: 5000 });
-  }
+  else
+    execFileSync("xdotool", ["windowactivate", "--sync", managedLinuxWindow(pid)], {
+      timeout: 5000,
+    });
   // On Windows the WebView child can own focus while the Tauri window reports false.
   if (!windows)
     await browser.waitUntil(() => ipc<boolean>("plugin:window|is_focused", { label: "main" }));

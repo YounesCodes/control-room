@@ -39,21 +39,35 @@ fn sending_input_to_a_process_that_never_reads_it_is_bounded() {
     assert!(started.elapsed() < Duration::from_secs(5));
 }
 
+fn posix_shell() -> std::process::Command {
+    #[cfg(windows)]
+    {
+        let bash = crate::local_shell::resolve_installed("git-bash").unwrap();
+        let mut command = background_command(bash.program());
+        command.args(["--noprofile", "--norc"]);
+        command
+    }
+    #[cfg(not(windows))]
+    background_command("sh")
+}
+
 #[test]
-#[cfg(windows)]
 fn process_input_and_output_pipes_are_drained_concurrently() {
-    let mut command = background_command("powershell.exe");
-    command.args(["-NoLogo", "-NoProfile", "-Command", "[Console]::Write('x' * 131072); $inputText=[Console]::In.ReadToEnd(); [Console]::Write($inputText.Length)"]);
+    let mut command = posix_shell();
+    command.args([
+        "-c",
+        "head -c 131072 /dev/zero | tr '\\0' x; wc -c | tr -d ' '",
+    ]);
     let output = run_process(
         command,
         "pipe_drain_test",
         Some(&vec![b'y'; 131072]),
-        Duration::from_secs(10),
+        COMMAND_TIMEOUT,
     )
     .unwrap();
     assert_eq!(output.exit_code, 0);
     assert!(output.stdout.starts_with(&vec![b'x'; 131072]));
-    assert!(output.stdout.ends_with(b"131073"));
+    assert_eq!(&output.stdout[131072..], b"131073\n");
 }
 
 #[test]
@@ -71,7 +85,6 @@ fn reads_cpu_busy_share_from_the_two_proc_stat_samples() {
 #[test]
 #[cfg(windows)]
 fn cpu_probe_does_not_double_count_guests_or_truncate_large_counters() {
-    let bash = crate::local_shell::resolve_installed("git-bash").unwrap();
     let command = resource_command().replace("/proc/stat", "\"$fixture\"");
     let script = format!(
         r#"fixture=$(mktemp)
@@ -80,8 +93,8 @@ printf 'cpu 4294967296 10 20 4294967296 10 20 30 40 100 20\n' > "$fixture"
 {command}
 "#
     );
-    let mut process = background_command(bash.program());
-    process.args(["--noprofile", "--norc", "-c", &script]);
+    let mut process = posix_shell();
+    process.args(["-c", &script]);
     let output = run_process(process, "cpu_fixture", None, COMMAND_TIMEOUT)
         .unwrap()
         .success_text()
