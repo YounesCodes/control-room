@@ -460,7 +460,7 @@ pub(super) fn classify_failure(code: i32, stderr: &[u8]) -> String {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, windows))]
 pub(super) fn run_local_script(
     command: std::process::Command,
     operation: &'static str,
