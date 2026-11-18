@@ -37,6 +37,7 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: npm ci
       - name: Check debug automation settings
         if: matrix.shard == 1
@@ -111,6 +112,7 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: npm ci
       - run: cargo install tauri-driver --locked
       - run: npm run test:desktop:build
