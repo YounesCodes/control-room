@@ -87,7 +87,9 @@ impl StartupTiming {
     fn log_line(&self, target: &str, stage: &str, at: Instant) -> String {
         format!(
             "[control-room] terminal_start target={target} prepare_ms={} spawn_ms={} {stage}_ms={}",
-            self.prepared_at.duration_since(self.requested_at).as_millis(),
+            self.prepared_at
+                .duration_since(self.requested_at)
+                .as_millis(),
             self.spawned_at.duration_since(self.prepared_at).as_millis(),
             at.duration_since(self.requested_at).as_millis(),
         )

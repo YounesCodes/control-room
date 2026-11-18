@@ -16,8 +16,8 @@ use crate::models::{SessionEndCategory, SessionState};
 
 use super::{
     CONNECTED_MARKER, MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OUTPUT_READ_BUFFER_BYTES, OutputFlow,
-    SessionManager, SessionMode, StartupTiming, TERMINAL_TYPE, TerminalFailureDetector, TerminalFailureHint,
-    classify_local_exit, classify_session_exit, interactive_shell_command,
+    SessionManager, SessionMode, StartupTiming, TERMINAL_TYPE, TerminalFailureDetector,
+    TerminalFailureHint, classify_local_exit, classify_session_exit, interactive_shell_command,
 };
 
 #[cfg(any(windows, target_os = "macos"))]
