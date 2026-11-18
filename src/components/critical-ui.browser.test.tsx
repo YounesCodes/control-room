@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
-import { useState, type ReactNode } from "react";
+import { Profiler, useState, type ReactNode } from "react";
 import axe from "axe-core";
 import { runAxe } from "../test/axe";
 import { Plus } from "lucide-react";
@@ -9,7 +9,7 @@ import { Modal } from "./Modal";
 import { CommandPalette } from "./CommandPalette";
 import { ConnectionDialog } from "./ConnectionDialog";
 import { WindowControls } from "./WindowControls";
-import { WorkspaceTabScroller } from "./WorkspaceTabScroller";
+import { TabLabel, WorkspaceTabScroller } from "./WorkspaceTabScroller";
 import { SettingsPane } from "../pages/SettingsPane";
 import type { AppSettings, EnvironmentInfo } from "../types";
 import "../styles.css";
@@ -192,7 +192,7 @@ function SettingsFixture() {
 
 function TabOverflowFixture({ longNames = false }: { longNames?: boolean }) {
   const [active, setActive] = useState(0);
-  const [count, setCount] = useState(4);
+  const [count, setCount] = useState(5);
   const [narrow, setNarrow] = useState(false);
   const tabs = Array.from({ length: count }, (_, index) => index);
   const label = (index: number) =>
@@ -424,6 +424,31 @@ describe("critical UI in Chromium", () => {
     await vi.waitFor(() => expect(Number(getComputedStyle(rename).opacity)).toBeGreaterThan(0.9));
   });
 
+  it("keeps a cut-off tab's trailing number visible and its full name readable", async () => {
+    mount(
+      <nav className="session-tabs" aria-label="Open Workspaces">
+        <div className="session-tab-wrap" style={{ width: 130 }}>
+          <button className="session-tab-main" type="button">
+            <TabLabel label="Windows PowerShell 2" />
+          </button>
+        </div>
+      </nav>,
+    );
+    const tab = page.getByRole("button", { name: "Windows PowerShell 2", exact: true });
+    await expect.element(tab).toBeVisible();
+    const label = tab.element().querySelector<HTMLElement>(".session-tab-label")!;
+    const base = label.querySelector<HTMLElement>(".session-tab-label-base")!;
+    const suffix = label.querySelector<HTMLElement>(".session-tab-label-suffix")!;
+    expect(label.innerText).toBe("Windows PowerShell 2");
+    expect(base.scrollWidth).toBeGreaterThan(base.clientWidth);
+    expect(suffix.getBoundingClientRect().right).toBeLessThanOrEqual(
+      label.getBoundingClientRect().right + 1,
+    );
+    expect(suffix.getBoundingClientRect().left).toBeGreaterThan(
+      base.getBoundingClientRect().right - 1,
+    );
+  });
+
   it("never paints a partial terminal at either overflow edge", async () => {
     mount(<TabOverflowFixture />);
     await page.getByRole("button", { name: "Add terminal" }).click();
@@ -438,6 +463,57 @@ describe("critical UI in Chromium", () => {
         expect(rect.right).toBeLessThanOrEqual(bounds.right + 1);
       }
     });
+  });
+
+  it("fits whole tabs beside the overflow controls however wide the engine draws them", async () => {
+    const wider = document.createElement("style");
+    wider.textContent = ".session-tab-pager { width: 41px; }";
+    document.head.append(wider);
+    try {
+      mount(<TabOverflowFixture />);
+      await page.getByRole("button", { name: "Add terminal" }).click();
+      const list = document.querySelector<HTMLElement>(".session-tab-list")!;
+      for (const step of ["Select first terminal", "Resize tabs", "Select last terminal"]) {
+        await page.getByRole("button", { name: step }).click();
+        await vi.waitFor(() => {
+          const bounds = list.getBoundingClientRect();
+          const content = list.querySelector<HTMLElement>(".session-tab-content")!;
+          const declared = parseFloat(content.style.getPropertyValue("--session-tab-width"));
+          expect(list.scrollWidth).toBeLessThanOrEqual(list.clientWidth + 1);
+          for (const tab of list.querySelectorAll<HTMLElement>(".session-tab-wrap")) {
+            const rect = tab.getBoundingClientRect();
+            expect(rect.width).toBeCloseTo(declared, 0);
+            expect(rect.left).toBeGreaterThanOrEqual(bounds.left - 1);
+            expect(rect.right).toBeLessThanOrEqual(bounds.right + 1);
+          }
+        });
+      }
+    } finally {
+      wider.remove();
+    }
+  });
+
+  it("stops re-rendering the tab strip once a resize has settled", async () => {
+    let commits = 0;
+    const frames = (count: number) =>
+      new Promise<void>((resolve) => {
+        const step = (left: number) =>
+          left === 0 ? resolve() : requestAnimationFrame(() => step(left - 1));
+        step(count);
+      });
+    mount(
+      <Profiler id="strip" onRender={() => commits++}>
+        <TabOverflowFixture />
+      </Profiler>,
+    );
+    await page.getByRole("button", { name: "Add terminal" }).click();
+    for (const step of ["Resize tabs", "Resize tabs", "Select first terminal"]) {
+      await page.getByRole("button", { name: step }).click();
+      await frames(4);
+      const settled = commits;
+      await frames(12);
+      expect(commits).toBe(settled);
+    }
   });
 
   it("keeps New terminal reachable and reveals tabs when the strip overflows", async () => {
@@ -547,10 +623,16 @@ describe("critical UI in Chromium", () => {
     await picker.click();
     await userEvent.keyboard("{End}");
     await expect.poll(() => getComputedStyle(menu.element()).opacity).toBe("1");
-    const bounds = menu.element().getBoundingClientRect();
+    const popover = menu.element().closest<HTMLElement>(".session-tab-overflow-menu")!;
+    const bounds = popover.getBoundingClientRect();
     expect(bounds.left).toBeGreaterThanOrEqual(8);
     expect(bounds.right).toBeLessThanOrEqual(792);
     expect(bounds.bottom).toBeLessThanOrEqual(632);
+    const last = menu.getByRole("menuitem", { name: /^Terminal 20 / });
+    await expect.element(last).toHaveFocus();
+    const lastBounds = last.element().getBoundingClientRect();
+    expect(lastBounds.top).toBeGreaterThanOrEqual(bounds.top);
+    expect(lastBounds.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
     const violations = await runAxe(menu.element(), {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
     });
@@ -572,7 +654,7 @@ describe("critical UI in Chromium", () => {
     await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
     await page.getByRole("button", { name: "Remove terminal" }).click();
     await expect.element(picker).not.toBeInTheDocument();
-    expect(document.querySelectorAll(".session-tab-wrap")).toHaveLength(4);
+    expect(document.querySelectorAll(".session-tab-wrap")).toHaveLength(5);
   });
 
   it("reopens the overflow menu quickly while an earlier menu is still exiting", async () => {

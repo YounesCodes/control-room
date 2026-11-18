@@ -735,6 +735,22 @@
         "unavailable": ".host-metrics-panel[data-state='unavailable']",
         "short-history": ".host-metrics-panel [data-metric='cpu'] .metric-chart-dot"
       }
+    },
+    "tabs": {
+      "states": ["overflow", "overflow-menu"],
+      "ready": ".app-shell",
+      "prepare": {
+        "overflow-menu": [
+          {
+            "role": "button",
+            "name": "All terminals"
+          }
+        ]
+      },
+      "settled": {
+        "overflow": ".session-tab-scroll-region .session-tab-wrap.active",
+        "overflow-menu": ".session-tab-overflow-menu [aria-current='page']"
+      }
     }
   }
 }

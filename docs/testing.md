@@ -111,7 +111,10 @@ Ports `warnings` fails every Ports read as an unreachable host does. Splits
 restores a three-pane terminal group outside Focus Mode in `before-focus`, enters
 Focus Mode on a single terminal in `focus`, and enters it on a side-by-side group
 in `two-pane` and on a side-by-side plus stacked group in `three-pane`. At compact,
-`three-pane` is wider than the window and scrolls within the terminal area. Loading
+`three-pane` is wider than the window and scrolls within the terminal area. Tabs
+opens ten local and remote terminals with one disconnected, one ringing the bell,
+and one running a command, so the tab row overflows at every viewport; `overflow`
+shows the row and `overflow-menu` opens All terminals. Loading
 holds one first read open so its skeleton stays on screen: the Systemd unit
 inspector in `systemd-inspector`, `windows-services`, the remote shell picker
 in `shell-picker`, `history`, Logs source discovery in `logs`, the Docker graph

@@ -53,15 +53,11 @@ function expectTerminalMenuAlignment(menu: Element) {
   for (const row of menu.querySelectorAll<HTMLElement>('[role="menuitem"]')) {
     const icon = row.querySelector<HTMLElement>(".session-tab-menu-icon")!;
     const name = row.querySelector<HTMLElement>(".session-tab-menu-name")!;
-    const check = row.querySelector<HTMLElement>(".session-tab-menu-check")!;
     expect(row.firstElementChild).toBe(icon);
-    expect(row.lastElementChild).toBe(check);
+    expect(row.querySelector(".session-tab-menu-check")).toBeNull();
     const bounds = row.getBoundingClientRect();
     expect(icon.getBoundingClientRect().left).toBeCloseTo(bounds.left + 8, 0);
-    expect(check.getBoundingClientRect().right).toBeCloseTo(bounds.right - 8, 0);
-    expect(check.getBoundingClientRect().left).toBeGreaterThanOrEqual(
-      name.getBoundingClientRect().right,
-    );
+    expect(name.getBoundingClientRect().right).toBeLessThanOrEqual(bounds.right - 8 + 1);
   }
 }
 
@@ -1507,9 +1503,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       }
     }
     expect(terminalMenu.querySelector(".session-tab-menu-icon .host-os-ubuntu svg")).not.toBeNull();
-    expect(
-      terminalMenu.querySelector('[aria-current="page"] .session-tab-menu-check svg'),
-    ).not.toBeNull();
+    expect(terminalMenu.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
     await page
       .getByRole("menu", { name: "All terminals menu" })
       .getByRole("menuitem", { name: /^Fixture Alpha/ })
@@ -1549,7 +1543,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const groupItem = page
       .getByRole("menu", { name: "All terminals menu" })
       .getByRole("menuitem", { name: /^Group 1/ });
-    await expect.element(groupItem).toHaveTextContent("Group 16 terminals");
+    await expect.element(groupItem).toHaveTextContent("Group 1 6 terminals");
     expectTerminalMenuAlignment(page.getByRole("menu", { name: "All terminals menu" }).element());
     expect(
       groupItem.element().querySelector(".session-tab-menu-icon .lucide-layout-panel-left"),
@@ -1558,6 +1552,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect
       .element(page.getByRole("button", { name: "Open Group 1 6 terminals" }))
       .toBeVisible();
+    await page.viewport(800, 640);
     await page.getByRole("button", { name: "All panes", exact: true }).click();
     const paneMenu = page.getByRole("menu", { name: "All panes menu" });
     expectTerminalMenuAlignment(paneMenu.element());

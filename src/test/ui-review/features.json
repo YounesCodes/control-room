@@ -427,6 +427,10 @@
         {
           "scenario": "terminal",
           "states": ["running-command"]
+        },
+        {
+          "scenario": "tabs",
+          "states": ["overflow", "overflow-menu"]
         }
       ],
       "entryPoints": [
