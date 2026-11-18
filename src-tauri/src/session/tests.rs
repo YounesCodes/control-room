@@ -16,7 +16,7 @@ use crate::models::{SessionEndCategory, SessionState};
 
 use super::{
     CONNECTED_MARKER, MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OUTPUT_READ_BUFFER_BYTES, OutputFlow,
-    SessionManager, SessionMode, TERMINAL_TYPE, TerminalFailureDetector, TerminalFailureHint,
+    SessionManager, SessionMode, StartupTiming, TERMINAL_TYPE, TerminalFailureDetector, TerminalFailureHint,
     classify_local_exit, classify_session_exit, interactive_shell_command,
 };
 
@@ -814,9 +814,41 @@ fn a_broken_local_pty_is_the_only_local_error_state() {
 }
 
 #[test]
+fn a_startup_log_line_splits_preparation_spawn_and_stage_time() {
+    let requested_at = std::time::Instant::now();
+    let timing = StartupTiming {
+        requested_at,
+        prepared_at: requested_at + Duration::from_millis(7),
+        spawned_at: requested_at + Duration::from_millis(52),
+    };
+    let local = SessionMode::Local {
+        label: "Command Prompt",
+        shell_id: "cmd",
+    };
+
+    assert_eq!(
+        timing.log_line(
+            &local.startup_target(),
+            "first_output",
+            requested_at + Duration::from_millis(180),
+        ),
+        "[control-room] terminal_start target=local:cmd prepare_ms=7 spawn_ms=45 first_output_ms=180"
+    );
+    assert_eq!(
+        timing.log_line(
+            &SessionMode::ssh("11111111-1111-4111-8111-111111111111").startup_target(),
+            "connected",
+            requested_at + Duration::from_millis(900),
+        ),
+        "[control-room] terminal_start target=ssh prepare_ms=7 spawn_ms=45 connected_ms=900"
+    );
+}
+
+#[test]
 fn a_local_start_failure_names_the_shell_without_pty_internals() {
     let local = SessionMode::Local {
         label: "PowerShell 7",
+        shell_id: "pwsh",
     };
     let remote = SessionMode::ssh("11111111-1111-4111-8111-111111111111");
 
