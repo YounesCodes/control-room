@@ -503,6 +503,107 @@ describe("TerminalPane sessions", () => {
     expect(api.startLocalSession).toHaveBeenCalledTimes(1);
   });
 
+  it("starts a host shell from the first fit and syncs the settled grid before queued input", async () => {
+    let finishStart!: (value: { sessionId: string }) => void;
+    api.startSession.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishStart = resolve;
+      }),
+    );
+    let fitsAfterStart = 0;
+    xterm.fit.mockImplementation(() => {
+      const requested = api.startSession.mock.calls.length > 0;
+      if (requested) fitsAfterStart++;
+      xterm.resize?.(requested ? 100 : 106, requested ? 28 : 30);
+    });
+    renderPane(createRemoteWorkspace(connection));
+    await vi.waitFor(() =>
+      expect(api.startSession).toHaveBeenCalledWith(
+        connection.id,
+        106,
+        30,
+        expect.anything(),
+        null,
+        null,
+      ),
+    );
+    act(() => xterm.onData!("queued input"));
+    await vi.waitFor(() => expect(fitsAfterStart).toBeGreaterThanOrEqual(2));
+    await act(async () => finishStart({ sessionId: "ssh-session" }));
+    await vi.waitFor(() => expect(api.resizeSession).toHaveBeenCalledWith("ssh-session", 100, 28));
+    await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalled());
+    expect(api.resizeSession.mock.invocationCallOrder[0]).toBeLessThan(
+      api.writeSession.mock.invocationCallOrder[0],
+    );
+    expect(api.startSession).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["macos", "windows"] as const)(
+    "starts a local %s shell at the settled grid so it never resizes after its first prompt",
+    async (platform) => {
+      let framed = false;
+      const frames = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+        window.setTimeout(() => {
+          framed = true;
+          callback(0);
+        }, 0);
+        return 1;
+      });
+      xterm.fit.mockImplementation(() => xterm.resize?.(framed ? 100 : 106, framed ? 28 : 30));
+      try {
+        renderPane(createLocalWorkspace(shell), vi.fn(), { platform });
+        await vi.waitFor(() => expect(api.startLocalSession).toHaveBeenCalledTimes(1));
+        expect(api.startLocalSession).toHaveBeenCalledWith(
+          "powershell-7",
+          100,
+          28,
+          expect.anything(),
+        );
+        expect(api.resizeSession).not.toHaveBeenCalled();
+      } finally {
+        cleanup();
+        frames.mockRestore();
+      }
+    },
+  );
+
+  it("closes a host session that started while the pane closed during its first fit", async () => {
+    renderPane(createRemoteWorkspace(connection));
+    await vi.waitFor(() => expect(api.startSession).toHaveBeenCalledTimes(1));
+    cleanup();
+    await vi.waitFor(() => expect(api.closeSession).toHaveBeenCalledWith("ssh-session"));
+  });
+
+  it.each([
+    ["a Windows host shell waits for", "powershell", 100, 28],
+    ["a macOS host shell starts before", "macos:zsh", 106, 30],
+  ])("%s the settled grid", async (_, shellId, cols, rows) => {
+    let framed = false;
+    const frames = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      window.setTimeout(() => {
+        framed = true;
+        callback(0);
+      }, 0);
+      return 1;
+    });
+    xterm.fit.mockImplementation(() => xterm.resize?.(framed ? 100 : 106, framed ? 28 : 30));
+    try {
+      renderPane(createRemoteWorkspace(connection, { id: shellId, label: "Shell" }));
+      await vi.waitFor(() => expect(api.startSession).toHaveBeenCalledTimes(1));
+      expect(api.startSession).toHaveBeenCalledWith(
+        connection.id,
+        cols,
+        rows,
+        expect.anything(),
+        shellId,
+        null,
+      );
+    } finally {
+      cleanup();
+      frames.mockRestore();
+    }
+  });
+
   it("does not start a shell when the pane closes while its first grid is settling", async () => {
     renderPane(createLocalWorkspace(shell));
     cleanup();

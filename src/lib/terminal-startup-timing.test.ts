@@ -147,11 +147,19 @@ it("formats a report as one log line with every stage", () => {
     formatTerminalStartup({
       target: "ssh",
       requestedAt: 0,
-      stages: { layout: 10, started: 30, firstOutput: 400, firstRender: 402, prompt: 650 },
+      stages: {
+        drained: 2,
+        fontLoaded: 6,
+        layout: 10,
+        started: 30,
+        firstOutput: 400,
+        firstRender: 402,
+        prompt: 650,
+      },
       prompt: "quiet",
     }),
   ).toBe(
-    "[control-room] terminal_startup target=ssh layout_ms=10 started_ms=30 first_output_ms=400 first_render_ms=402 prompt_ms=650 prompt=quiet",
+    "[control-room] terminal_startup target=ssh drained_ms=2 font_ms=6 layout_ms=10 started_ms=30 first_output_ms=400 first_render_ms=402 prompt_ms=650 prompt=quiet",
   );
   expect(
     formatTerminalStartup({
