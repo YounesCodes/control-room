@@ -6,7 +6,7 @@ import process from "node:process";
 import { chromium } from "playwright";
 import { createServer } from "vite";
 import react from "@vitejs/plugin-react";
-import { parseOptions, registry } from "./ui-review-options.mjs";
+import { featureMap, formatFeatures, parseOptions, registry } from "./ui-review-options.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const output = path.join(root, "test-results/ui-review");
@@ -114,7 +114,10 @@ if (options?.help) {
 All viewports by default. PNGs and manifest.json: test-results/ui-review/SCENARIO/STATE/VIEWPORT/TYPE/
 Exit codes: 0 captured, 1 capture failed, 2 invalid arguments. One session at a time.
 Motion samples real transitions. Still screenshots finish animations before capture.
+Find the scenario for a feature: npm run ui:capture -- --features
 ${JSON.stringify(registry, null, 2)}`);
+} else if (options?.features) {
+  console.log(formatFeatures(featureMap));
 } else if (options) {
   const deadline = setTimeout(() => {
     console.error("UI review exceeded its 120 second session budget");

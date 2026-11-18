@@ -73,6 +73,19 @@ Chromium session, then close both. Run commands serially; a lock prevents overla
 captures. A session has a two-minute budget. Exit codes are 0 for success, 1 for a
 capture failure, and 2 for invalid arguments. Use `--help` for available selections.
 
+`src/test/ui-review/features.json` maps each main-window feature to its name in the UI
+and docs, its entry points (toolbar, sidebar, tab strip, Settings, menu, command palette
+item, or shortcut, by accessible role and name), its docs page, and the capture
+scenarios and states that show it. `npm run ui:capture -- --features` prints it and
+lists features with no capture scenario (`"capture": null`). Those are the open
+visual coverage gaps. `npm test` checks that every referenced scenario, state, docs
+page, heading, and shortcut exists, and that every capture state belongs to a feature.
+`npm run test:browser` mounts the real App on the capture fixtures and resolves every
+entry point, so renaming a control or palette item without updating the map fails. An
+entry point with `platforms` resolves only on those browser platforms; the window
+buttons, for example, exist only on Windows and Linux. Add
+a feature to the map when you add a scenario or a main-window control.
+
 Normal 1440×900, narrow 960×640, and compact 520×480 viewports run by default.
 Use `--viewport normal`, `--viewport narrow`, or `--viewport compact` for one size.
 Compact covers the smaller window target from PR #188, even before that change
