@@ -264,7 +264,8 @@ fn run_ssh(
     stdin: Option<&[u8]>,
 ) -> Result<CommandOutput, String> {
     let ssh_path = detect_ssh_path().ok_or_else(ssh_not_found_message)?;
-    let mut arguments = connection_arguments(connection, false);
+    let mut arguments =
+        crate::ssh_mux::inspection_arguments(connection, connection_arguments(connection, false));
     arguments.push(remote_command.into());
     let mut command = background_command(ssh_path);
     command.args(arguments);
