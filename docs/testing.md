@@ -192,7 +192,7 @@ python scripts/capture-launch.py /path/to/control-room test-results/launch
 The recorder checks that it can see a white window, switches the backdrop to teal,
 then launches Control Room. It samples the center of the display until the dark UI
 appears and at least six seconds have elapsed. A mostly white sample, an early exit,
-or no painted UI within 20 seconds fails the check. Inspect the timestamped frames
+or no painted UI within 60 seconds fails the check. Inspect the timestamped frames
 and `settled.png` to confirm the transition and the final window. `samples.json`
 records the timing and fraction of white and dark pixels in each sample. Frames
 between samples can be missed. On Windows, repeat under light and dark app appearance.

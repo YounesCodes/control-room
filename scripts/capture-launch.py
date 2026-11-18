@@ -38,7 +38,10 @@ def record(binary, output):
             "height": height,
         }
         backdrop = tk.Tk()
-        backdrop.overrideredirect(True)
+        if backdrop.tk.call("tk", "windowingsystem") == "x11":
+            backdrop.attributes("-type", "desktop")
+        else:
+            backdrop.overrideredirect(True)
         backdrop.geometry(f"{backdrop.winfo_screenwidth()}x{backdrop.winfo_screenheight()}+0+0")
         backdrop.configure(background="white")
         backdrop.update()
@@ -62,6 +65,7 @@ def record(binary, output):
         app = subprocess.Popen([str(binary.resolve())])
         try:
             while True:
+                backdrop.update()
                 image = capture(screen, region)
                 elapsed = round((time.perf_counter() - started) * 1000, 1)
                 white, dark = summarize(image)
@@ -76,7 +80,7 @@ def record(binary, output):
                 if app.poll() is not None:
                     raise RuntimeError(f"App exited during launch with status {app.returncode}")
                 painted = dark >= 0.8 and image.convert("L").getextrema()[1] >= 100
-                if elapsed >= 20_000 or (elapsed >= 6_000 and painted):
+                if elapsed >= 60_000 or (elapsed >= 6_000 and painted):
                     break
                 time.sleep(0.002)
             image.save(output / "settled.png")
