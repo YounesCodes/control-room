@@ -116,6 +116,14 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   scrollbar-gutter: stable;
 }
 
+@supports (scrollbar-gutter: stable both-edges) {
+  .sidebar-sections > .host-list,
+  .sidebar-sections > .workspace-navigation {
+    padding-inline: 0;
+    scrollbar-gutter: stable both-edges;
+  }
+}
+
 .sidebar-sections.with-capabilities::before {
   content: "";
   grid-row: 2;

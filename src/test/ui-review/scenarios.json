@@ -454,6 +454,43 @@
         "error": ".connection-section .panel-state-error"
       }
     },
+    "sidebar": {
+      "states": ["short", "long", "menu-open"],
+      "ready": ".app-shell",
+      "prepare": {
+        "short": [
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          }
+        ],
+        "long": [
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          }
+        ],
+        "menu-open": [
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          },
+          {
+            "selector": ".host-row.active",
+            "hover": true
+          },
+          {
+            "role": "button",
+            "name": "Open actions for Example host"
+          }
+        ]
+      },
+      "settled": {
+        "short": ".feature-nav button.active",
+        "long": ".feature-nav button.active",
+        "menu-open": ".host-row.menu-open"
+      }
+    },
     "logs": {
       "states": ["stopped", "populated", "errors", "search", "restricted"],
       "ready": ".app-shell",

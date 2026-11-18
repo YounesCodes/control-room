@@ -29,6 +29,7 @@ if (
 const host = {
   ...connection(),
   displayName: "Example host",
+  groupId: scenario === "sidebar" ? "example-group-lab" : null,
   historyEnabled: (scenario === "pages" && state === "history") || loading === "history",
 };
 const units = [
@@ -46,6 +47,7 @@ if (state === "overflow") {
 }
 const workspaceView = {
   systemd: "services",
+  sidebar: "services",
   scratchpad: "terminal",
   splits: "terminal",
   dialogs: firstMacConnection ? undefined : "terminal",
@@ -113,7 +115,7 @@ const portsTimeout =
   "Connection timed out: ssh: connect to host 192.0.2.10 port 22: Connection timed out";
 const portsQueueBusy = "Remote operation queue was busy for 4 seconds";
 const groups =
-  scenario === "dialogs"
+  scenario === "dialogs" || scenario === "sidebar"
     ? [
         { id: "example-group-lab", name: "Homelab", position: 0, collapsed: false },
         { id: "example-group-cloud", name: "Cloud", position: 1, collapsed: false },
@@ -126,6 +128,15 @@ const tags =
         { id: "example-tag-docker", name: "docker", color: "#2563eb" },
       ]
     : [];
+const sidebarHosts = Array.from(
+  { length: scenario !== "sidebar" ? 0 : state === "short" ? 2 : 22 },
+  (_, index) => ({
+    ...connection(`example-host-${index + 1}`),
+    displayName: `example-${String(index + 1).padStart(2, "0")}`,
+    destination: `10.0.${index < 8 ? 1 : 2}.${index + 10}`,
+    groupId: index < 8 ? "example-group-lab" : "example-group-cloud",
+  }),
+);
 const metricsSettings =
   (scenario === "dialogs" && state === "metrics") ||
   (scenario === "settings" && state === "monitoring")
@@ -272,7 +283,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       };
       break;
     case "list_connections":
-      result = [{ ...host, tags }];
+      result = [{ ...host, tags }, ...sidebarHosts];
       break;
     case "list_connection_groups":
       result = groups;

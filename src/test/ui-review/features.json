@@ -1003,6 +1003,10 @@
         {
           "scenario": "dialogs",
           "states": ["groups"]
+        },
+        {
+          "scenario": "sidebar",
+          "states": ["short", "long", "menu-open"]
         }
       ],
       "entryPoints": [
