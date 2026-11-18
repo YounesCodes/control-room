@@ -9,7 +9,7 @@ import { Modal } from "./Modal";
 import { CommandPalette } from "./CommandPalette";
 import { ConnectionDialog } from "./ConnectionDialog";
 import { WindowControls } from "./WindowControls";
-import { WorkspaceTabScroller } from "./WorkspaceTabScroller";
+import { TabLabel, WorkspaceTabScroller } from "./WorkspaceTabScroller";
 import { SettingsPane } from "../pages/SettingsPane";
 import type { AppSettings, EnvironmentInfo } from "../types";
 import "../styles.css";
@@ -422,6 +422,31 @@ describe("critical UI in Chromium", () => {
     await vi.waitFor(() => expect(getComputedStyle(rename).opacity).toBe("0"));
     rename.focus();
     await vi.waitFor(() => expect(Number(getComputedStyle(rename).opacity)).toBeGreaterThan(0.9));
+  });
+
+  it("keeps a cut-off tab's trailing number visible and its full name readable", async () => {
+    mount(
+      <nav className="session-tabs" aria-label="Open Workspaces">
+        <div className="session-tab-wrap" style={{ width: 130 }}>
+          <button className="session-tab-main" type="button">
+            <TabLabel label="Windows PowerShell 2" />
+          </button>
+        </div>
+      </nav>,
+    );
+    const tab = page.getByRole("button", { name: "Windows PowerShell 2", exact: true });
+    await expect.element(tab).toBeVisible();
+    const label = tab.element().querySelector<HTMLElement>(".session-tab-label")!;
+    const base = label.querySelector<HTMLElement>(".session-tab-label-base")!;
+    const suffix = label.querySelector<HTMLElement>(".session-tab-label-suffix")!;
+    expect(label.innerText).toBe("Windows PowerShell 2");
+    expect(base.scrollWidth).toBeGreaterThan(base.clientWidth);
+    expect(suffix.getBoundingClientRect().right).toBeLessThanOrEqual(
+      label.getBoundingClientRect().right + 1,
+    );
+    expect(suffix.getBoundingClientRect().left).toBeGreaterThan(
+      base.getBoundingClientRect().right - 1,
+    );
   });
 
   it("never paints a partial terminal at either overflow edge", async () => {

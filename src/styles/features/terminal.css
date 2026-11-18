@@ -526,23 +526,23 @@
 }
 
 .session-tab-label {
-  display: flex;
-  min-width: 0;
   overflow: hidden;
   flex: 1;
   text-align: left;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .session-tab-label-base {
-  min-width: 0;
+  display: inline-block;
+  max-width: calc(100% - var(--tab-label-suffix-width, 0ch));
   overflow: hidden;
   text-overflow: ellipsis;
+  vertical-align: bottom;
 }
 
 .session-tab-label-suffix {
-  flex: none;
-  margin-left: 0.28em;
+  white-space: pre;
 }
 
 .session-tab-main.has-context .session-tab-label {

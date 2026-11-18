@@ -549,15 +549,10 @@ describe("WorkspaceTabScroller overflow", () => {
 describe("TabLabel", () => {
   afterEach(cleanup);
 
-  it("keeps a trailing number visible apart and the full name accessible", () => {
-    const { container, getByRole } = render(
-      <button type="button">
-        <TabLabel label="PowerShell 7" />
-      </button>,
-    );
-    expect(getByRole("button", { name: "PowerShell 7" })).toBeTruthy();
+  it("splits a trailing number into its own span without changing the label text", () => {
+    const { container } = render(<TabLabel label="PowerShell 7" />);
     expect(container.querySelector(".session-tab-label-base")?.textContent).toBe("PowerShell");
-    expect(container.querySelector(".session-tab-label-suffix")?.textContent).toBe("7");
+    expect(container.querySelector(".session-tab-label-suffix")?.textContent).toBe(" 7");
     expect(container.querySelector(".session-tab-label")?.textContent).toBe("PowerShell 7");
   });
 
