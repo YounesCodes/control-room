@@ -727,6 +727,93 @@ fn connection_target_edits_invalidate_capabilities_and_reject_old_reads() {
 }
 
 #[test]
+fn a_remote_shell_catalog_lives_and_dies_with_its_target_and_os() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let saved = database.create_connection(input("Laptop")).unwrap();
+    let windows = HostCapabilities {
+        connection_id: saved.id.clone(),
+        os_id: Some("windows".into()),
+        ..HostCapabilities::default()
+    };
+    assert!(database.save_shell_catalog(&saved, "{}").is_err());
+    database.save_capabilities(&saved, &windows).unwrap();
+    assert_eq!(database.get_shell_catalog(&saved.id).unwrap(), None);
+    database
+        .save_shell_catalog(&saved, "windows-shells")
+        .unwrap();
+    assert_eq!(
+        database.get_shell_catalog(&saved.id).unwrap().as_deref(),
+        Some("windows-shells")
+    );
+
+    database.save_capabilities(&saved, &windows).unwrap();
+    assert_eq!(
+        database.get_shell_catalog(&saved.id).unwrap().as_deref(),
+        Some("windows-shells"),
+        "refreshing the same OS keeps the catalog"
+    );
+    let linux = HostCapabilities {
+        os_id: Some("ubuntu".into()),
+        ..windows.clone()
+    };
+    database.save_capabilities(&saved, &linux).unwrap();
+    assert_eq!(database.get_shell_catalog(&saved.id).unwrap(), None);
+
+    database.save_capabilities(&saved, &windows).unwrap();
+    database
+        .save_shell_catalog(&saved, "windows-shells")
+        .unwrap();
+    let mut moved = input("Laptop");
+    moved.destination = "different-host".into();
+    let updated = database.update_connection(&saved.id, moved).unwrap();
+    assert_eq!(database.get_shell_catalog(&saved.id).unwrap(), None);
+    database.save_capabilities(&updated, &windows).unwrap();
+    assert!(database.save_shell_catalog(&saved, "stale-target").is_err());
+    assert_eq!(database.get_shell_catalog(&saved.id).unwrap(), None);
+}
+
+#[test]
+fn a_shell_catalog_column_is_added_without_disturbing_saved_capabilities() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("control-room.db");
+    let saved = {
+        let database = Database::open(&path).unwrap();
+        let saved = database.create_connection(input("Laptop")).unwrap();
+        database
+            .save_capabilities(
+                &saved,
+                &HostCapabilities {
+                    connection_id: saved.id.clone(),
+                    os_id: Some("windows".into()),
+                    ..HostCapabilities::default()
+                },
+            )
+            .unwrap();
+        let connection = database.connection.lock();
+        connection
+            .execute_batch(
+                "ALTER TABLE host_capabilities DROP COLUMN shell_catalog; PRAGMA user_version = 15;",
+            )
+            .unwrap();
+        saved
+    };
+    let database = Database::open(&path).unwrap();
+    assert_eq!(
+        database
+            .get_capabilities(&saved.id)
+            .unwrap()
+            .and_then(|capabilities| capabilities.os_id)
+            .as_deref(),
+        Some("windows")
+    );
+    assert_eq!(database.get_shell_catalog(&saved.id).unwrap(), None);
+    database
+        .save_shell_catalog(&saved, "windows-shells")
+        .unwrap();
+}
+
+#[test]
 fn invalid_settings_are_discarded_before_the_frontend_uses_them() {
     let directory = tempfile::tempdir().unwrap();
     let database = Database::open(&directory.path().join("control-room.db")).unwrap();
@@ -1469,9 +1556,9 @@ fn the_unused_schema_versions_stay_unused() {
         .iter()
         .map(|migration| migration.version)
         .collect();
-    assert_eq!(versions, [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 15]);
+    assert_eq!(versions, [1, 2, 3, 4, 5, 6, 10, 11, 12, 13, 14, 15, 16]);
     assert_eq!(RETIRED_SCHEMA_VERSIONS, [7, 8, 9]);
-    assert_eq!(LATEST_SCHEMA_VERSION, 15);
+    assert_eq!(LATEST_SCHEMA_VERSION, 16);
 }
 
 #[test]

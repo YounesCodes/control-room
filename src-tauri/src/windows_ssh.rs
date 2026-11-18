@@ -33,7 +33,7 @@ pub struct RemoteShellCatalog {
     pub profile_error: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct ResolvedShell {
     id: String,
     label: String,
@@ -41,7 +41,7 @@ struct ResolvedShell {
     arguments: Vec<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowsHost {
     pub capabilities: HostCapabilities,
@@ -112,6 +112,14 @@ pub fn discover_windows(connection: &SavedConnection) -> Result<WindowsHost, Str
     .success_text()?;
     let mut host: WindowsHost = serde_json::from_str(text.trim_start_matches('\u{feff}').trim())
         .map_err(|_| "Windows shell discovery returned an invalid response".to_string())?;
+    validate_host(&host)?;
+    host.capabilities.connection_id = connection.id.clone();
+    host.capabilities.detected_at = Utc::now().to_rfc3339();
+    remember(connection, &host);
+    Ok(host)
+}
+
+fn validate_host(host: &WindowsHost) -> Result<(), String> {
     let mut ids = std::collections::HashSet::new();
     if host.capabilities.os_id.as_deref() != Some("windows")
         || host.shells.len() > 100
@@ -132,8 +140,10 @@ pub fn discover_windows(connection: &SavedConnection) -> Result<WindowsHost, Str
     {
         return Err("Windows shell discovery returned an invalid host".into());
     }
-    host.capabilities.connection_id = connection.id.clone();
-    host.capabilities.detected_at = Utc::now().to_rfc3339();
+    Ok(())
+}
+
+fn remember(connection: &SavedConnection, host: &WindowsHost) {
     let mut cache = shell_cache().lock();
     cache.retain(|_, (time, _)| time.elapsed() < SHELL_CACHE_TTL);
     if cache.len() >= 64
@@ -145,12 +155,100 @@ pub fn discover_windows(connection: &SavedConnection) -> Result<WindowsHost, Str
         cache.remove(&oldest);
     }
     cache.insert(connection_key(connection), (Instant::now(), host.clone()));
-    Ok(host)
 }
 
-pub fn discover(connection: &SavedConnection, refresh: bool) -> Result<RemoteShellCatalog, String> {
+/// The form a discovered Windows host is saved in, read back by [`restore`].
+pub fn stored_form(host: &WindowsHost) -> String {
+    serde_json::to_string(host).expect("a Windows host serializes")
+}
+
+/// Makes a saved Windows host the current one for `connection`, unless a
+/// fresher discovery is already known. A saved host that no longer passes
+/// validation is ignored, so the caller falls back to discovering it again.
+pub fn restore(connection: &SavedConnection, stored: &str) -> Option<WindowsHost> {
+    if let Some(host) = cached_host(connection) {
+        return Some(host);
+    }
+    let mut host: WindowsHost = serde_json::from_str(stored).ok()?;
+    validate_host(&host).ok()?;
+    host.capabilities.connection_id = connection.id.clone();
+    remember(connection, &host);
+    Some(host)
+}
+
+pub struct Discovery {
+    pub catalog: RemoteShellCatalog,
+    /// Capabilities that were just read from the host and should be saved.
+    pub fresh_capabilities: Option<HostCapabilities>,
+    /// The catalog in the form it is saved in, when it was just read from the host.
+    pub stored_form: Option<String>,
+    /// The catalog came from storage and should be refreshed in the background.
+    pub from_storage: bool,
+}
+
+impl Discovery {
+    fn known(catalog: RemoteShellCatalog) -> Self {
+        Self {
+            catalog,
+            fresh_capabilities: None,
+            stored_form: None,
+            from_storage: false,
+        }
+    }
+
+    fn from_storage(catalog: RemoteShellCatalog) -> Self {
+        Self {
+            from_storage: true,
+            ..Self::known(catalog)
+        }
+    }
+
+    fn windows(host: WindowsHost) -> Self {
+        Self {
+            fresh_capabilities: Some(host.capabilities.clone()),
+            stored_form: Some(stored_form(&host)),
+            ..Self::known(catalog(host))
+        }
+    }
+
+    fn macos(catalog: RemoteShellCatalog) -> Self {
+        Self {
+            stored_form: Some(crate::macos_remote::stored_form(&catalog)),
+            ..Self::known(catalog)
+        }
+    }
+}
+
+/// Finds the shells a host offers. Saved capabilities that already name the
+/// platform skip the `uname` probe, and a saved catalog is returned without
+/// contacting the host at all unless `refresh` asks for a fresh read.
+pub fn discover(
+    connection: &SavedConnection,
+    refresh: bool,
+    saved: Option<&HostCapabilities>,
+    stored: Option<&str>,
+) -> Result<Discovery, String> {
     if !refresh && let Some(host) = cached_host(connection) {
-        return Ok(catalog(host));
+        return Ok(Discovery::known(catalog(host)));
+    }
+    match saved.and_then(|capabilities| capabilities.os_id.as_deref()) {
+        Some("windows") => {
+            if !refresh && let Some(host) = stored.and_then(|stored| restore(connection, stored)) {
+                return Ok(Discovery::from_storage(catalog(host)));
+            }
+            return discover_windows(connection).map(Discovery::windows);
+        }
+        Some("macos") => {
+            crate::macos_remote::remember(connection, true);
+            if !refresh
+                && let Some(catalog) =
+                    stored.and_then(|stored| crate::macos_remote::restore(stored, saved.cloned()))
+            {
+                return Ok(Discovery::from_storage(catalog));
+            }
+            return crate::macos_remote::shells(connection, saved.cloned()).map(Discovery::macos);
+        }
+        _ => {}
     }
     if let Ok(output) =
         RemoteCommandExecutor::execute(connection, "detect_host_platform", "uname -s; uname -r")
@@ -163,19 +261,42 @@ pub fn discover(connection: &SavedConnection, refresh: bool) -> Result<RemoteShe
     {
         if text.lines().next().unwrap_or("").trim() == "Darwin" {
             crate::macos_remote::remember(connection, true);
-            return crate::macos_remote::shells(connection);
+            return crate::macos_remote::shells(connection, None).map(Discovery::known);
         }
-        return Ok(RemoteShellCatalog {
+        return Ok(Discovery::known(RemoteShellCatalog {
             platform: "linux".into(),
             shells: vec![],
             windows_terminal_available: false,
             wsl_error: None,
             capabilities: None,
             profile_error: None,
-        });
+        }));
     }
-    let host = discover_windows(connection)?;
-    Ok(catalog(host))
+    discover_windows(connection).map(Discovery::windows)
+}
+
+static BACKGROUND_REFRESHES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Held while one background shell refresh runs for a connection, so a second
+/// dialog opening does not start a second probe of the same host.
+pub struct BackgroundRefresh(String);
+
+impl BackgroundRefresh {
+    pub fn claim(connection: &SavedConnection) -> Option<Self> {
+        let key = connection_key(connection);
+        let mut running = BACKGROUND_REFRESHES.lock();
+        if running.contains(&key) {
+            return None;
+        }
+        running.push(key.clone());
+        Some(Self(key))
+    }
+}
+
+impl Drop for BackgroundRefresh {
+    fn drop(&mut self) {
+        BACKGROUND_REFRESHES.lock().retain(|key| key != &self.0);
+    }
 }
 
 fn catalog(host: WindowsHost) -> RemoteShellCatalog {
@@ -323,6 +444,148 @@ pub fn default_command(connection: &SavedConnection) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn unreachable(id: &str) -> SavedConnection {
+        SavedConnection {
+            id: id.into(),
+            display_name: "Fixture".into(),
+            destination: "control-room-unreachable.invalid".into(),
+            username: Some("fixture".into()),
+            port: Some(1),
+            identity_file: None,
+            history_enabled: false,
+            sudo_enabled: false,
+            group_id: None,
+            tags: vec![],
+            created_at: String::new(),
+            updated_at: String::new(),
+            last_connected_at: None,
+        }
+    }
+
+    fn saved_host(label: &str) -> WindowsHost {
+        serde_json::from_value(serde_json::json!({
+            "capabilities": { "connectionId": "elsewhere", "osId": "windows", "defaultShell": "C:\\Windows\\cmd.exe" },
+            "shells": [
+                { "id": "cmd", "label": label, "executable": "C:\\Windows\\cmd.exe", "arguments": [] },
+                { "id": "wsl:Ubuntu", "label": "WSL: Ubuntu", "executable": "C:\\Windows\\System32\\wsl.exe", "arguments": ["--distribution", "Ubuntu"] }
+            ],
+            "windowsTerminalAvailable": true,
+            "wslError": null,
+            "profileError": null
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn a_saved_windows_catalog_is_shown_without_contacting_the_host() {
+        let connection = unreachable("stored-catalog");
+        let stored = stored_form(&saved_host("Command Prompt"));
+        let started = Instant::now();
+        let saved = HostCapabilities {
+            os_id: Some("windows".into()),
+            ..HostCapabilities::default()
+        };
+        let discovery = discover(&connection, false, Some(&saved), Some(&stored)).unwrap();
+        assert!(started.elapsed() < Duration::from_millis(250));
+        assert!(discovery.from_storage);
+        assert!(discovery.stored_form.is_none());
+        assert!(discovery.fresh_capabilities.is_none());
+        assert_eq!(discovery.catalog.platform, "windows");
+        assert!(discovery.catalog.windows_terminal_available);
+        assert_eq!(
+            discovery
+                .catalog
+                .shells
+                .iter()
+                .map(|shell| shell.id.as_str())
+                .collect::<Vec<_>>(),
+            ["cmd", "wsl:Ubuntu"]
+        );
+        assert_eq!(
+            discovery.catalog.capabilities.unwrap().connection_id,
+            "stored-catalog"
+        );
+        shell_cache().lock().remove(&connection_key(&connection));
+    }
+
+    #[test]
+    fn a_restored_catalog_launches_its_saved_shells_without_a_second_probe() {
+        let connection = unreachable("restored-launch");
+        restore(&connection, &stored_form(&saved_host("Command Prompt"))).unwrap();
+        let started = Instant::now();
+        assert!(selected_command(&connection, "wsl:Ubuntu").is_ok());
+        assert!(default_command(&connection).is_ok());
+        assert!(started.elapsed() < Duration::from_millis(250));
+        shell_cache().lock().remove(&connection_key(&connection));
+    }
+
+    #[test]
+    fn a_saved_catalog_that_fails_validation_is_not_trusted() {
+        let connection = unreachable("invalid-stored-catalog");
+        let mut linux = saved_host("Command Prompt");
+        linux.capabilities.os_id = Some("ubuntu".into());
+        for stored in [
+            "not json".to_string(),
+            stored_form(&saved_host("Command\nPrompt")),
+            stored_form(&linux),
+        ] {
+            assert!(restore(&connection, &stored).is_none(), "{stored}");
+        }
+        assert!(cached_host(&connection).is_none());
+    }
+
+    #[test]
+    fn a_fresher_discovery_outranks_the_saved_catalog() {
+        let connection = unreachable("fresher-than-stored");
+        remember(&connection, &saved_host("Fresh"));
+        let restored = restore(&connection, &stored_form(&saved_host("Saved"))).unwrap();
+        assert_eq!(restored.shells[0].label, "Fresh");
+        shell_cache().lock().remove(&connection_key(&connection));
+    }
+
+    #[test]
+    fn a_saved_mac_catalog_is_shown_without_any_remote_call() {
+        let connection = unreachable("stored-mac-catalog");
+        let saved = HostCapabilities {
+            connection_id: "stored-mac-catalog".into(),
+            os_id: Some("macos".into()),
+            os_name: Some("macOS".into()),
+            ..HostCapabilities::default()
+        };
+        let stored = r#"["macos:zsh","macos:fish"]"#;
+        let started = Instant::now();
+        let discovery = discover(&connection, false, Some(&saved), Some(stored)).unwrap();
+        assert!(crate::macos_remote::is_host(&connection).unwrap());
+        assert!(started.elapsed() < Duration::from_millis(250));
+        assert!(discovery.from_storage);
+        assert!(discovery.stored_form.is_none());
+        assert!(discovery.fresh_capabilities.is_none());
+        assert_eq!(discovery.catalog.platform, "macos");
+        assert_eq!(
+            discovery
+                .catalog
+                .shells
+                .iter()
+                .map(|shell| (shell.id.as_str(), shell.label.as_str()))
+                .collect::<Vec<_>>(),
+            [("macos:zsh", "zsh"), ("macos:fish", "fish")]
+        );
+        assert_eq!(
+            discovery.catalog.capabilities.unwrap().os_name.as_deref(),
+            Some("macOS")
+        );
+    }
+
+    #[test]
+    fn one_background_refresh_runs_per_host_at_a_time() {
+        let connection = unreachable("background-refresh");
+        let claim = BackgroundRefresh::claim(&connection).unwrap();
+        assert!(BackgroundRefresh::claim(&connection).is_none());
+        assert!(BackgroundRefresh::claim(&unreachable("another-host")).is_some());
+        drop(claim);
+        assert!(BackgroundRefresh::claim(&connection).is_some());
+    }
 
     #[test]
     fn cached_shells_are_bound_to_target_and_expire() {
