@@ -6,6 +6,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
     thread,
+    time::Instant,
 };
 
 use parking_lot::{Condvar, Mutex};
@@ -26,6 +27,9 @@ use crate::{
 #[cfg(target_os = "linux")]
 #[path = "session_linux.rs"]
 mod linux;
+#[cfg(windows)]
+#[path = "session_windows.rs"]
+mod windows;
 
 struct ManagedSession {
     master: Mutex<Option<Box<dyn MasterPty + Send>>>,
@@ -39,7 +43,10 @@ struct ManagedSession {
 
 enum SessionMode {
     Ssh(RemoteSessionState),
-    Local { label: &'static str },
+    Local {
+        label: &'static str,
+        shell_id: &'static str,
+    },
 }
 
 struct RemoteSessionState {
@@ -60,8 +67,35 @@ impl SessionMode {
     fn spawn_error(&self, error: impl std::fmt::Display) -> String {
         match self {
             Self::Ssh(_) => format!("SSH process could not start: {error}"),
-            Self::Local { label } => format!("{label} could not be started."),
+            Self::Local { label, .. } => format!("{label} could not be started."),
         }
+    }
+
+    fn startup_target(&self) -> String {
+        match self {
+            Self::Ssh(_) => "ssh".into(),
+            Self::Local { shell_id, .. } => format!("local:{shell_id}"),
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StartupTiming {
+    requested_at: Instant,
+    prepared_at: Instant,
+    spawned_at: Instant,
+}
+
+impl StartupTiming {
+    fn log_line(&self, target: &str, stage: &str, at: Instant) -> String {
+        format!(
+            "[control-room] terminal_start target={target} prepare_ms={} spawn_ms={} {stage}_ms={}",
+            self.prepared_at
+                .duration_since(self.requested_at)
+                .as_millis(),
+            self.spawned_at.duration_since(self.prepared_at).as_millis(),
+            at.duration_since(self.requested_at).as_millis(),
+        )
     }
 }
 
@@ -170,6 +204,7 @@ impl SessionManager {
         ids
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn start(
         &self,
         app: AppHandle,
@@ -178,6 +213,7 @@ impl SessionManager {
         cols: u16,
         rows: u16,
         output: Channel<Response>,
+        requested_at: Instant,
     ) -> Result<SessionStarted, String> {
         let ssh_path = detect_ssh_path().ok_or_else(ssh_not_found_message)?;
         let mut command = CommandBuilder::new(ssh_path);
@@ -196,6 +232,7 @@ impl SessionManager {
             rows,
             output,
             SessionMode::ssh(&connection.id),
+            requested_at,
         )?;
 
         Ok(SessionStarted {
@@ -214,6 +251,7 @@ impl SessionManager {
         cols: u16,
         rows: u16,
         output: Channel<Response>,
+        requested_at: Instant,
     ) -> Result<LocalSessionStarted, String> {
         let session_id = self.spawn(
             app,
@@ -223,7 +261,9 @@ impl SessionManager {
             output,
             SessionMode::Local {
                 label: shell.label(),
+                shell_id: shell.id(),
             },
+            requested_at,
         )?;
 
         Ok(LocalSessionStarted {
@@ -232,6 +272,7 @@ impl SessionManager {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn spawn(
         &self,
         app: AppHandle,
@@ -240,7 +281,9 @@ impl SessionManager {
         rows: u16,
         output: Channel<Response>,
         mode: SessionMode,
+        requested_at: Instant,
     ) -> Result<String, String> {
+        let prepared_at = Instant::now();
         let pair = native_pty_system()
             .openpty(PtySize {
                 rows: rows.clamp(2, 500),
@@ -255,6 +298,12 @@ impl SessionManager {
             .spawn_command(command)
             .map_err(|error| mode.spawn_error(error))?;
         drop(pair.slave);
+        let startup = StartupTiming {
+            requested_at,
+            prepared_at,
+            spawned_at: Instant::now(),
+        };
+        let startup_target = mode.startup_target();
 
         #[cfg(target_os = "linux")]
         let (mut reader, writer, exit_signal, killer) = match linux::open_io(pair.master.as_ref())
@@ -292,7 +341,17 @@ impl SessionManager {
                 return Err(format!("PTY input could not be opened: {error}"));
             }
         };
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(windows)]
+        let killer: Box<dyn ChildKiller + Send + Sync> = match windows::Killer::new(child.as_ref())
+        {
+            Ok(killer) => Box::new(killer),
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("PTY process could not be tracked: {error}"));
+            }
+        };
+        #[cfg(not(any(target_os = "linux", windows)))]
         let killer = child.clone_killer();
         let session_id = Uuid::new_v4().to_string();
         let managed = Arc::new(ManagedSession {
@@ -313,10 +372,18 @@ impl SessionManager {
         let output_managed = managed.clone();
         let output_reader = thread::spawn(move || {
             let mut buffer = vec![0_u8; OUTPUT_READ_BUFFER_BYTES];
+            let mut first_output_logged = false;
             loop {
                 match reader.read(&mut buffer) {
                     Ok(0) => break,
                     Ok(count) => {
+                        if !first_output_logged {
+                            first_output_logged = true;
+                            eprintln!(
+                                "{}",
+                                startup.log_line(&startup_target, "first_output", Instant::now())
+                            );
+                        }
                         if let SessionMode::Ssh(remote) = &output_managed.mode {
                             let established = {
                                 let mut detector = remote.failure_detector.lock();
@@ -325,6 +392,10 @@ impl SessionManager {
                             };
                             if established && !remote.connected_emitted.swap(true, Ordering::AcqRel)
                             {
+                                eprintln!(
+                                    "{}",
+                                    startup.log_line(&startup_target, "connected", Instant::now())
+                                );
                                 let _ = output_app
                                     .state::<Database>()
                                     .mark_connected(&remote.connection_id);
@@ -397,7 +468,7 @@ impl SessionManager {
                             remote.failure_detector.lock().hint,
                             remote.connected_emitted.load(Ordering::Acquire),
                         ),
-                        SessionMode::Local { label } => classify_local_exit(
+                        SessionMode::Local { label, .. } => classify_local_exit(
                             stop_requested,
                             failure,
                             status.success(),
@@ -498,14 +569,7 @@ fn interactive_shell_command(history_enabled: bool) -> &'static str {
     }
 }
 
-// portable-pty's Windows child killer inverts its result: success comes back as Err(GetLastError()).
 fn map_pty_kill_result(result: std::io::Result<()>) -> Result<(), String> {
-    #[cfg(windows)]
-    {
-        let _ = result;
-        Ok(())
-    }
-    #[cfg(not(windows))]
     result.map_err(|error| format!("Could not close the terminal process: {error}"))
 }
 
