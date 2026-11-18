@@ -1918,16 +1918,16 @@ describe("complete app journeys with typed IPC fixtures", () => {
         .element(page.getByRole("navigation", { name: /^Terminals in Group \d+$/ }))
         .toBeVisible();
       expect(position()).toEqual(normalBounds);
-      for (let index = 0; index < 10; index++) {
+      const overflow = page.getByRole("button", { name: "All terminals", exact: true });
+      for (let opened = 0; !overflow.query(); opened++) {
+        expect(opened, "the terminal strip never overflowed").toBeLessThan(10);
         await page.getByRole("button", { name: "New terminal", exact: true }).click();
         await page
           .getByRole("dialog", { name: "New terminal" })
           .getByRole("button", { name: /Command Prompt/ })
           .click();
       }
-      await expect
-        .element(page.getByRole("button", { name: "All terminals", exact: true }))
-        .toBeVisible();
+      await expect.element(overflow).toBeVisible();
       expect(position()).toEqual(normalBounds);
       expect(element.scrollWidth).toBeLessThanOrEqual(width);
       expect((await runAxe(actions)).violations).toEqual([]);
