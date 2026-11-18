@@ -193,11 +193,14 @@ mod tests {
     #[test]
     fn noninteractive_processes_use_the_background_command_factory() {
         let remote = include_str!("remote.rs");
+        let operation = include_str!("remote/operation.rs");
         let commands = include_str!("commands.rs");
         let ssh = include_str!("ssh.rs");
         assert!(!remote.contains("Command::new("));
+        assert!(!operation.contains("Command::new("));
         assert!(!commands.contains("Command::new("));
-        assert!(remote.matches("background_command(").count() >= 2);
+        assert!(remote.contains("background_command("));
+        assert!(operation.contains("background_command("));
         assert!(ssh.contains("platform::background_command(program)"));
     }
 
