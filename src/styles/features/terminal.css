@@ -1760,6 +1760,22 @@
   user-select: text;
 }
 
+.terminal-concealed .terminal-container {
+  visibility: hidden;
+}
+
+.terminal-connecting {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: var(--terminal-bg);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .terminal-container.visual-bell {
   box-shadow: inset 0 0 0 2px var(--warning);
 }

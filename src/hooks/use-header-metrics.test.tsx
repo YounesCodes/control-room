@@ -24,7 +24,7 @@ async function tick(ms = 0) {
   });
 }
 describe("header sampling lifecycle", () => {
-  it("keeps at most twenty real readings and clears trends on host changes", async () => {
+  it("keeps ten minutes of readings and clears them on host changes", async () => {
     const { result, rerender } = renderHook(
       ({ target }) => useHeaderMetrics(target, ["cpu", "diskIo"], 2),
       { initialProps: { target: "host-a" } },
@@ -32,7 +32,11 @@ describe("header sampling lifecycle", () => {
     await tick();
     expect(result.current.history).toHaveLength(1);
     await tick(48000);
-    expect(result.current.history).toHaveLength(20);
+    expect(result.current.history).toHaveLength(25);
+    await tick(700_000);
+    const span = result.current.history.at(-1)!.at - result.current.history[0].at;
+    expect(span).toBeLessThanOrEqual(600_000);
+    expect(span).toBeGreaterThan(590_000);
     rerender({ target: "host-b" });
     expect(result.current.history).toHaveLength(0);
     await tick();
@@ -124,7 +128,7 @@ describe("header sampling lifecycle", () => {
     expect(result.current.sampling).toBe(true);
     expect(result.current.stale).toBe(true);
   });
-  it("pauses in hidden windows and refreshes immediately on return", async () => {
+  it("pauses in hidden windows, keeps the history, and refreshes immediately on return", async () => {
     const { result } = renderHook(() => useHeaderMetrics("host-a", ["ram"], 5));
     await tick();
     act(() => {
@@ -134,7 +138,7 @@ describe("header sampling lifecycle", () => {
     await tick(20000);
     expect(mock.sampleHeaderMetrics).toHaveBeenCalledTimes(1);
     expect(result.current.stale).toBe(true);
-    expect(result.current.history).toHaveLength(0);
+    expect(result.current.history).toHaveLength(1);
     act(() => {
       Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
       document.dispatchEvent(new Event("visibilitychange"));
@@ -154,6 +158,22 @@ describe("header sampling lifecycle", () => {
     await tick(5000);
     expect(result.current.error).toBeNull();
     expect(result.current.stale).toBe(false);
-    expect(result.current.history).toHaveLength(1);
+    expect(result.current.history.map((reading) => reading.at)).toEqual([
+      Date.parse(sample.sampledAt),
+      Date.parse(sample.sampledAt) + 10_000,
+    ]);
+  });
+
+  it("keeps the history when the interval or metric selection changes", async () => {
+    const { result, rerender } = renderHook(
+      ({ metrics, seconds }) => useHeaderMetrics("host-a", metrics, seconds),
+      { initialProps: { metrics: ["cpu"] as ("cpu" | "ram")[], seconds: 5 } },
+    );
+    await tick();
+    act(() => vi.setSystemTime(Date.now() + 1000));
+    rerender({ metrics: ["cpu", "ram"], seconds: 2 });
+    await tick();
+    expect(result.current.history).toHaveLength(2);
+    expect(result.current.interval).toBe(2);
   });
 });

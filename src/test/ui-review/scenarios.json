@@ -454,6 +454,43 @@
         "error": ".connection-section .panel-state-error"
       }
     },
+    "sidebar": {
+      "states": ["short", "long", "menu-open"],
+      "ready": ".app-shell",
+      "prepare": {
+        "short": [
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          }
+        ],
+        "long": [
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          }
+        ],
+        "menu-open": [
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          },
+          {
+            "selector": ".host-row.active",
+            "hover": true
+          },
+          {
+            "role": "button",
+            "name": "Open actions for Example host"
+          }
+        ]
+      },
+      "settled": {
+        "short": ".feature-nav button.active",
+        "long": ".feature-nav button.active",
+        "menu-open": ".host-row.menu-open"
+      }
+    },
     "logs": {
       "states": ["stopped", "populated", "errors", "search", "restricted"],
       "ready": ".app-shell",
@@ -512,6 +549,7 @@
         "systemd-inspector",
         "windows-services",
         "shell-picker",
+        "new-host-terminal",
         "history",
         "logs",
         "docker",
@@ -583,6 +621,15 @@
             "selector": "#settings-ssh",
             "scroll": true
           }
+        ],
+        "new-host-terminal": [
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          },
+          {
+            "selector": ".host-main"
+          }
         ]
       },
       "settled": {
@@ -596,7 +643,8 @@
         "ports": ".arch-viewport .skeleton",
         "ports-discovering": ".arch-loading-status",
         "font-suggestions": ".font-suggestions.skeleton",
-        "ssh-diagnostics": "#settings-ssh .skeleton"
+        "ssh-diagnostics": "#settings-ssh .skeleton",
+        "new-host-terminal": ".terminal-concealed .terminal-connecting"
       }
     },
     "splits": {
@@ -632,6 +680,60 @@
         "description": "Focus Mode entry with a three-pane group, sidebar departing",
         "target": ".focus-departing-sidebar",
         "button": "Focus terminal"
+      }
+    },
+    "metrics": {
+      "states": ["live", "reading", "stale", "unavailable", "short-history"],
+      "ready": ".app-shell",
+      "clock": "manual",
+      "prepare": {
+        "live": [
+          {
+            "advance": 600000
+          },
+          {
+            "selector": ".host-metrics-trigger"
+          }
+        ],
+        "reading": [
+          {
+            "advance": 1000
+          },
+          {
+            "selector": ".host-metrics-trigger"
+          }
+        ],
+        "stale": [
+          {
+            "advance": 600000
+          },
+          {
+            "selector": ".host-metrics-trigger"
+          }
+        ],
+        "unavailable": [
+          {
+            "advance": 1000
+          },
+          {
+            "selector": ".host-metrics-trigger"
+          }
+        ],
+        "short-history": [
+          {
+            "advance": 40000
+          },
+          {
+            "selector": ".host-metrics-trigger"
+          }
+        ]
+      },
+      "settled": {
+        "live": ".host-metrics-panel [data-metric='cpu'] .metric-chart-dot",
+        "reading": ".host-metrics-panel[data-state='reading']",
+        "stale": ".host-metrics-panel .host-metrics-error",
+        "unavailable": ".host-metrics-panel[data-state='unavailable']",
+        "short-history": ".host-metrics-panel [data-metric='cpu'] .metric-chart-dot"
       }
     },
     "tabs": {

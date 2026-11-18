@@ -20,6 +20,7 @@ const loading = scenario === "loading" ? state : null;
 const pending = <T>() => new Promise<T>(() => {});
 const windowsHost = loading === "windows-services" || loading === "shell-picker";
 const firstMacConnection = scenario === "dialogs" && state === "mac-shell-picker";
+const newHostTerminal = loading === "new-host-terminal";
 if (
   !Object.hasOwn(registry.scenarios, scenario) ||
   !registry.scenarios[scenario as keyof typeof registry.scenarios].states.includes(state)
@@ -29,6 +30,7 @@ if (
 const host = {
   ...connection(),
   displayName: "Example host",
+  groupId: scenario === "sidebar" ? "example-group-lab" : null,
   historyEnabled: (scenario === "pages" && state === "history") || loading === "history",
 };
 const units = [
@@ -46,10 +48,12 @@ if (state === "overflow") {
 }
 const workspaceView = {
   systemd: "services",
+  sidebar: "services",
   scratchpad: "terminal",
   splits: "terminal",
   tabs: "terminal",
   dialogs: firstMacConnection ? undefined : "terminal",
+  metrics: "terminal",
   terminal: "terminal",
   ports: "ports",
   logs: "logs",
@@ -114,7 +118,7 @@ const portsTimeout =
   "Connection timed out: ssh: connect to host 192.0.2.10 port 22: Connection timed out";
 const portsQueueBusy = "Remote operation queue was busy for 4 seconds";
 const groups =
-  scenario === "dialogs"
+  scenario === "dialogs" || scenario === "sidebar"
     ? [
         { id: "example-group-lab", name: "Homelab", position: 0, collapsed: false },
         { id: "example-group-cloud", name: "Cloud", position: 1, collapsed: false },
@@ -127,11 +131,50 @@ const tags =
         { id: "example-tag-docker", name: "docker", color: "#2563eb" },
       ]
     : [];
+const sidebarHosts = Array.from(
+  { length: scenario !== "sidebar" ? 0 : state === "short" ? 2 : 22 },
+  (_, index) => ({
+    ...connection(`example-host-${index + 1}`),
+    displayName: `example-${String(index + 1).padStart(2, "0")}`,
+    destination: `10.0.${index < 8 ? 1 : 2}.${index + 10}`,
+    groupId: index < 8 ? "example-group-lab" : "example-group-cloud",
+  }),
+);
 const metricsSettings =
   (scenario === "dialogs" && state === "metrics") ||
+  scenario === "metrics" ||
   (scenario === "settings" && state === "monitoring")
     ? { ...settings, hostMetricsEnabled: true }
     : settings;
+const metricsStart = Date.parse("2026-11-01T10:00:00Z");
+function trendSample() {
+  const now = Date.now();
+  const seconds = (now - metricsStart) / 1000;
+  const age = 600 - seconds;
+  if (scenario === "metrics" && state === "reading") return pending<never>();
+  if (scenario === "metrics" && (state === "unavailable" || (state === "stale" && age < 30)))
+    throw new Error("Connection timed out: ssh: connect to host 192.0.2.10 port 22");
+  const wave = (period: number, phase = 0) => Math.sin((seconds / period) * Math.PI * 2 + phase);
+  const burst = Math.max(0, wave(95, 1.2)) ** 6;
+  return Promise.resolve({
+    sampledAt: new Date(now).toISOString(),
+    cpuPercent: Math.round((18 + 9 * wave(70) + 4 * wave(13, 0.7) + 26 * burst) * 10) / 10,
+    memoryTotalKib: 32_190_000,
+    memoryAvailableKib: Math.round(16_100_000 - 1_400_000 * (seconds / 600) - 300_000 * wave(180)),
+    gpuPercent:
+      state !== "short-history" && age > 70 && age < 95
+        ? null
+        : Math.round((6 + 4 * wave(40, 2) + 38 * burst) * 10) / 10,
+    diskTotalKib: null,
+    diskFreeKib: null,
+    diskLabel: null,
+    diskReadBytesPerSecond: Math.round((0.4 + 12.6 * burst) * 1024 * 1024),
+    diskWriteBytesPerSecond: Math.round(
+      (180 + 120 * Math.max(0, wave(25))) * 1024 + 2.1 * burst * 1024 * 1024,
+    ),
+    uptimeSeconds: 259_200 + Math.round(seconds),
+  });
+}
 const journalMessages = [
   "Started example-worker.service - Example queue worker.",
   "worker: connected to queue example at 10.0.0.12:5672",
@@ -313,7 +356,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       };
       break;
     case "list_connections":
-      result = scenario === "tabs" ? [host, stagingHost] : [{ ...host, tags }];
+      result = scenario === "tabs" ? [host, stagingHost] : [{ ...host, tags }, ...sidebarHosts];
       break;
     case "list_connection_groups":
       result = groups;
@@ -377,6 +420,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       if (loading) return pending();
       throw new Error(portsQueueBusy);
     case "sample_header_metrics":
+      if (scenario === "metrics") return (await trendSample()) as T;
       result = {
         sampledAt: "2026-11-01T10:00:00Z",
         cpuPercent: 12,
@@ -432,7 +476,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       break;
     case "get_cached_capabilities":
     case "refresh_capabilities":
-      if (firstMacConnection) {
+      if (firstMacConnection || newHostTerminal) {
         if (command === "refresh_capabilities") return pending();
         result = null;
         break;
@@ -486,6 +530,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
           ? `example-session-${start + 1}`
           : "example-session";
       result = { sessionId, connectionId: host.id };
+      if (newHostTerminal) break;
       setTimeout(() => {
         listeners.get("session-state-changed")?.forEach((callback) =>
           callback({
