@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use chrono::Utc;
 use tauri::{AppHandle, State, ipc::Channel, ipc::Response};
 
@@ -190,6 +192,7 @@ pub fn start_session(
     rows: u16,
     output: Channel<Response>,
 ) -> Result<SessionStarted, String> {
+    let requested_at = Instant::now();
     let mut connection = database.get_connection(&connection_id)?;
     validate_connection_input(&SavedConnectionInput {
         display_name: connection.display_name.clone(),
@@ -218,7 +221,15 @@ pub fn start_session(
             let sudo_allowed = elevation_allowed(&database, &connection)?;
             remote::docker_exec_command(&container_id, sudo_allowed)?
         };
-        return sessions.start(app, &connection, Some(command), cols, rows, output);
+        return sessions.start(
+            app,
+            &connection,
+            Some(command),
+            cols,
+            rows,
+            output,
+            requested_at,
+        );
     }
     let _permit = if remote_shell_id.is_some() || windows {
         Some(limiter.acquire(&connection_id)?)
@@ -239,7 +250,15 @@ pub fn start_session(
         None if windows => Some(windows_ssh::default_command(&connection)?),
         None => None,
     };
-    let started = sessions.start(app, &connection, remote_command, cols, rows, output)?;
+    let started = sessions.start(
+        app,
+        &connection,
+        remote_command,
+        cols,
+        rows,
+        output,
+        requested_at,
+    )?;
     Ok(started)
 }
 
@@ -280,8 +299,9 @@ pub fn start_local_session(
     rows: u16,
     output: Channel<Response>,
 ) -> Result<LocalSessionStarted, String> {
+    let requested_at = Instant::now();
     let shell = local_shell::resolve_installed(&shell_id)?;
-    sessions.start_local(app, &shell, cols, rows, output)
+    sessions.start_local(app, &shell, cols, rows, output, requested_at)
 }
 
 #[tauri::command]

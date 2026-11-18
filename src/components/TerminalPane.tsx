@@ -19,6 +19,7 @@ import { trackCodexMouse } from "../lib/terminal-mouse";
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import { TerminalProcessing } from "../lib/terminal-processing";
 import { TerminalTitle } from "../lib/terminal-title";
+import { formatTerminalStartup, TerminalStartupTiming } from "../lib/terminal-startup-timing";
 import { readTerminalView } from "../lib/terminal-screen";
 import { deferHiddenSelectionRepaint } from "../lib/terminal-selection-repaint";
 import { isRemoteWorkspace } from "../lib/workspace-target";
@@ -117,6 +118,7 @@ export function TerminalPane({
   const titleRef = useRef<TerminalTitle | null>(null);
   if (!titleRef.current) titleRef.current = new TerminalTitle((title) => onTitleRef.current(title));
   const processingRef = useRef<TerminalProcessing | null>(null);
+  const startupTimingRef = useRef<TerminalStartupTiming | null>(null);
   if (!processingRef.current) {
     processingRef.current = new TerminalProcessing(
       (busy) => onProcessingRef.current(busy),
@@ -349,6 +351,7 @@ export function TerminalPane({
     container.addEventListener("contextmenu", handleContextMenu, { capture: true });
 
     const promptDisposable = terminal.parser.registerOscHandler(133, (data) => {
+      startupTimingRef.current?.shellMarker(data);
       if (!sessionIdRef.current) return false;
       titleRef.current?.marker(data);
       processingRef.current?.shellMarker(data);
@@ -360,6 +363,7 @@ export function TerminalPane({
     });
     const oscDisposable = terminal.parser.registerOscHandler(633, (data) => {
       if (!data.startsWith("ControlRoom;")) {
+        startupTimingRef.current?.shellMarker(data);
         if (sessionIdRef.current) titleRef.current?.marker(data);
         if (sessionIdRef.current) processingRef.current?.shellMarker(data);
         return false;
@@ -509,6 +513,20 @@ export function TerminalPane({
     let acknowledgedBytes = 0;
     let acknowledgementTimer: number | undefined;
     let disposed = false;
+    const startupContainer = containerRef.current;
+    const startupTiming = new TerminalStartupTiming(
+      workspace.kind === "local"
+        ? `local:${workspace.shell.id}`
+        : workspace.container
+          ? "ssh:container"
+          : `ssh:${workspace.remoteShell?.id ?? "default"}`,
+      (report) => {
+        console.info(formatTerminalStartup(report));
+        startupContainer?.setAttribute("data-terminal-startup-timing", JSON.stringify(report));
+      },
+    );
+    startupTimingRef.current?.cancel();
+    startupTimingRef.current = startupTiming;
 
     acceptingInputRef.current = true;
     processingRef.current?.reset();
@@ -554,11 +572,13 @@ export function TerminalPane({
       if (disposed || generation !== sessionGenerationRef.current) return;
       if (!sessionIdRef.current && !acceptingInputRef.current) return;
       const bytes = new Uint8Array(message);
+      startupTiming.mark("firstOutput");
       if (!activeRef.current) onActivityRef.current("output");
       terminal.write(bytes, () => {
         if (disposed || generation !== sessionGenerationRef.current) return;
         if (!sessionIdRef.current && !acceptingInputRef.current) return;
         const view = readTerminalView(terminal);
+        startupTiming.rendered(view.line);
         processingRef.current?.output(
           view.line,
           view.alternate,
@@ -570,7 +590,6 @@ export function TerminalPane({
 
     let initialCols = terminal.cols;
     let initialRows = terminal.rows;
-    const startupContainer = containerRef.current;
     const startupPhase = (phase: string) =>
       startupContainer?.setAttribute("data-terminal-startup-phase", phase);
     const started = (async () => {
@@ -613,6 +632,7 @@ export function TerminalPane({
       if (disposed || generation !== sessionGenerationRef.current) return null;
       if (!settled) terminal.resize(smallestCols, smallestRows);
       startupPhase("native");
+      startupTiming.mark("layout");
       initialCols = terminal.cols;
       initialRows = terminal.rows;
       return workspace.kind === "local"
@@ -636,6 +656,7 @@ export function TerminalPane({
           return;
         }
         startupPhase("started");
+        startupTiming.mark("started");
         ownedSessionId = sessionId;
         sessionIdRef.current = sessionId;
         if (terminal.cols !== initialCols || terminal.rows !== initialRows) {
@@ -662,6 +683,7 @@ export function TerminalPane({
       .catch((error) => {
         if (disposed || generation !== sessionGenerationRef.current) return;
         startupPhase("error");
+        startupTiming.cancel();
         acceptingInputRef.current = false;
         pendingInputRef.current.clear();
         const message = errorMessage(error);
@@ -673,6 +695,8 @@ export function TerminalPane({
 
     return () => {
       disposed = true;
+      startupTiming.cancel();
+      if (startupTimingRef.current === startupTiming) startupTimingRef.current = null;
       sessionGenerationRef.current += 1;
       acceptingInputRef.current = false;
       pendingInputRef.current.clear();
