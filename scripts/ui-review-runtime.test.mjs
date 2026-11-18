@@ -25,6 +25,7 @@ it("rejects concurrent sessions and exits after a browser launch failure without
       "scripts/ui-review.mjs",
       "scripts/ui-review-options.mjs",
       "src/test/ui-review/scenarios.json",
+      "src/test/ui-review/features.json",
     ]) {
       mkdirSync(path.dirname(path.join(fixture, file)), { recursive: true });
       copyFileSync(path.join(root, file), path.join(fixture, file));
