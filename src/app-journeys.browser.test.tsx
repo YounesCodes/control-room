@@ -1818,7 +1818,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(element.querySelector(".host-metrics-panel")!.textContent).not.toContain("Invalid Date");
     sampledAt = new Date().toISOString();
     await page.getByRole("button", { name: "Refresh readings", exact: true }).click();
-    await expect.element(page.getByText("Live", { exact: true })).toBeVisible();
+    await expect
+      .element(page.getByRole("button", { name: "Live: Host metrics for Fixture Alpha" }))
+      .toBeVisible();
   });
   it("keeps whole priority readings in the titlebar and exposes the rest through the status button", async () => {
     currentSettings = { ...currentSettings, hostMetricsEnabled: true };
@@ -1843,7 +1845,8 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.element(page.getByRole("button", { name: "Close host metrics" })).toHaveFocus();
     expect(
       [...strip.querySelectorAll(".host-metrics-panel dt")].map((item) => item.textContent),
-    ).toEqual(["CPU", "RAM", "GPU", "Disk I/O", "Uptime"]);
+    ).toEqual(["CPU", "RAM", "GPU", "Disk I/O"]);
+    expect(strip.querySelector(".host-metrics-uptime")!.textContent).toMatch(/^Up /);
     await userEvent.keyboard("{Escape}");
     await expect.element(trigger).toHaveFocus();
     strip.style.maxWidth = "";
@@ -2150,15 +2153,18 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await expect.poll(() => sequence).toBe(index + 2);
       await expect.poll(() => strip.hasAttribute("data-sampling")).toBe(false);
     }
-    expect(io.querySelector("svg")).toBeNull();
-    expect(strip.querySelectorAll(".host-metrics-panel .host-metric-trend")).toHaveLength(3);
-    const ioDetail = [...strip.querySelectorAll(".host-metrics-panel dl > div")].find(
-      (row) => row.querySelector("dt")?.textContent === "Disk I/O",
+    expect(strip.querySelector(".host-metrics-values svg")).toBeNull();
+    expect(strip.querySelectorAll(".host-metrics-panel .metric-chart")).toHaveLength(4);
+    const ioChart = strip.querySelector(
+      '.host-metrics-panel [data-metric="diskIo"] .metric-chart',
     )!;
-    expect(ioDetail.querySelector("svg")).toBeNull();
-    const cpu = strip.querySelector<HTMLElement>('[data-metric="cpu"]')!;
-    const path = cpu.querySelector("path")!;
-    expect(path.getAttribute("d")).toContain("L");
+    expect(ioChart.querySelector('[data-trace="read"] .metric-chart-line')).not.toBeNull();
+    expect(ioChart.querySelector('[data-trace="main"] .metric-chart-line')).not.toBeNull();
+    const cpuLine = () =>
+      strip
+        .querySelector('.host-metrics-panel [data-metric="cpu"] .metric-chart-line')
+        ?.getAttribute("d") ?? "";
+    expect(cpuLine().split("L").length).toBeGreaterThan(10);
     expect(positions()).toEqual(before);
     await page.screenshot({ path: "../test-results/live-metrics-panel.png" });
     await userEvent.keyboard("{Escape}");
@@ -2169,14 +2175,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
     });
     expect(getComputedStyle(io.querySelector(".host-metric-value")!).animationName).toBe("none");
     expect(io.querySelectorAll(".animated-number")).toHaveLength(2);
-    const lastPath = path.getAttribute("d");
     failures.set("sample_header_metrics", "Fixture offline");
     await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
     await page.getByRole("button", { name: "Refresh readings", exact: true }).click();
     await expect.poll(() => strip.dataset.state).toBe("stale");
     expect(trigger.getBoundingClientRect().width).toBeLessThanOrEqual(80);
     expect(positions()).toEqual(before);
-    expect(cpu.querySelector("path")!.getAttribute("d")).toBe(lastPath);
+    expect(cpuLine().split("L").length).toBeGreaterThan(10);
     expect(io.textContent).toContain("MiB/s");
     failures.delete("sample_header_metrics");
     await userEvent.keyboard("{Escape}");
@@ -2189,9 +2194,16 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect
       .poll(() => element.querySelector<HTMLElement>(".host-metrics")!.dataset.state)
       .toBe("live");
+    await page.getByRole("button", { name: /: Host metrics for Fixture Beta$/ }).click();
     await expect
-      .poll(() => element.querySelector(".host-metrics path")?.getAttribute("d") ?? "")
-      .not.toContain("L");
+      .poll(
+        () =>
+          element
+            .querySelector('.host-metrics-panel [data-metric="cpu"] .metric-chart-line')
+            ?.getAttribute("d")
+            ?.split("L").length,
+      )
+      .toBe(2);
   });
 
   for (const state of ["connecting", "disconnected", "error"]) {
@@ -2227,7 +2239,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       });
       expect(gpuDetail.querySelector("strong")).toHaveAttribute("data-unavailable");
       expect(gpuDetail.textContent).toContain("Unavailable");
-      expect(gpuDetail.querySelector("small")).toBeNull();
+      expect(gpuDetail.querySelector("small")!.textContent!.trim()).toBe("");
       const close = page.getByRole("button", { name: "Close host metrics" });
       await expect.element(close).toHaveFocus();
       await userEvent.keyboard("{Escape}");
@@ -2237,20 +2249,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
       await expect.poll(() => element.querySelector(".host-metrics-panel")).toBeNull();
       const badge = element.querySelector(".host-metrics-status")!;
       const cells = [...element.querySelectorAll<HTMLElement>(".host-metrics-values .host-metric")];
-      expect(cells.filter((cell) => cell.querySelector("svg")).length).toBeGreaterThanOrEqual(2);
-      for (const [index, cell] of cells.entries()) {
-        const graph = cell.querySelector("svg");
-        if (!graph) continue;
-        const value = cell.querySelector(".host-metric-value")!;
-        const ownGap = graph.getBoundingClientRect().left - value.getBoundingClientRect().right;
-        expect(ownGap).toBeGreaterThanOrEqual(8);
-        const next = cells[index + 1];
-        if (next) {
-          const nextGap = next.getBoundingClientRect().left - graph.getBoundingClientRect().right;
-          expect(nextGap).toBeGreaterThanOrEqual(24);
-          expect(nextGap).toBeGreaterThan(ownGap * 2);
-          expect(parseFloat(getComputedStyle(cell).borderRightWidth)).toBeGreaterThan(0);
-        }
+      expect(cells.filter((cell) => cell.querySelector("svg"))).toHaveLength(0);
+      const shown = cells.filter((cell) => !cell.hasAttribute("data-overflow"));
+      for (const [index, cell] of shown.slice(0, -1).entries()) {
+        expect(parseFloat(getComputedStyle(cell).borderRightWidth)).toBe(1);
+        const gap =
+          shown[index + 1].getBoundingClientRect().left - cell.getBoundingClientRect().right;
+        expect(gap).toBeGreaterThanOrEqual(8);
       }
       expect(badge.parentElement).toHaveClass("host-metrics-trigger");
       expect(element.querySelector(".host-metrics")!.textContent).not.toContain("Fixture Alpha");

@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { api, errorMessage } from "../lib/api";
+import { appendReading, type TimedReading } from "../lib/metric-history";
 import type { HeaderMetric, HeaderMetrics } from "../types";
 
 interface Reading {
   key: string;
+  target: string;
   sample: HeaderMetrics | null;
   error: string | null;
   sampling: boolean;
-  history: HeaderMetrics[];
+  history: TimedReading[];
 }
 export function useHeaderMetrics(target: string | null, metrics: HeaderMetric[], seconds: number) {
   const interval = [2, 5, 10, 30].includes(seconds) ? seconds : 5;
@@ -25,7 +27,6 @@ export function useHeaderMetrics(target: string | null, metrics: HeaderMetric[],
     const changed = () => {
       const nextVisible = document.visibilityState !== "hidden";
       setVisible(nextVisible);
-      if (!nextVisible) setReading((current) => (current ? { ...current, history: [] } : null));
     };
     document.addEventListener("visibilitychange", changed);
     return () => document.removeEventListener("visibilitychange", changed);
@@ -46,10 +47,11 @@ export function useHeaderMetrics(target: string | null, metrics: HeaderMetric[],
       inFlight.current = true;
       setReading((current) => ({
         key,
+        target,
         sample: current?.key === key ? current.sample : null,
         error: current?.key === key ? current.error : null,
         sampling: true,
-        history: current?.key === key ? current.history : [],
+        history: current?.target === target ? current.history : [],
       }));
       try {
         const sample = await api.sampleHeaderMetrics(
@@ -57,33 +59,23 @@ export function useHeaderMetrics(target: string | null, metrics: HeaderMetric[],
           selection.split(",") as HeaderMetric[],
         );
         if (active)
-          setReading((current) => {
-            const previous = current?.key === key && !current.error ? current.history : [];
-            const last = previous.at(-1);
-            const elapsed = last ? Date.parse(sample.sampledAt) - Date.parse(last.sampledAt) : 0;
-            const history =
-              last &&
-              (!Number.isFinite(elapsed) || elapsed <= 0 || elapsed > (interval * 2 + 2) * 1000)
-                ? []
-                : previous;
-            return {
-              key,
-              sample,
-              error: null,
-              sampling: false,
-              history: Number.isFinite(Date.parse(sample.sampledAt))
-                ? [...history, sample].slice(-20)
-                : [],
-            };
-          });
+          setReading((current) => ({
+            key,
+            target,
+            sample,
+            error: null,
+            sampling: false,
+            history: appendReading(current?.target === target ? current.history : [], sample),
+          }));
       } catch (error) {
         if (active)
           setReading((current) => ({
             key,
+            target,
             sample: current?.key === key ? current.sample : null,
             error: errorMessage(error),
             sampling: false,
-            history: current?.key === key ? current.history : [],
+            history: current?.target === target ? current.history : [],
           }));
       } finally {
         inFlight.current = false;
@@ -113,7 +105,9 @@ export function useHeaderMetrics(target: string | null, metrics: HeaderMetric[],
       Math.max(now, Date.now()) - sampledAt > (interval + 2) * 1000);
   return {
     sample,
-    history: current?.history ?? [],
+    history: reading?.target === target ? reading.history : [],
+    interval,
+    now: Math.max(now, Number.isFinite(sampledAt) ? sampledAt : 0),
     error: current?.error ?? null,
     sampling: current?.sampling ?? false,
     stale,

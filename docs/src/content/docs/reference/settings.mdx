@@ -76,13 +76,15 @@ Enable **Show host metrics in header** to see CPU, RAM, GPU, Disk I/O, and uptim
 
 On macOS, CPU, RAM, and uptime are available. GPU and Disk I/O readings currently show unavailable.
 
-Click the reading status, such as **Live**, to see all selected metrics and when they were last updated. The refresh button beside the close button reads them again, and **Customize in Settings** opens these options. The title bar gives CPU and RAM priority when space is tight. The CPU, RAM, and GPU charts show up to twenty recent readings on a 0–100% scale and reset when you change hosts or monitoring pauses. These short trends stay in memory and are not saved. Disk I/O shows separate read and write speeds without a graph.
+The title bar shows the current values and gives CPU and RAM priority when space is tight. Click the reading status, such as **Live**, to open a chart for each metric and see when the readings were last updated. Choose **1m**, **2m**, or **10m** to set how far back the charts go. Each chart labels its peak for that range. CPU, RAM, and GPU use a 0–100% scale. The Disk I/O chart draws write speed as a solid line and read speed as a dashed line on one scale. Uptime is shown at the bottom.
+
+A missing reading leaves a gap in the chart, for example while the host is unreachable or while the window is hidden. When the app has fewer readings than the range covers, the status line says how much history it has. History is kept in memory for up to 10 minutes, is cleared when you change hosts, and is not saved. The refresh button beside the close button reads the host again, and **Customize in Settings** opens these options.
 
 <figure class="docs-screenshot">
   <a href={metricsScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={metricsScreenshot.src}
-      alt="Live header readings with small trend lines, Disk I/O read and write speeds, and an open reading details panel."
+      alt="Live header readings and the open readings panel with CPU, RAM, GPU, and Disk I/O charts, peak labels, and the range switch."
     />
   </a>
   <figcaption>Read and write activity is separate from space used. Example data shown.</figcaption>

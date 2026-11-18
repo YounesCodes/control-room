@@ -198,16 +198,22 @@ ${JSON.stringify(registry, null, 2)}`);
         );
         const page = await context.newPage();
         page.setDefaultTimeout(15_000);
-        await page.clock.setFixedTime(new Date("2026-11-01T10:00:00Z"));
+        const definition = registry.scenarios[options.scenario];
+        const fixtureTime = new Date("2026-11-01T10:00:00Z");
+        if (definition.clock === "manual") await page.clock.install({ time: fixtureTime });
+        else await page.clock.setFixedTime(fixtureTime);
         const errors = [];
         page.on("pageerror", (error) => errors.push(error.message));
-        const definition = registry.scenarios[options.scenario];
         await page.goto(
           `${origin}ui-review/?${new URLSearchParams({ scenario: options.scenario, state: options.state })}`,
           { waitUntil: "networkidle", timeout: 30_000 },
         );
         await page.locator(definition.ready).waitFor();
         for (const action of definition.prepare?.[options.state] ?? []) {
+          if (action.advance !== undefined) {
+            await page.clock.runFor(action.advance);
+            continue;
+          }
           let locator = action.selector
             ? page.locator(action.selector)
             : page.getByRole(action.role, { name: action.name, exact: true });

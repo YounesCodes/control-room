@@ -633,6 +633,60 @@
         "target": ".focus-departing-sidebar",
         "button": "Focus terminal"
       }
+    },
+    "metrics": {
+      "states": ["live", "reading", "stale", "unavailable", "short-history"],
+      "ready": ".app-shell",
+      "clock": "manual",
+      "prepare": {
+        "live": [
+          {
+            "advance": 600000
+          },
+          {
+            "selector": ".host-metrics-trigger"
+          }
+        ],
+        "reading": [
+          {
+            "advance": 1000
+          },
+          {
+            "selector": ".host-metrics-trigger"
+          }
+        ],
+        "stale": [
+          {
+            "advance": 600000
+          },
+          {
+            "selector": ".host-metrics-trigger"
+          }
+        ],
+        "unavailable": [
+          {
+            "advance": 1000
+          },
+          {
+            "selector": ".host-metrics-trigger"
+          }
+        ],
+        "short-history": [
+          {
+            "advance": 40000
+          },
+          {
+            "selector": ".host-metrics-trigger"
+          }
+        ]
+      },
+      "settled": {
+        "live": ".host-metrics-panel [data-metric='cpu'] .metric-chart-dot",
+        "reading": ".host-metrics-panel[data-state='reading']",
+        "stale": ".host-metrics-panel .host-metrics-error",
+        "unavailable": ".host-metrics-panel[data-state='unavailable']",
+        "short-history": ".host-metrics-panel [data-metric='cpu'] .metric-chart-dot"
+      }
     }
   }
 }

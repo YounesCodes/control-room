@@ -49,6 +49,7 @@ const workspaceView = {
   scratchpad: "terminal",
   splits: "terminal",
   dialogs: firstMacConnection ? undefined : "terminal",
+  metrics: "terminal",
   terminal: "terminal",
   ports: "ports",
   logs: "logs",
@@ -128,9 +129,39 @@ const tags =
     : [];
 const metricsSettings =
   (scenario === "dialogs" && state === "metrics") ||
+  scenario === "metrics" ||
   (scenario === "settings" && state === "monitoring")
     ? { ...settings, hostMetricsEnabled: true }
     : settings;
+const metricsStart = Date.parse("2026-11-01T10:00:00Z");
+function trendSample() {
+  const now = Date.now();
+  const seconds = (now - metricsStart) / 1000;
+  const age = 600 - seconds;
+  if (scenario === "metrics" && state === "reading") return pending<never>();
+  if (scenario === "metrics" && (state === "unavailable" || (state === "stale" && age < 30)))
+    throw new Error("Connection timed out: ssh: connect to host 192.0.2.10 port 22");
+  const wave = (period: number, phase = 0) => Math.sin((seconds / period) * Math.PI * 2 + phase);
+  const burst = Math.max(0, wave(95, 1.2)) ** 6;
+  return Promise.resolve({
+    sampledAt: new Date(now).toISOString(),
+    cpuPercent: Math.round((18 + 9 * wave(70) + 4 * wave(13, 0.7) + 26 * burst) * 10) / 10,
+    memoryTotalKib: 32_190_000,
+    memoryAvailableKib: Math.round(16_100_000 - 1_400_000 * (seconds / 600) - 300_000 * wave(180)),
+    gpuPercent:
+      state !== "short-history" && age > 70 && age < 95
+        ? null
+        : Math.round((6 + 4 * wave(40, 2) + 38 * burst) * 10) / 10,
+    diskTotalKib: null,
+    diskFreeKib: null,
+    diskLabel: null,
+    diskReadBytesPerSecond: Math.round((0.4 + 12.6 * burst) * 1024 * 1024),
+    diskWriteBytesPerSecond: Math.round(
+      (180 + 120 * Math.max(0, wave(25))) * 1024 + 2.1 * burst * 1024 * 1024,
+    ),
+    uptimeSeconds: 259_200 + Math.round(seconds),
+  });
+}
 const journalMessages = [
   "Started example-worker.service - Example queue worker.",
   "worker: connected to queue example at 10.0.0.12:5672",
@@ -336,6 +367,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       if (loading) return pending();
       throw new Error(portsQueueBusy);
     case "sample_header_metrics":
+      if (scenario === "metrics") return (await trendSample()) as T;
       result = {
         sampledAt: "2026-11-01T10:00:00Z",
         cpuPercent: 12,

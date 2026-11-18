@@ -87,25 +87,6 @@ export function headerMetricNumber(
   return number != null && Number.isFinite(number) && number >= 0 && number <= 100 ? number : null;
 }
 
-export function metricTrend(metric: HeaderMetric, samples: HeaderMetrics[]): string | null {
-  if (metric !== "cpu" && metric !== "ram" && metric !== "gpu") return null;
-  const values = samples.slice(-20).map((sample) => headerMetricNumber(metric, sample));
-  if (!values.some((value) => value !== null)) return null;
-  let drawing = false;
-  return values
-    .map((value, index) => {
-      if (value === null) {
-        drawing = false;
-        return "";
-      }
-      const x = 1 + ((20 - values.length + index) * 32) / 19;
-      const y = 13 - Math.min(1, value / 100) * 11;
-      const point = `${drawing ? "L" : "M"}${x.toFixed(2)},${y.toFixed(2)}`;
-      drawing = true;
-      return point;
-    })
-    .join(" ");
-}
 export function headerMetricValue(metric: HeaderMetric, sample: HeaderMetrics | null): string {
   switch (metric) {
     case "cpu":
