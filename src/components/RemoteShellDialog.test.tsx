@@ -33,6 +33,7 @@ describe("remote shell selection", () => {
     const onSelect = vi.fn();
     render(<RemoteShellDialog connection={connection} onClose={vi.fn()} onSelect={onSelect} />);
     await screen.findByRole("group", { name: "Mac shells" });
+    expect(screen.getByText("macOS")).toBeTruthy();
     expect(onSelect).not.toHaveBeenCalled();
     await userEvent.click(screen.getByRole("radio", { name: "Bash" }));
     await userEvent.click(screen.getByRole("button", { name: "Connect" }));

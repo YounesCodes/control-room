@@ -33,7 +33,7 @@ pub struct RemoteShellCatalog {
     pub profile_error: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct ResolvedShell {
     id: String,
     label: String,
@@ -41,7 +41,7 @@ struct ResolvedShell {
     arguments: Vec<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowsHost {
     pub capabilities: HostCapabilities,
@@ -112,6 +112,14 @@ pub fn discover_windows(connection: &SavedConnection) -> Result<WindowsHost, Str
     .success_text()?;
     let mut host: WindowsHost = serde_json::from_str(text.trim_start_matches('\u{feff}').trim())
         .map_err(|_| "Windows shell discovery returned an invalid response".to_string())?;
+    validate_host(&host)?;
+    host.capabilities.connection_id = connection.id.clone();
+    host.capabilities.detected_at = Utc::now().to_rfc3339();
+    remember(connection, &host);
+    Ok(host)
+}
+
+fn validate_host(host: &WindowsHost) -> Result<(), String> {
     let mut ids = std::collections::HashSet::new();
     if host.capabilities.os_id.as_deref() != Some("windows")
         || host.shells.len() > 100
@@ -132,8 +140,10 @@ pub fn discover_windows(connection: &SavedConnection) -> Result<WindowsHost, Str
     {
         return Err("Windows shell discovery returned an invalid host".into());
     }
-    host.capabilities.connection_id = connection.id.clone();
-    host.capabilities.detected_at = Utc::now().to_rfc3339();
+    Ok(())
+}
+
+fn remember(connection: &SavedConnection, host: &WindowsHost) {
     let mut cache = shell_cache().lock();
     cache.retain(|_, (time, _)| time.elapsed() < SHELL_CACHE_TTL);
     if cache.len() >= 64
@@ -145,12 +155,100 @@ pub fn discover_windows(connection: &SavedConnection) -> Result<WindowsHost, Str
         cache.remove(&oldest);
     }
     cache.insert(connection_key(connection), (Instant::now(), host.clone()));
-    Ok(host)
 }
 
-pub fn discover(connection: &SavedConnection, refresh: bool) -> Result<RemoteShellCatalog, String> {
+/// The form a discovered Windows host is saved in, read back by [`restore`].
+pub fn stored_form(host: &WindowsHost) -> String {
+    serde_json::to_string(host).expect("a Windows host serializes")
+}
+
+/// Makes a saved Windows host the current one for `connection`, unless a
+/// fresher discovery is already known. A saved host that no longer passes
+/// validation is ignored, so the caller falls back to discovering it again.
+pub fn restore(connection: &SavedConnection, stored: &str) -> Option<WindowsHost> {
+    if let Some(host) = cached_host(connection) {
+        return Some(host);
+    }
+    let mut host: WindowsHost = serde_json::from_str(stored).ok()?;
+    validate_host(&host).ok()?;
+    host.capabilities.connection_id = connection.id.clone();
+    remember(connection, &host);
+    Some(host)
+}
+
+pub struct Discovery {
+    pub catalog: RemoteShellCatalog,
+    /// Capabilities that were just read from the host and should be saved.
+    pub fresh_capabilities: Option<HostCapabilities>,
+    /// The catalog in the form it is saved in, when it was just read from the host.
+    pub stored_form: Option<String>,
+    /// The catalog came from storage and should be refreshed in the background.
+    pub from_storage: bool,
+}
+
+impl Discovery {
+    fn known(catalog: RemoteShellCatalog) -> Self {
+        Self {
+            catalog,
+            fresh_capabilities: None,
+            stored_form: None,
+            from_storage: false,
+        }
+    }
+
+    fn from_storage(catalog: RemoteShellCatalog) -> Self {
+        Self {
+            from_storage: true,
+            ..Self::known(catalog)
+        }
+    }
+
+    fn windows(host: WindowsHost) -> Self {
+        Self {
+            fresh_capabilities: Some(host.capabilities.clone()),
+            stored_form: Some(stored_form(&host)),
+            ..Self::known(catalog(host))
+        }
+    }
+
+    fn macos(catalog: RemoteShellCatalog) -> Self {
+        Self {
+            stored_form: Some(crate::macos_remote::stored_form(&catalog)),
+            ..Self::known(catalog)
+        }
+    }
+}
+
+/// Finds the shells a host offers. Saved capabilities that already name the
+/// platform skip the `uname` probe, and a saved catalog is returned without
+/// contacting the host at all unless `refresh` asks for a fresh read.
+pub fn discover(
+    connection: &SavedConnection,
+    refresh: bool,
+    saved: Option<&HostCapabilities>,
+    stored: Option<&str>,
+) -> Result<Discovery, String> {
     if !refresh && let Some(host) = cached_host(connection) {
-        return Ok(catalog(host));
+        return Ok(Discovery::known(catalog(host)));
+    }
+    match saved.and_then(|capabilities| capabilities.os_id.as_deref()) {
+        Some("windows") => {
+            if !refresh && let Some(host) = stored.and_then(|stored| restore(connection, stored)) {
+                return Ok(Discovery::from_storage(catalog(host)));
+            }
+            return discover_windows(connection).map(Discovery::windows);
+        }
+        Some("macos") => {
+            crate::macos_remote::remember(connection, true);
+            if !refresh
+                && let Some(catalog) =
+                    stored.and_then(|stored| crate::macos_remote::restore(stored, saved.cloned()))
+            {
+                return Ok(Discovery::from_storage(catalog));
+            }
+            return crate::macos_remote::shells(connection, saved.cloned()).map(Discovery::macos);
+        }
+        _ => {}
     }
     if let Ok(output) =
         RemoteCommandExecutor::execute(connection, "detect_host_platform", "uname -s; uname -r")
@@ -163,19 +261,42 @@ pub fn discover(connection: &SavedConnection, refresh: bool) -> Result<RemoteShe
     {
         if text.lines().next().unwrap_or("").trim() == "Darwin" {
             crate::macos_remote::remember(connection, true);
-            return crate::macos_remote::shells(connection);
+            return crate::macos_remote::shells(connection, None).map(Discovery::known);
         }
-        return Ok(RemoteShellCatalog {
+        return Ok(Discovery::known(RemoteShellCatalog {
             platform: "linux".into(),
             shells: vec![],
             windows_terminal_available: false,
             wsl_error: None,
             capabilities: None,
             profile_error: None,
-        });
+        }));
     }
-    let host = discover_windows(connection)?;
-    Ok(catalog(host))
+    discover_windows(connection).map(Discovery::windows)
+}
+
+static BACKGROUND_REFRESHES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+/// Held while one background shell refresh runs for a connection, so a second
+/// dialog opening does not start a second probe of the same host.
+pub struct BackgroundRefresh(String);
+
+impl BackgroundRefresh {
+    pub fn claim(connection: &SavedConnection) -> Option<Self> {
+        let key = connection_key(connection);
+        let mut running = BACKGROUND_REFRESHES.lock();
+        if running.contains(&key) {
+            return None;
+        }
+        running.push(key.clone());
+        Some(Self(key))
+    }
+}
+
+impl Drop for BackgroundRefresh {
+    fn drop(&mut self) {
+        BACKGROUND_REFRESHES.lock().retain(|key| key != &self.0);
+    }
 }
 
 fn catalog(host: WindowsHost) -> RemoteShellCatalog {
@@ -203,7 +324,61 @@ fn literal(value: &str) -> Result<String, String> {
     Ok(format!("'{}'", value.replace('\'', "''")))
 }
 
-fn launch(shell: &ResolvedShell) -> Result<String, String> {
+const CONNECTED_MARKER: &str = "\u{1b}]633;ControlRoom;connected\u{7}";
+const MISSING_SHELL: &str = "The selected shell is no longer installed";
+const SSH_COMMAND_LIMIT: usize = 7500;
+
+fn default_shell_is_cmd(default_shell: Option<&str>) -> bool {
+    default_shell
+        .and_then(|path| path.rsplit(['\\', '/']).next())
+        .is_some_and(|name| name.eq_ignore_ascii_case("cmd.exe"))
+}
+
+fn cmd_quoted(value: &str) -> Option<String> {
+    if value.is_empty()
+        || value.len() > 2048
+        || value
+            .chars()
+            .any(|character| character.is_control() || matches!(character, '"' | '%' | '!'))
+    {
+        return None;
+    }
+    let trailing_backslashes = value.len() - value.trim_end_matches('\\').len();
+    Some(format!("\"{value}{}\"", "\\".repeat(trailing_backslashes)))
+}
+
+fn cmd_argument(value: &str) -> Option<String> {
+    let plain = !value.is_empty()
+        && value.len() <= 2048
+        && value.chars().all(|character| {
+            character.is_ascii_alphanumeric()
+                || matches!(character, '-' | '_' | '.' | '/' | ':' | '\\' | '+' | '@')
+        });
+    if plain {
+        Some(value.into())
+    } else {
+        cmd_quoted(value)
+    }
+}
+
+fn cmd_launch(shell: &ResolvedShell) -> Option<String> {
+    let executable = cmd_quoted(&shell.executable)?;
+    let mut program = vec![executable.clone()];
+    for argument in &shell.arguments {
+        program.push(cmd_argument(argument)?);
+    }
+    let git_environment = if shell.id == "git-bash" {
+        "set \"MSYSTEM=MINGW64\" & "
+    } else {
+        ""
+    };
+    Some(format!(
+        "if exist {executable} (<nul set /p \"={CONNECTED_MARKER}\" & {git_environment}{}) else (>&2 echo {MISSING_SHELL}& exit 1)",
+        program.join(" ")
+    ))
+}
+
+fn powershell_launch(shell: &ResolvedShell) -> Result<String, String> {
     let executable = literal(&shell.executable)?;
     let arguments = shell
         .arguments
@@ -216,10 +391,20 @@ fn launch(shell: &ResolvedShell) -> Result<String, String> {
     } else {
         ""
     };
-    let command = powershell_command(&format!(
-        "$ErrorActionPreference='Stop'; {git_environment}$exe={executable}; if (!(Test-Path -LiteralPath $exe -PathType Leaf)) {{ throw 'The selected shell is no longer installed' }}; $arguments=@({arguments}); [Console]::Write([char]27 + ']633;ControlRoom;connected' + [char]7); & $exe @arguments; exit $LASTEXITCODE"
-    ));
-    if command.len() > 7500 {
+    Ok(powershell_command(&format!(
+        "$ErrorActionPreference='Stop'; {git_environment}$exe={executable}; if (!(Test-Path -LiteralPath $exe -PathType Leaf)) {{ throw '{MISSING_SHELL}' }}; $arguments=@({arguments}); [Console]::Write([char]27 + ']633;ControlRoom;connected' + [char]7); & $exe @arguments; exit $LASTEXITCODE"
+    )))
+}
+
+fn launch(shell: &ResolvedShell, default_shell: Option<&str>) -> Result<String, String> {
+    let direct = default_shell_is_cmd(default_shell)
+        .then(|| cmd_launch(shell))
+        .flatten();
+    let command = match direct {
+        Some(command) => command,
+        None => powershell_launch(shell)?,
+    };
+    if command.len() > SSH_COMMAND_LIMIT {
         return Err(
             "The selected shell command exceeds the Windows SSH command length limit".into(),
         );
@@ -239,7 +424,7 @@ pub fn selected_command(connection: &SavedConnection, shell_id: &str) -> Result<
         .ok_or_else(|| {
             "The selected remote shell is no longer available. Choose a shell again.".to_string()
         })?;
-    launch(shell)
+    launch(shell, host.capabilities.default_shell.as_deref())
 }
 
 pub fn default_command(connection: &SavedConnection) -> Result<String, String> {
@@ -253,12 +438,154 @@ pub fn default_command(connection: &SavedConnection) -> Result<String, String> {
         .find(|shell| Some(&shell.executable) == host.capabilities.default_shell.as_ref())
         .or_else(|| host.shells.first())
         .ok_or_else(|| "No remote Windows shells were detected".to_string())?;
-    launch(shell)
+    launch(shell, host.capabilities.default_shell.as_deref())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn unreachable(id: &str) -> SavedConnection {
+        SavedConnection {
+            id: id.into(),
+            display_name: "Fixture".into(),
+            destination: "control-room-unreachable.invalid".into(),
+            username: Some("fixture".into()),
+            port: Some(1),
+            identity_file: None,
+            history_enabled: false,
+            sudo_enabled: false,
+            group_id: None,
+            tags: vec![],
+            created_at: String::new(),
+            updated_at: String::new(),
+            last_connected_at: None,
+        }
+    }
+
+    fn saved_host(label: &str) -> WindowsHost {
+        serde_json::from_value(serde_json::json!({
+            "capabilities": { "connectionId": "elsewhere", "osId": "windows", "defaultShell": "C:\\Windows\\cmd.exe" },
+            "shells": [
+                { "id": "cmd", "label": label, "executable": "C:\\Windows\\cmd.exe", "arguments": [] },
+                { "id": "wsl:Ubuntu", "label": "WSL: Ubuntu", "executable": "C:\\Windows\\System32\\wsl.exe", "arguments": ["--distribution", "Ubuntu"] }
+            ],
+            "windowsTerminalAvailable": true,
+            "wslError": null,
+            "profileError": null
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn a_saved_windows_catalog_is_shown_without_contacting_the_host() {
+        let connection = unreachable("stored-catalog");
+        let stored = stored_form(&saved_host("Command Prompt"));
+        let started = Instant::now();
+        let saved = HostCapabilities {
+            os_id: Some("windows".into()),
+            ..HostCapabilities::default()
+        };
+        let discovery = discover(&connection, false, Some(&saved), Some(&stored)).unwrap();
+        assert!(started.elapsed() < Duration::from_millis(250));
+        assert!(discovery.from_storage);
+        assert!(discovery.stored_form.is_none());
+        assert!(discovery.fresh_capabilities.is_none());
+        assert_eq!(discovery.catalog.platform, "windows");
+        assert!(discovery.catalog.windows_terminal_available);
+        assert_eq!(
+            discovery
+                .catalog
+                .shells
+                .iter()
+                .map(|shell| shell.id.as_str())
+                .collect::<Vec<_>>(),
+            ["cmd", "wsl:Ubuntu"]
+        );
+        assert_eq!(
+            discovery.catalog.capabilities.unwrap().connection_id,
+            "stored-catalog"
+        );
+        shell_cache().lock().remove(&connection_key(&connection));
+    }
+
+    #[test]
+    fn a_restored_catalog_launches_its_saved_shells_without_a_second_probe() {
+        let connection = unreachable("restored-launch");
+        restore(&connection, &stored_form(&saved_host("Command Prompt"))).unwrap();
+        let started = Instant::now();
+        assert!(selected_command(&connection, "wsl:Ubuntu").is_ok());
+        assert!(default_command(&connection).is_ok());
+        assert!(started.elapsed() < Duration::from_millis(250));
+        shell_cache().lock().remove(&connection_key(&connection));
+    }
+
+    #[test]
+    fn a_saved_catalog_that_fails_validation_is_not_trusted() {
+        let connection = unreachable("invalid-stored-catalog");
+        let mut linux = saved_host("Command Prompt");
+        linux.capabilities.os_id = Some("ubuntu".into());
+        for stored in [
+            "not json".to_string(),
+            stored_form(&saved_host("Command\nPrompt")),
+            stored_form(&linux),
+        ] {
+            assert!(restore(&connection, &stored).is_none(), "{stored}");
+        }
+        assert!(cached_host(&connection).is_none());
+    }
+
+    #[test]
+    fn a_fresher_discovery_outranks_the_saved_catalog() {
+        let connection = unreachable("fresher-than-stored");
+        remember(&connection, &saved_host("Fresh"));
+        let restored = restore(&connection, &stored_form(&saved_host("Saved"))).unwrap();
+        assert_eq!(restored.shells[0].label, "Fresh");
+        shell_cache().lock().remove(&connection_key(&connection));
+    }
+
+    #[test]
+    fn a_saved_mac_catalog_is_shown_without_any_remote_call() {
+        let connection = unreachable("stored-mac-catalog");
+        let saved = HostCapabilities {
+            connection_id: "stored-mac-catalog".into(),
+            os_id: Some("macos".into()),
+            os_name: Some("macOS".into()),
+            ..HostCapabilities::default()
+        };
+        let stored = r#"["macos:zsh","macos:fish"]"#;
+        let started = Instant::now();
+        let discovery = discover(&connection, false, Some(&saved), Some(stored)).unwrap();
+        assert!(crate::macos_remote::is_host(&connection).unwrap());
+        assert!(started.elapsed() < Duration::from_millis(250));
+        assert!(discovery.from_storage);
+        assert!(discovery.stored_form.is_none());
+        assert!(discovery.fresh_capabilities.is_none());
+        assert_eq!(discovery.catalog.platform, "macos");
+        assert_eq!(
+            discovery
+                .catalog
+                .shells
+                .iter()
+                .map(|shell| (shell.id.as_str(), shell.label.as_str()))
+                .collect::<Vec<_>>(),
+            [("macos:zsh", "zsh"), ("macos:fish", "fish")]
+        );
+        assert_eq!(
+            discovery.catalog.capabilities.unwrap().os_name.as_deref(),
+            Some("macOS")
+        );
+    }
+
+    #[test]
+    fn one_background_refresh_runs_per_host_at_a_time() {
+        let connection = unreachable("background-refresh");
+        let claim = BackgroundRefresh::claim(&connection).unwrap();
+        assert!(BackgroundRefresh::claim(&connection).is_none());
+        assert!(BackgroundRefresh::claim(&unreachable("another-host")).is_some());
+        drop(claim);
+        assert!(BackgroundRefresh::claim(&connection).is_some());
+    }
 
     #[test]
     fn cached_shells_are_bound_to_target_and_expire() {
@@ -341,30 +668,149 @@ mod tests {
             literal("Ubuntu's $(touch x); & whoami").unwrap(),
             "'Ubuntu''s $(touch x); & whoami'"
         );
-        let command = launch(&ResolvedShell {
-            id: "wsl:x".into(),
-            label: "WSL".into(),
-            executable: r"C:\Windows\System32\wsl.exe".into(),
-            arguments: vec![
-                "--distribution".into(),
-                "Ubuntu's $(touch x); & whoami".into(),
-            ],
-        })
-        .unwrap();
+        let hostile = shell(
+            "wsl:x",
+            r"C:\Windows\System32\wsl.exe",
+            &["--distribution", "Ubuntu's $(touch x); & whoami"],
+        );
+        let command = launch(&hostile, Some(POWERSHELL)).unwrap();
         assert!(!command.contains("touch"));
         assert!(!command.contains('&'));
+        assert!(
+            launch(&hostile, Some(CMD))
+                .unwrap()
+                .contains(r#"--distribution "Ubuntu's $(touch x); & whoami")"#)
+        );
         assert!(literal("line\ncommand").is_err());
         assert!(literal("").is_err());
     }
 
     #[test]
     fn oversized_profile_commands_fail_before_starting_ssh() {
-        let shell = ResolvedShell {
-            id: "terminal:large".into(),
-            label: "Large".into(),
-            executable: r"C:\shell.exe".into(),
-            arguments: vec!["a".repeat(2000); 4],
-        };
-        assert!(launch(&shell).unwrap_err().contains("length limit"));
+        let large = vec!["a".repeat(2000); 4];
+        let arguments: Vec<_> = large.iter().map(String::as_str).collect();
+        for default_shell in [Some(POWERSHELL), Some(CMD)] {
+            assert!(
+                launch(
+                    &shell("terminal:large", r"C:\shell.exe", &arguments),
+                    default_shell
+                )
+                .unwrap_err()
+                .contains("length limit")
+            );
+        }
+    }
+
+    const CMD: &str = r"C:\Windows\System32\cmd.exe";
+    const POWERSHELL: &str = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe";
+
+    fn shell(id: &str, executable: &str, arguments: &[&str]) -> ResolvedShell {
+        ResolvedShell {
+            id: id.into(),
+            label: id.into(),
+            executable: executable.into(),
+            arguments: arguments
+                .iter()
+                .map(|argument| (*argument).into())
+                .collect(),
+        }
+    }
+
+    fn direct(executable: &str, program: &str) -> String {
+        format!(
+            "if exist \"{executable}\" (<nul set /p \"=\u{1b}]633;ControlRoom;connected\u{7}\" & {program}) else (>&2 echo The selected shell is no longer installed& exit 1)"
+        )
+    }
+
+    #[test]
+    fn cmd_default_shell_starts_each_detected_shell_without_a_wrapper() {
+        let pwsh = r"C:\Program Files\PowerShell\7\pwsh.exe";
+        let bash = r"C:\Program Files\Git\bin\bash.exe";
+        let wsl = r"C:\Windows\System32\wsl.exe";
+        let cases = [
+            (
+                shell("powershell", POWERSHELL, &["-NoLogo"]),
+                direct(POWERSHELL, &format!("\"{POWERSHELL}\" -NoLogo")),
+            ),
+            (
+                shell("powershell-7", pwsh, &["-NoLogo"]),
+                direct(pwsh, &format!("\"{pwsh}\" -NoLogo")),
+            ),
+            (
+                shell("cmd", CMD, &["/Q"]),
+                direct(CMD, &format!("\"{CMD}\" /Q")),
+            ),
+            (
+                shell("git-bash", bash, &["--login", "-i"]),
+                direct(
+                    bash,
+                    &format!("set \"MSYSTEM=MINGW64\" & \"{bash}\" --login -i"),
+                ),
+            ),
+            (
+                shell("wsl:Ubuntu 24.04", wsl, &["--distribution", "Ubuntu 24.04"]),
+                direct(wsl, &format!("\"{wsl}\" --distribution \"Ubuntu 24.04\"")),
+            ),
+            (
+                shell("ssh-default", CMD, &[]),
+                direct(CMD, &format!("\"{CMD}\"")),
+            ),
+        ];
+        for (resolved, expected) in cases {
+            assert_eq!(launch(&resolved, Some(CMD)).unwrap(), expected);
+            assert_eq!(
+                launch(&resolved, Some("C:/WINDOWS/system32/CMD.EXE")).unwrap(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn cmd_arguments_are_quoted_for_the_target_program() {
+        assert_eq!(
+            launch(
+                &shell(
+                    "terminal:x",
+                    r"C:\Tools\x.exe",
+                    &[r"C:\My Dir\", "a&b|c", "(x)"]
+                ),
+                Some(CMD),
+            )
+            .unwrap(),
+            direct(
+                r"C:\Tools\x.exe",
+                r#""C:\Tools\x.exe" "C:\My Dir\\" "a&b|c" "(x)""#,
+            )
+        );
+    }
+
+    #[test]
+    fn values_cmd_cannot_quote_keep_the_powershell_wrapper() {
+        for (executable, arguments) in [
+            (r"C:\100%\shell.exe", vec![]),
+            (r"C:\Tools\x.exe", vec!["%PATH%"]),
+            (r"C:\Tools\x.exe", vec!["say \"hi\""]),
+            (r"C:\Tools\x.exe", vec!["wow!"]),
+        ] {
+            let command = launch(&shell("terminal:x", executable, &arguments), Some(CMD)).unwrap();
+            assert!(command.starts_with("powershell.exe -NoLogo -NoProfile -EncodedCommand "));
+        }
+    }
+
+    #[test]
+    fn non_cmd_default_shells_keep_the_powershell_wrapper() {
+        let resolved = shell("powershell", POWERSHELL, &["-NoLogo"]);
+        for default_shell in [
+            None,
+            Some(POWERSHELL),
+            Some(r"C:\Program Files\PowerShell\7\pwsh.exe"),
+            Some(r"C:\Program Files\Git\bin\bash.exe"),
+            Some(r"C:\Tools\notcmd.exe"),
+        ] {
+            assert_eq!(
+                launch(&resolved, default_shell).unwrap(),
+                powershell_launch(&resolved).unwrap()
+            );
+        }
     }
 }

@@ -6,8 +6,9 @@ applies across the whole app and the reasons behind it.
 
 Product boundaries and security rules live in `AGENTS.md`. Feature behavior
 lives in the implementation, its tests, and the user manual in `docs/`.
-`src/styles.css` owns exact colors, spacing, typography, sizing, and motion
-values. Do not copy token tables or feature specifications here.
+`src/styles/tokens.css` owns the exact color, spacing, typography, sizing, and
+motion tokens, and the sheets that `src/styles.css` imports apply them. Do not
+copy token tables or feature specifications here.
 
 ## Design principles
 
@@ -211,7 +212,7 @@ belongs in `docs/src/content/docs/reference/keyboard-shortcuts.md`.
 Record a decision here only when it applies across the app: the palette,
 surfaces, type, motion, or a pattern several screens share. A rule that belongs
 to one feature goes in that feature's code, tests, and `docs/`, not here. Leave
-exact values to `src/styles.css`. `src/color-palette.test.ts` and
+exact values to `src/styles/tokens.css`. `src/color-palette.test.ts` and
 `src/ui-hierarchy.test.ts` protect selected palette, contrast, and structural
 rules. If a design decision changes, update the relevant guardrail and explain
 the reason in the change.

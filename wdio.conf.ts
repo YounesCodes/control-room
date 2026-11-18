@@ -23,6 +23,9 @@ const installLifecycle = process.argv.some((argument) =>
     "e2e/updater-lifecycle-cleanup.spec.ts",
   ].some((spec) => argument.replaceAll("\\", "/").endsWith(spec)),
 );
+const startupTiming = process.argv.some((argument) =>
+  argument.replaceAll("\\", "/").endsWith("e2e/startup-timing.spec.ts"),
+);
 const dataDirectory =
   process.env.CONTROL_ROOM_E2E_DATA_DIR || mkdtempSync(join(tmpdir(), "control-room-e2e-"));
 process.env.CONTROL_ROOM_E2E_DATA_DIR = dataDirectory;
@@ -54,6 +57,7 @@ export const config: WebdriverIO.Config = {
           "./e2e/updater-lifecycle.spec.ts",
           "./e2e/updater-lifecycle-cleanup.spec.ts",
         ]),
+    ...(startupTiming ? [] : ["./e2e/startup-timing.spec.ts"]),
   ],
   ...(shard ? { shard: { current: Number(shard[1]), total: Number(shard[2]) } } : {}),
   maxInstances: 1,

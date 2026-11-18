@@ -1,0 +1,339 @@
+.skeleton .history-command {
+  padding-block: 14px;
+}
+
+.history-opt-in {
+  max-width: 780px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  padding: 20px;
+}
+
+.history-opt-in h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.history-opt-in p {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.history-opt-in code {
+  color: #e0e0dc;
+}
+
+.history-opt-in-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 0 18px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #0d0d0d;
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.history-opt-in-note svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--text-muted);
+}
+
+.history-opt-in-note strong {
+  font-weight: 650;
+}
+
+.history-opt-in-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.history-restart p {
+  margin: 0 0 14px;
+}
+
+.page-heading-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.page-heading-title h2 {
+  margin: 0;
+}
+
+.page-heading .page-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.page-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: #737370;
+}
+
+.page-status[data-state="active"] .page-status-dot {
+  background: var(--success);
+}
+
+.page-status[data-state="paused"] .page-status-dot {
+  background: var(--warning);
+}
+
+.history-more {
+  position: relative;
+}
+
+.history-menu {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  width: 240px;
+  flex-direction: column;
+  gap: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-popover);
+  padding: 6px;
+  animation: popover-in var(--motion-fast) var(--ease);
+}
+
+.history-menu button {
+  display: flex;
+  width: 100%;
+  min-height: 30px;
+  align-items: center;
+  gap: 9px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0 9px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  text-align: left;
+}
+
+.history-menu button:hover:not(:disabled) {
+  background: var(--fill-active);
+  color: var(--text-strong);
+}
+
+.history-menu button:disabled {
+  opacity: 0.5;
+}
+
+.history-menu button.danger-text,
+.history-menu button.danger-text:hover:not(:disabled) {
+  color: var(--failure);
+}
+
+.history-menu button.danger-text:hover:not(:disabled) {
+  background: var(--fill-active);
+}
+
+.history-search-row {
+  max-width: 980px;
+  margin-bottom: 16px;
+}
+
+.history-search-row .search-field {
+  width: min(460px, 100%);
+  padding: 0 10px;
+}
+
+.history-opt-in + .history-search-row {
+  margin-top: 16px;
+}
+
+.history-list {
+  max-width: 980px;
+}
+
+.history-list:not([data-loading]) {
+  animation: history-results-in var(--motion-med) var(--ease);
+}
+
+@keyframes history-results-in {
+  from {
+    opacity: 0.45;
+  }
+}
+
+.history-group {
+  margin-top: 18px;
+}
+
+.history-group > h3 {
+  position: sticky;
+  top: -26px;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 5px;
+  background: var(--app-bg);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.history-row {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows var(--motion-med) var(--ease),
+    opacity var(--motion-med) var(--ease);
+}
+
+.history-row[data-removing] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.history-row-inner {
+  display: grid;
+  grid-template-columns: 70px 40px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "time status command actions"
+    ". . cwd .";
+  align-items: center;
+  gap: 5px 10px;
+  min-height: 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 5px;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    padding-block var(--motion-med) var(--ease),
+    border-bottom-width var(--motion-med) var(--ease);
+}
+
+.history-row[data-removing] .history-row-inner {
+  padding-block: 0;
+  border-bottom-width: 0;
+}
+
+.history-row:hover .history-row-inner,
+.history-row:focus-within .history-row-inner {
+  background: var(--fill-hover);
+}
+
+.history-row-inner time {
+  grid-area: time;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.exit-status {
+  grid-area: status;
+  display: inline-flex;
+  justify-content: flex-end;
+  font-size: 11px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.exit-success {
+  color: var(--success);
+}
+
+.exit-failure {
+  color: var(--failure);
+}
+
+.exit-unknown {
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.history-command {
+  grid-area: command;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  max-height: 220px;
+  overflow: auto;
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  padding: 8px 10px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.65;
+  user-select: text;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.history-command mark {
+  border-radius: 2px;
+  background: var(--fill-selected);
+  color: var(--text-strong);
+}
+
+.history-cwd {
+  grid-area: cwd;
+  min-width: 0;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.history-row .row-actions {
+  grid-area: actions;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-fast) var(--ease);
+}
+
+.history-row:hover .row-actions,
+.history-row:focus-within .row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .history-row .row-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.history-row .row-actions .icon-button.copied {
+  color: var(--success);
+}
+
+@container (max-width: 720px) {
+  .history-group > h3 {
+    top: -20px;
+  }
+}
+
+@container (max-width: 480px) {
+  .history-row-inner {
+    grid-template-columns: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "time status actions"
+      "command command command"
+      "cwd cwd cwd";
+  }
+}

@@ -1,0 +1,182 @@
+.scratchpad-editor {
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+}
+
+.scratchpad-save-state {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.scratchpad-save-state {
+  flex: none;
+}
+
+.scratchpad-save-error,
+.settings-status.failed {
+  color: color-mix(in srgb, var(--failure) 55%, var(--text));
+}
+
+.scratchpad-save-error::before,
+.settings-status.failed::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  vertical-align: -2px;
+  background: var(--failure);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cline x1='12' x2='12' y1='8' y2='12'/%3E%3Cline x1='12' x2='12.01' y1='16' y2='16'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.scratchpad-editor textarea {
+  width: 100%;
+  min-height: 260px;
+  flex: 1;
+  resize: none;
+  padding: 16px;
+  font-family: "Cascadia Mono", Consolas, Menlo, Monaco, monospace;
+  font-size: 12.5px;
+  line-height: 1.65;
+  tab-size: 2;
+  white-space: pre-wrap;
+}
+
+.scratchpad-editor-tools,
+.scratchpad-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.scratchpad-editor-tools {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.scratchpad-edit-actions .icon-button {
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  border-radius: var(--radius-sm);
+}
+
+.scratchpad-popover {
+  position: fixed;
+  z-index: 30;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  display: flex;
+  width: min(320px, calc(100vw - 40px));
+  max-height: calc(100vh - 76px);
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-popover);
+  padding: 6px;
+  animation: popover-in var(--motion-fast) var(--ease);
+}
+
+.scratchpad-popover-scope {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex: none;
+  gap: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: #0a0a0a;
+  margin-bottom: 6px;
+  padding: 2px;
+}
+
+.scratchpad-popover-scope button {
+  display: inline-flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  padding: 4px 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
+}
+
+.scratchpad-popover-scope button:hover {
+  color: var(--text-strong);
+}
+
+.scratchpad-popover-scope button:active {
+  background: var(--fill-hover);
+}
+
+.scratchpad-popover-scope::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 2px auto 2px 2px;
+  width: calc(50% - 3px);
+  border-radius: 3px;
+  background: var(--fill-active);
+  transition: transform var(--motion-med) var(--ease);
+}
+
+.scratchpad-popover-scope:has(button:last-child[aria-pressed="true"])::before {
+  transform: translateX(calc(100% + 2px));
+}
+
+.scratchpad-popover-scope button[aria-pressed="true"] {
+  background: transparent;
+  color: var(--text-strong);
+}
+
+.scratchpad-editor-compact {
+  flex: none;
+  border-top: 0;
+}
+
+.scratchpad-editor-compact .scratchpad-save-state {
+  display: block;
+  padding: 1px 2px 5px;
+}
+
+.scratchpad-editor-compact textarea {
+  min-height: 116px;
+  max-height: 220px;
+  flex: none;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: #0a0a0a;
+  padding: 8px;
+}
+
+.scratchpad-popover-actions {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-top: 6px;
+}
+
+.scratchpad-popover-actions .secondary-button {
+  min-height: 27px;
+  gap: 6px;
+  padding: 0 9px;
+  font-size: 11px;
+}
