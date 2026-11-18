@@ -879,7 +879,7 @@ describe("Local Terminal", () => {
     expect(within(splitGroup).queryByText("prod-web")).toBeNull();
     const paneTabs = screen.getByRole("navigation", { name: "Terminals in Group 1" });
     expect(within(paneTabs).getByText("prod-web")).toBeTruthy();
-    expect(within(paneTabs).getByText("PowerShell 7")).toBeTruthy();
+    expect(within(paneTabs).getByRole("button", { name: "PowerShell 7" })).toBeTruthy();
     expect(within(paneTabs).getByLabelText("Rename prod-web Workspace")).toBeTruthy();
     expect(within(paneTabs).getByLabelText("Rename PowerShell 7 Workspace")).toBeTruthy();
     expect(within(splitGroup).queryByText("Git Bash")).toBeNull();

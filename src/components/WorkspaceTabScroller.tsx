@@ -37,9 +37,21 @@ const MENU_SECTIONS: { kind: WorkspaceTabKind; label: string }[] = [
 ];
 const MENU_FILTER_MIN_ITEMS = 8;
 
-export function splitTrailingNumber(label: string): [string, string] {
-  const match = /^(.*\S)(\s+\d+)$/.exec(label);
-  return match ? [match[1], match[2]] : [label, ""];
+export function splitTrailingNumber(label: string): [string, string, string] {
+  const match = /^(.*\S)(\s+)(\d+)$/.exec(label);
+  return match ? [match[1], match[2], match[3]] : [label, "", ""];
+}
+
+export function TabLabel({ label }: { label: string }) {
+  const [base, gap, suffix] = splitTrailingNumber(label);
+  if (!suffix) return <span className="session-tab-label">{label}</span>;
+  return (
+    <span className="session-tab-label">
+      <span className="session-tab-label-base">{base}</span>
+      {gap}
+      <span className="session-tab-label-suffix">{suffix}</span>
+    </span>
+  );
 }
 
 function hiddenSummary(direction: "left" | "right", hidden: number, attention: boolean) {

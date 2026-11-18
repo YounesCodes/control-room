@@ -75,7 +75,7 @@ import { LocalShellIcon } from "./components/LocalShellIcon";
 import { WindowControls, WindowResizeHandles } from "./components/WindowControls";
 import { TerminalScratchpad } from "./components/TerminalScratchpad";
 import {
-  splitTrailingNumber,
+  TabLabel,
   WorkspaceTabScroller,
   type TabDragOut,
   type WorkspaceTabOption,
@@ -2283,19 +2283,7 @@ export function App() {
           onClick={() => selectWorkspaceTab(workspace)}
         >
           <span className="target-mark">{workspaceMark(workspace)}</span>
-          <span className="session-tab-label">
-            {splitTrailingNumber(activityLabel(workspace)).map(
-              (part, index) =>
-                part && (
-                  <span
-                    className={index ? "session-tab-label-suffix" : "session-tab-label-base"}
-                    key={index}
-                  >
-                    {part}
-                  </span>
-                ),
-            )}
-          </span>
+          <TabLabel label={activityLabel(workspace)} />
           {hostContext && <span className="session-tab-context">{hostContext}</span>}
           {(workspace.state !== "connected" ||
             terminalFocusMode ||

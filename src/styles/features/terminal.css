@@ -542,7 +542,7 @@
 
 .session-tab-label-suffix {
   flex: none;
-  white-space: pre;
+  margin-left: 0.28em;
 }
 
 .session-tab-main.has-context .session-tab-label {

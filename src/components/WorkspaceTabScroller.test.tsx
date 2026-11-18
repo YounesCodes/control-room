@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useState } from "react";
-import { WorkspaceTabScroller, type WorkspaceTabOption } from "./WorkspaceTabScroller";
+import { TabLabel, WorkspaceTabScroller, type WorkspaceTabOption } from "./WorkspaceTabScroller";
 
 const TAB_WIDTH = 175;
 const STRIP = { left: 0, right: 700, top: 0, bottom: 34 };
@@ -543,5 +543,31 @@ describe("WorkspaceTabScroller overflow", () => {
     expect(remaining).toHaveLength(5);
     expect(document.activeElement).toBe(remaining[0]);
     expect(itemName(remaining[0])).toBe("PowerShell");
+  });
+});
+
+describe("TabLabel", () => {
+  afterEach(cleanup);
+
+  it("keeps a trailing number visible apart and the full name accessible", () => {
+    const { container, getByRole } = render(
+      <button type="button">
+        <TabLabel label="PowerShell 7" />
+      </button>,
+    );
+    expect(getByRole("button", { name: "PowerShell 7" })).toBeTruthy();
+    expect(container.querySelector(".session-tab-label-base")?.textContent).toBe("PowerShell");
+    expect(container.querySelector(".session-tab-label-suffix")?.textContent).toBe("7");
+    expect(container.querySelector(".session-tab-label")?.textContent).toBe("PowerShell 7");
+  });
+
+  it("renders a name without a trailing number as plain text", () => {
+    const { container, getByRole } = render(
+      <button type="button">
+        <TabLabel label="Git Bash" />
+      </button>,
+    );
+    expect(getByRole("button", { name: "Git Bash" })).toBeTruthy();
+    expect(container.querySelector(".session-tab-label-suffix")).toBeNull();
   });
 });
