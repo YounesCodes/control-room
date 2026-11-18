@@ -74,7 +74,12 @@ import { ContainerTerminalMark } from "./components/ContainerImageIcon";
 import { LocalShellIcon } from "./components/LocalShellIcon";
 import { WindowControls, WindowResizeHandles } from "./components/WindowControls";
 import { TerminalScratchpad } from "./components/TerminalScratchpad";
-import { WorkspaceTabScroller, type TabDragOut } from "./components/WorkspaceTabScroller";
+import {
+  splitTrailingNumber,
+  WorkspaceTabScroller,
+  type TabDragOut,
+  type WorkspaceTabOption,
+} from "./components/WorkspaceTabScroller";
 import { TerminalLayoutControls } from "./components/TerminalLayoutControls";
 import { useTerminalLayoutMotion } from "./hooks/use-terminal-layout-motion";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
@@ -1945,10 +1950,35 @@ export function App() {
     );
   }
 
-  function workspaceMenuDetail(workspace: Workspace) {
-    const hostContext = workspaceHostContext(workspace);
-    const state = terminalStateLabel(workspace);
-    return hostContext ? `${hostContext} · ${state}` : state;
+  function workspaceNeedsAttention(workspace: Workspace) {
+    return (
+      workspace.state === "error" ||
+      workspace.state === "disconnected" ||
+      terminalActivity[workspace.id] === "bell"
+    );
+  }
+
+  function workspaceMenuOption(workspace: Workspace): WorkspaceTabOption {
+    const status =
+      workspace.state !== "connected"
+        ? terminalStateLabel(workspace)
+        : terminalActivity[workspace.id] === "bell"
+          ? "bell"
+          : workspaceProcessing(workspace)
+            ? "running a command"
+            : undefined;
+    return {
+      id: workspace.id,
+      label: activityLabel(workspace),
+      icon: workspaceMark(workspace),
+      detail: workspaceHostContext(workspace) ?? undefined,
+      status,
+      attention: workspaceNeedsAttention(workspace),
+      kind: isLocalWorkspace(workspace) ? "local" : "remote",
+      active: workspace.id === activeWorkspaceId && !settingsOpen,
+      onSelect: () => selectWorkspaceTab(workspace),
+      onClose: () => void closeWorkspace(workspace.id),
+    };
   }
 
   function renameWorkspace(workspace: Workspace) {
@@ -2253,7 +2283,19 @@ export function App() {
           onClick={() => selectWorkspaceTab(workspace)}
         >
           <span className="target-mark">{workspaceMark(workspace)}</span>
-          <span className="session-tab-label">{activityLabel(workspace)}</span>
+          <span className="session-tab-label">
+            {splitTrailingNumber(activityLabel(workspace)).map(
+              (part, index) =>
+                part && (
+                  <span
+                    className={index ? "session-tab-label-suffix" : "session-tab-label-base"}
+                    key={index}
+                  >
+                    {part}
+                  </span>
+                ),
+            )}
+          </span>
           {hostContext && <span className="session-tab-context">{hostContext}</span>}
           {(workspace.state !== "connected" ||
             terminalFocusMode ||
@@ -2463,21 +2505,17 @@ export function App() {
           label: group.name,
           icon: <LayoutPanelLeft size={17} strokeWidth={1.8} />,
           detail: `${getTerminalLayoutIds(group.layout).length} terminals`,
+          kind: "group" as const,
+          attention: getTerminalLayoutIds(group.layout).some((id) => {
+            const member = workspaces.find((item) => item.id === id);
+            return !!member && workspaceNeedsAttention(member);
+          }),
           active: activeTerminalGroup?.id === group.id && !settingsOpen,
           onSelect: () => selectTerminalGroup(group),
         },
       ];
     }
-    return [
-      {
-        id: workspace.id,
-        label: activityLabel(workspace),
-        icon: workspaceMark(workspace),
-        detail: workspaceMenuDetail(workspace),
-        active: workspace.id === activeWorkspaceId && !settingsOpen,
-        onSelect: () => selectWorkspaceTab(workspace),
-      },
-    ];
+    return [workspaceMenuOption(workspace)];
   });
 
   const headerMetrics = displayedHeaderMetrics(settingsContract?.current.hostMetrics);
@@ -3016,16 +3054,7 @@ export function App() {
               items={getTerminalLayoutIds(activeTerminalGroup.layout).flatMap((id) => {
                 const workspace = workspaces.find((item) => item.id === id);
                 return workspace
-                  ? [
-                      {
-                        id,
-                        label: activityLabel(workspace),
-                        icon: workspaceMark(workspace),
-                        detail: workspaceMenuDetail(workspace),
-                        active: id === activeWorkspaceId,
-                        onSelect: () => selectWorkspaceTab(workspace),
-                      },
-                    ]
+                  ? [{ ...workspaceMenuOption(workspace), active: id === activeWorkspaceId }]
                   : [];
               })}
             >

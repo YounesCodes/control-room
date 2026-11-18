@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { WorkspaceTabScroller, type WorkspaceTabOption } from "./WorkspaceTabScroller";
 
 const TAB_WIDTH = 175;
@@ -188,7 +189,7 @@ describe("WorkspaceTabScroller reordering", () => {
     rectSpy.mockImplementation(function (this: HTMLElement) {
       const index = this.parentElement ? Array.from(this.parentElement.children).indexOf(this) : -1;
       if (this.classList.contains("session-tab-scroll-region"))
-        return tabRect({ left: 0, right: 384, width: 384, top: 0, bottom: 34, height: 34 });
+        return tabRect({ left: 0, right: 260, width: 260, top: 0, bottom: 34, height: 34 });
       if (this.classList.contains("session-tab-content"))
         return tabRect({ left: 0, right: 300, width: 300, top: 0, bottom: 34, height: 34 });
       if (this.classList.contains("session-tab-wrap") && index >= 0)
@@ -338,5 +339,209 @@ describe("WorkspaceTabScroller reordering", () => {
     pointer(plainTab, "pointermove", 40);
     pointer(plainTab, "pointerup", 40);
     expect(plain.container.querySelector(".session-tab-dragged")).toBeNull();
+  });
+});
+
+interface MenuTerminal {
+  label: string;
+  kind?: "local" | "remote";
+  status?: string;
+  attention?: boolean;
+}
+
+function OverflowStrip({
+  terminals,
+  initialActive,
+  onClose,
+}: {
+  terminals: MenuTerminal[];
+  initialActive: number;
+  onClose?: (label: string) => void;
+}) {
+  const [activeLabel, setActiveLabel] = useState(terminals[initialActive].label);
+  const [open, setOpen] = useState(terminals);
+  return (
+    <WorkspaceTabScroller
+      items={open.map((terminal): WorkspaceTabOption => ({
+        id: terminal.label,
+        label: terminal.label,
+        kind: terminal.kind,
+        status: terminal.status,
+        attention: terminal.attention,
+        active: terminal.label === activeLabel,
+        onSelect: () => setActiveLabel(terminal.label),
+        onClose: () => {
+          onClose?.(terminal.label);
+          setOpen((current) => current.filter((item) => item !== terminal));
+        },
+      }))}
+      activeTabId={activeLabel}
+      arrangementKey={open.map((terminal) => terminal.label).join("|")}
+    >
+      {open.map((terminal) => (
+        <div className="session-tab-wrap" key={terminal.label}>
+          <button className="session-tab-main" type="button">
+            {terminal.label}
+          </button>
+        </div>
+      ))}
+    </WorkspaceTabScroller>
+  );
+}
+
+function visibleTabs(container: HTMLElement) {
+  return [...container.querySelectorAll(".session-tab-main")].map((tab) => tab.textContent);
+}
+
+function menuItems(container: HTMLElement) {
+  return [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+}
+
+function picker(container: HTMLElement) {
+  return container.querySelector<HTMLButtonElement>(".session-tab-picker")!;
+}
+
+function itemName(item: HTMLElement) {
+  return item.textContent?.split(",")[0];
+}
+
+const terminals: MenuTerminal[] = [
+  { label: "Git Bash", kind: "local" },
+  { label: "Example host", kind: "remote", status: "disconnected", attention: true },
+  { label: "PowerShell", kind: "local" },
+  { label: "Command Prompt", kind: "local" },
+  { label: "Staging host", kind: "remote" },
+  { label: "Example host 2", kind: "remote" },
+];
+
+describe("WorkspaceTabScroller overflow", () => {
+  beforeEach(() => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains("session-tab-scroll-region")
+        ? tabRect({ left: 0, right: 400, width: 400, top: 0, bottom: 34, height: 34 })
+        : tabRect({});
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  function openMenu(container: HTMLElement) {
+    fireEvent.click(container.querySelector<HTMLButtonElement>(".session-tab-picker")!);
+  }
+
+  it("counts hidden terminals on each side and flags hidden ones that need attention", () => {
+    const { container } = render(<OverflowStrip terminals={terminals} initialActive={5} />);
+    expect(visibleTabs(container)).toEqual(["Staging host", "Example host 2"]);
+    const [left, right] = container.querySelectorAll<HTMLButtonElement>(".session-tab-pager");
+    expect(left.getAttribute("aria-label")).toBe("Scroll terminals left");
+    expect(left.title).toBe("4 hidden to the left, needs attention");
+    expect(left.dataset.attention).toBe("true");
+    expect(left.textContent).toBe("4");
+    expect(right.disabled).toBe(true);
+    expect(right.hasAttribute("title")).toBe(false);
+
+    fireEvent.click(left);
+    expect(visibleTabs(container)).toEqual(["PowerShell", "Command Prompt"]);
+    expect(left.title).toBe("2 hidden to the left, needs attention");
+    expect(right.title).toBe("2 hidden to the right");
+    expect(right.dataset.attention).toBeUndefined();
+  });
+
+  it("scrolls a terminal chosen from the menu or newly activated into view", () => {
+    const { container } = render(<OverflowStrip terminals={terminals} initialActive={5} />);
+    openMenu(container);
+    const items = menuItems(container);
+    expect(items.filter((item) => item.getAttribute("aria-current") === "page")).toHaveLength(1);
+    const gitBash = items.find((item) => itemName(item) === "Git Bash")!;
+    expect(gitBash.textContent).toContain("hidden to the left");
+    fireEvent.click(gitBash);
+    expect(visibleTabs(container)).toEqual(["Git Bash", "Example host"]);
+    expect(picker(container).getAttribute("aria-expanded")).toBe("false");
+
+    openMenu(container);
+    fireEvent.click(menuItems(container).find((item) => itemName(item) === "Example host 2")!);
+    expect(visibleTabs(container)).toEqual(["Staging host", "Example host 2"]);
+  });
+
+  it("shows status only where it carries information and groups local shells apart", () => {
+    const { container } = render(<OverflowStrip terminals={terminals} initialActive={5} />);
+    openMenu(container);
+    const groups = [...container.querySelectorAll('[role="menu"] > [role="group"]')];
+    expect(groups.map((group) => group.getAttribute("aria-label"))).toEqual([
+      "Local shells",
+      "Connections",
+    ]);
+    expect(
+      [...container.querySelectorAll(".session-tab-menu-status")].map((status) =>
+        status.textContent?.replace(", ", ""),
+      ),
+    ).toEqual(["disconnected"]);
+    expect(container.querySelector(".session-tab-menu-check")).toBeNull();
+  });
+
+  it("navigates the menu with arrows, Home and End, and returns focus on Escape", () => {
+    const { container } = render(<OverflowStrip terminals={terminals} initialActive={5} />);
+    openMenu(container);
+    const items = menuItems(container);
+    expect(items.map(itemName)).toEqual([
+      "Git Bash",
+      "PowerShell",
+      "Command Prompt",
+      "Example host",
+      "Staging host",
+      "Example host 2",
+    ]);
+    expect(document.activeElement).toBe(items[5]);
+    fireEvent.keyDown(items[5], { key: "ArrowDown" });
+    expect(document.activeElement).toBe(items[0]);
+    fireEvent.keyDown(items[0], { key: "ArrowUp" });
+    expect(document.activeElement).toBe(items[5]);
+    fireEvent.keyDown(items[5], { key: "Home" });
+    expect(document.activeElement).toBe(items[0]);
+    fireEvent.keyDown(items[0], { key: "End" });
+    expect(document.activeElement).toBe(items[5]);
+    fireEvent.keyDown(items[5], { key: "Escape" });
+    expect(picker(container).getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(picker(container));
+  });
+
+  it("filters by typing and selects the first match with Enter", () => {
+    const { container } = render(<OverflowStrip terminals={terminals} initialActive={5} />);
+    openMenu(container);
+    expect(container.querySelector(".session-tab-menu-filter")).toBeNull();
+    fireEvent.keyDown(document.activeElement!, { key: "p" });
+    const filter = container.querySelector<HTMLInputElement>(".session-tab-menu-filter")!;
+    expect(filter.value).toBe("p");
+    expect(document.activeElement).toBe(filter);
+    fireEvent.change(filter, { target: { value: "power" } });
+    expect(menuItems(container).map(itemName)).toEqual(["PowerShell"]);
+    fireEvent.keyDown(filter, { key: "Enter" });
+    expect(picker(container).getAttribute("aria-expanded")).toBe("false");
+    expect(visibleTabs(container)).toContain("PowerShell");
+  });
+
+  it("closes the focused terminal with Delete and keeps the menu open on the next row", () => {
+    const onClose = vi.fn();
+    const { container } = render(
+      <OverflowStrip terminals={terminals} initialActive={5} onClose={onClose} />,
+    );
+    openMenu(container);
+    const items = menuItems(container);
+    fireEvent.keyDown(items[5], { key: "Home" });
+    fireEvent.keyDown(items[0], { key: "Delete" });
+    expect(onClose).toHaveBeenCalledWith("Git Bash");
+    const remaining = menuItems(container);
+    expect(remaining).toHaveLength(5);
+    expect(document.activeElement).toBe(remaining[0]);
+    expect(itemName(remaining[0])).toBe("PowerShell");
   });
 });

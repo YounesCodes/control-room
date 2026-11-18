@@ -94,7 +94,7 @@ describe("motion guardrails", () => {
       ".session-tab-wrap.active .identity-mark",
       ".host-row.menu-open .identity-mark",
       ".terminal-target-group button:hover .identity-mark",
-      '.session-tab-overflow-menu > button[aria-current="page"] .identity-mark',
+      '.session-tab-menu-row > [role="menuitem"][aria-current="page"] .identity-mark',
     ]) {
       expect(reveal?.[0]).toContain(context);
     }

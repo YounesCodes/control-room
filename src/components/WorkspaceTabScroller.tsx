@@ -12,16 +12,39 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { usePopoverExit } from "../hooks/use-popover-exit";
+
+export type WorkspaceTabKind = "local" | "remote" | "group";
 
 export interface WorkspaceTabOption {
   id: string;
   label: string;
   detail?: string;
+  status?: string;
+  attention?: boolean;
+  kind?: WorkspaceTabKind;
   icon?: ReactNode;
   active: boolean;
   onSelect: () => void;
+  onClose?: () => void;
+}
+
+const MENU_SECTIONS: { kind: WorkspaceTabKind; label: string }[] = [
+  { kind: "local", label: "Local shells" },
+  { kind: "remote", label: "Connections" },
+  { kind: "group", label: "Groups" },
+];
+const MENU_FILTER_MIN_ITEMS = 8;
+
+export function splitTrailingNumber(label: string): [string, string] {
+  const match = /^(.*\S)(\s+\d+)$/.exec(label);
+  return match ? [match[1], match[2]] : [label, ""];
+}
+
+function hiddenSummary(direction: "left" | "right", hidden: number, attention: boolean) {
+  if (!hidden) return undefined;
+  return `${hidden} hidden to the ${direction}${attention ? ", needs attention" : ""}`;
 }
 
 interface WorkspaceTabScrollerProps {
@@ -42,10 +65,11 @@ export interface TabDragOut {
   cancel: () => void;
 }
 
-const MIN_TAB_WIDTH = 160;
+const MIN_TAB_WIDTH = 136;
 const MAX_TAB_WIDTH = 196;
 const OVERFLOW_BUTTON_WIDTH = 28;
-const OVERFLOW_CONTROLS_WIDTH = OVERFLOW_BUTTON_WIDTH * 3;
+const PAGER_BUTTON_WIDTH = 34;
+const OVERFLOW_CONTROLS_WIDTH = OVERFLOW_BUTTON_WIDTH + PAGER_BUTTON_WIDTH * 2;
 const DRAG_START_PX = 4;
 const DRAG_EDGE_PX = 28;
 const DRAG_STEP_MS = 350;
@@ -132,8 +156,56 @@ export function WorkspaceTabScroller({
     timer: null,
   });
   const clickGuardRef = useRef<(() => void) | null>(null);
+  const pendingDisarmsRef = useRef(new Map<() => void, number>());
+  const filterRef = useRef<HTMLInputElement>(null);
+  const [filter, setFilter] = useState("");
+  const keepMenuOnRearrangeRef = useRef(false);
+  const refocusMenuIndexRef = useRef<number | null>(null);
+  const focusFilterRef = useRef(false);
+  const hiddenRight = Math.max(0, count - visibleStart - pageSize);
+  const attentionLeft = items.slice(0, visibleStart).some((item) => item.attention);
+  const attentionRight = items.slice(visibleStart + pageSize).some((item) => item.attention);
+  const query = filter.trim().toLowerCase();
+  const matches = items
+    .map((item, index) => ({ item, index }))
+    .filter(
+      ({ item }) => !query || `${item.label} ${item.detail ?? ""}`.toLowerCase().includes(query),
+    );
+  const sectioned = new Set(items.map((item) => item.kind ?? "remote")).size > 1;
+  const sections = sectioned
+    ? MENU_SECTIONS.map((section) => ({
+        ...section,
+        rows: matches.filter(({ item }) => (item.kind ?? "remote") === section.kind),
+      })).filter((section) => section.rows.length > 0)
+    : [{ kind: null, label: null, rows: matches }];
 
-  useEffect(() => setMenuOpen(false), [arrangementKey, overflow]);
+  useEffect(() => {
+    if (keepMenuOnRearrangeRef.current) {
+      keepMenuOnRearrangeRef.current = false;
+      return;
+    }
+    setMenuOpen(false);
+  }, [arrangementKey]);
+
+  useEffect(() => setMenuOpen(false), [overflow]);
+
+  useEffect(() => {
+    if (!menuOpen) setFilter("");
+  }, [menuOpen]);
+
+  useLayoutEffect(() => {
+    if (!focusFilterRef.current) return;
+    focusFilterRef.current = false;
+    filterRef.current?.focus();
+  }, [filter]);
+
+  useLayoutEffect(() => {
+    const index = refocusMenuIndexRef.current;
+    if (index === null || !menuRef.current) return;
+    refocusMenuIndexRef.current = null;
+    const rows = [...menuRef.current.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    (rows[Math.min(index, rows.length - 1)] ?? pickerRef.current)?.focus();
+  }, [items.length]);
 
   useLayoutEffect(() => {
     const region = regionRef.current;
@@ -186,10 +258,84 @@ export function WorkspaceTabScroller({
       top: useAbove ? Math.max(8, anchor.top - height - gap) : anchor.bottom + gap,
       maxHeight,
     });
-    menuRef.current.querySelector<HTMLButtonElement>('[aria-current="page"]')?.focus();
+    menuRef.current.querySelector<HTMLElement>('[role="menuitem"][aria-current="page"]')?.focus();
     if (!menuRef.current.contains(document.activeElement))
-      menuRef.current.querySelector<HTMLButtonElement>("button")?.focus();
+      menuRef.current.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
   }, [menuOpen]);
+
+  function selectFromMenu(item: WorkspaceTabOption, index: number) {
+    closeMenu();
+    setStart((current) =>
+      index < current || index >= current + pageSize ? Math.min(index, lastStart) : current,
+    );
+    item.onSelect();
+  }
+
+  function closeFromMenu(item: WorkspaceTabOption, row: number) {
+    if (!item.onClose) return;
+    keepMenuOnRearrangeRef.current = true;
+    refocusMenuIndexRef.current = row;
+    item.onClose();
+  }
+
+  function menuRows() {
+    return [...(menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+  }
+
+  function handleMenuKey(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape" || event.key === "Tab") {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      closeMenu();
+      return;
+    }
+    const rows = menuRows();
+    const inFilter = event.target === filterRef.current;
+    if (inFilter) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        rows[0]?.focus();
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        const first = sections[0]?.rows[0];
+        if (first) selectFromMenu(first.item, first.index);
+      }
+      return;
+    }
+    const current = rows.indexOf(document.activeElement as HTMLElement);
+    if (event.key === "Delete" && current >= 0) {
+      const match = matches[Number(rows[current].dataset.match)];
+      if (match?.item.onClose) {
+        event.preventDefault();
+        closeFromMenu(match.item, current);
+      }
+      return;
+    }
+    const printable = event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
+    if (printable || (event.key === "Backspace" && filter)) {
+      event.preventDefault();
+      setFilter((value) => (printable ? value + event.key : value.slice(0, -1)));
+      focusFilterRef.current = true;
+      return;
+    }
+    if (event.key === "ArrowUp" && current === 0 && filterRef.current) {
+      event.preventDefault();
+      filterRef.current.focus();
+      return;
+    }
+    const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
+    if (!keys.includes(event.key) || rows.length === 0) return;
+    event.preventDefault();
+    const next =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? rows.length - 1
+          : (current + (event.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length;
+    rows[next]?.focus();
+  }
 
   function move(direction: -1 | 1) {
     setStart((current) => Math.max(0, Math.min(lastStart, current + direction * pageSize)));
@@ -284,7 +430,11 @@ export function WorkspaceTabScroller({
     const disarm = clickGuardRef.current;
     if (!disarm) return;
     clickGuardRef.current = null;
-    window.setTimeout(disarm, 0);
+    const timer = window.setTimeout(() => {
+      pendingDisarmsRef.current.delete(disarm);
+      disarm();
+    }, 0);
+    pendingDisarmsRef.current.set(disarm, timer);
   }
 
   useEffect(() => {
@@ -313,6 +463,11 @@ export function WorkspaceTabScroller({
       stopDragScrollRef.current();
       clickGuardRef.current?.();
       clickGuardRef.current = null;
+      for (const [disarm, timer] of pendingDisarmsRef.current) {
+        window.clearTimeout(timer);
+        disarm();
+      }
+      pendingDisarmsRef.current.clear();
     },
     [],
   );
@@ -515,13 +670,16 @@ export function WorkspaceTabScroller({
     >
       {showPager && (
         <button
-          className="session-tab-scroll-button"
+          className="session-tab-scroll-button session-tab-pager"
           type="button"
           disabled={visibleStart === 0}
           onClick={() => move(-1)}
           aria-label="Scroll terminals left"
+          title={hiddenSummary("left", visibleStart, attentionLeft)}
+          data-attention={attentionLeft || undefined}
         >
-          <ChevronLeft size={15} />
+          <ChevronLeft size={15} aria-hidden="true" />
+          {visibleStart > 0 && <span className="session-tab-hidden-count">{visibleStart}</span>}
         </button>
       )}
       <div className="session-tab-list" ref={listRef} data-tauri-drag-region>
@@ -579,13 +737,16 @@ export function WorkspaceTabScroller({
       </div>
       {showPager && (
         <button
-          className="session-tab-scroll-button"
+          className="session-tab-scroll-button session-tab-pager"
           type="button"
           disabled={visibleStart === lastStart}
           onClick={() => move(1)}
           aria-label="Scroll terminals right"
+          title={hiddenSummary("right", hiddenRight, attentionRight)}
+          data-attention={attentionRight || undefined}
         >
-          <ChevronRight size={15} />
+          {hiddenRight > 0 && <span className="session-tab-hidden-count">{hiddenRight}</span>}
+          <ChevronRight size={15} aria-hidden="true" />
         </button>
       )}
       {overflow && (
@@ -606,69 +767,97 @@ export function WorkspaceTabScroller({
         <div
           ref={menuRef}
           className="session-tab-overflow-menu"
-          role="menu"
-          aria-label={`${menuLabel} menu`}
           style={menuPosition}
           aria-hidden={menuClosing || undefined}
           inert={menuClosing || undefined}
           data-closing={menuClosing || undefined}
           data-app-popover=""
-          onKeyDown={(event) => {
-            if (event.key === "Escape" || event.key === "Tab") {
-              if (event.key === "Escape") {
-                event.preventDefault();
-                event.stopPropagation();
-              }
-              closeMenu();
-              return;
-            }
-            const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
-            if (!keys.includes(event.key)) return;
-            event.preventDefault();
-            const buttons = [
-              ...(menuRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []),
-            ];
-            const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
-            const next =
-              event.key === "Home"
-                ? 0
-                : event.key === "End"
-                  ? buttons.length - 1
-                  : (current + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) %
-                    buttons.length;
-            buttons[next]?.focus();
-          }}
+          onKeyDown={handleMenuKey}
         >
-          {items.map((item, index) => (
-            <button
-              key={item.id}
-              role="menuitem"
-              type="button"
-              aria-current={item.active ? "page" : undefined}
-              onClick={() => {
-                closeMenu();
-                setStart((current) =>
-                  index < current || index >= current + pageSize
-                    ? Math.min(index, lastStart)
-                    : current,
+          {(count >= MENU_FILTER_MIN_ITEMS || filter) && (
+            <input
+              ref={filterRef}
+              className="session-tab-menu-filter"
+              type="search"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder="Filter terminals"
+              aria-label="Filter terminals"
+              spellCheck={false}
+              autoComplete="off"
+            />
+          )}
+          <div role="menu" aria-label={`${menuLabel} menu`}>
+            {sections.map((section) => {
+              const rows = section.rows.map(({ item, index }) => {
+                const match = matches.findIndex((entry) => entry.index === index);
+                const side =
+                  index < visibleStart ? "left" : index >= visibleStart + pageSize ? "right" : null;
+                return (
+                  <div className="session-tab-menu-row" role="none" key={item.id}>
+                    <button
+                      role="menuitem"
+                      type="button"
+                      data-match={match}
+                      aria-current={item.active ? "page" : undefined}
+                      aria-keyshortcuts={item.onClose ? "Delete" : undefined}
+                      onClick={() => selectFromMenu(item, index)}
+                    >
+                      {item.icon && (
+                        <span className="session-tab-menu-icon" aria-hidden="true">
+                          {item.icon}
+                        </span>
+                      )}
+                      <span className="session-tab-menu-name">
+                        {item.label}
+                        {item.detail && <small> {item.detail}</small>}
+                      </span>
+                      {item.status && (
+                        <span
+                          className="session-tab-menu-status"
+                          data-attention={item.attention || undefined}
+                        >
+                          <span className="sr-only">, </span>
+                          {item.status}
+                        </span>
+                      )}
+                      {side && (
+                        <span className="session-tab-menu-side" title={`Hidden to the ${side}`}>
+                          <span className="sr-only">, hidden to the {side}</span>
+                          {side === "left" ? (
+                            <ChevronLeft size={13} aria-hidden="true" />
+                          ) : (
+                            <ChevronRight size={13} aria-hidden="true" />
+                          )}
+                        </span>
+                      )}
+                    </button>
+                    {item.onClose && (
+                      <span
+                        className="session-tab-menu-close"
+                        aria-hidden="true"
+                        title={`Close ${item.label}`}
+                        onClick={() => closeFromMenu(item, Math.max(0, match))}
+                      >
+                        <X size={13} />
+                      </span>
+                    )}
+                  </div>
                 );
-                item.onSelect();
-              }}
-            >
-              {item.icon && (
-                <span className="session-tab-menu-icon" aria-hidden="true">
-                  {item.icon}
-                </span>
-              )}
-              <span className="session-tab-menu-name">
-                {item.label}
-                {item.detail && <small>{item.detail}</small>}
-              </span>
-              <span className="session-tab-menu-check" aria-hidden="true">
-                {item.active && <Check size={14} />}
-              </span>
-            </button>
-          ))}
+              });
+              return section.label ? (
+                <div role="group" aria-label={section.label} key={section.kind}>
+                  <div className="session-tab-menu-section" aria-hidden="true">
+                    {section.label}
+                  </div>
+                  {rows}
+                </div>
+              ) : (
+                rows
+              );
+            })}
+          </div>
+          {matches.length === 0 && <p className="session-tab-menu-empty">No matching terminals</p>}
         </div>
       )}
     </div>

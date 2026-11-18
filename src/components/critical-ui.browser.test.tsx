@@ -192,7 +192,7 @@ function SettingsFixture() {
 
 function TabOverflowFixture({ longNames = false }: { longNames?: boolean }) {
   const [active, setActive] = useState(0);
-  const [count, setCount] = useState(4);
+  const [count, setCount] = useState(5);
   const [narrow, setNarrow] = useState(false);
   const tabs = Array.from({ length: count }, (_, index) => index);
   const label = (index: number) =>
@@ -572,7 +572,7 @@ describe("critical UI in Chromium", () => {
     await expect.element(page.getByRole("menu")).not.toBeInTheDocument();
     await page.getByRole("button", { name: "Remove terminal" }).click();
     await expect.element(picker).not.toBeInTheDocument();
-    expect(document.querySelectorAll(".session-tab-wrap")).toHaveLength(4);
+    expect(document.querySelectorAll(".session-tab-wrap")).toHaveLength(5);
   });
 
   it("reopens the overflow menu quickly while an earlier menu is still exiting", async () => {

@@ -124,6 +124,36 @@
   color: var(--text-strong);
 }
 
+.session-tab-scroll-button:disabled {
+  color: var(--text-faint);
+}
+
+.session-tab-pager {
+  position: relative;
+  display: flex;
+  width: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+
+.session-tab-hidden-count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-tab-pager[data-attention]::after {
+  position: absolute;
+  top: 8px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+  box-shadow: 0 0 0 2px var(--surface-chrome);
+  content: "";
+}
+
 .session-tab-content > .session-tab-wrap,
 .session-tab-content > .session-tab-group {
   width: var(--session-tab-width, 196px);
@@ -145,33 +175,127 @@
   animation: popover-in var(--motion-fast) var(--ease);
 }
 
-.session-tab-overflow-menu > button {
+.session-tab-menu-filter {
+  width: 100%;
+  height: 28px;
+  margin-bottom: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.session-tab-menu-filter:focus-visible {
+  border-color: var(--border-strong);
+  outline: none;
+}
+
+.session-tab-menu-section {
+  padding: 8px 8px 3px;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.session-tab-menu-row {
+  position: relative;
+  display: flex;
+}
+
+.session-tab-menu-row > [role="menuitem"] {
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 30px;
+  min-width: 0;
+  min-height: 28px;
   gap: 8px;
-  padding: 5px 8px;
+  padding: 4px 8px;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text);
   text-align: left;
-  transition: background-color var(--motion-fast) var(--ease);
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    padding var(--motion-med) var(--ease);
 }
 
-.session-tab-overflow-menu > button:hover,
-.session-tab-overflow-menu > button:focus,
-.session-tab-overflow-menu > button:focus-visible {
+.session-tab-menu-row > [role="menuitem"]:hover,
+.session-tab-menu-row > [role="menuitem"]:focus,
+.session-tab-menu-row > [role="menuitem"]:focus-visible {
   background: var(--fill-active);
 }
 
-.session-tab-overflow-menu > button:active {
+.session-tab-menu-row > [role="menuitem"][aria-current="page"] {
+  background: var(--fill-selected);
+  color: var(--text-strong);
+}
+
+.session-tab-menu-row > [role="menuitem"]:active {
   background: var(--fill-selected);
 }
 
-.session-tab-menu-check {
-  width: 14px;
+.session-tab-menu-row:has(.session-tab-menu-close):hover > [role="menuitem"],
+.session-tab-menu-row:has(.session-tab-menu-close):focus-within > [role="menuitem"] {
+  padding-right: 32px;
+}
+
+.session-tab-menu-close {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition:
+    opacity var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease),
+    background-color var(--motion-fast) var(--ease);
+}
+
+.session-tab-menu-row:hover > .session-tab-menu-close,
+.session-tab-menu-row:focus-within > .session-tab-menu-close {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.session-tab-menu-close:hover {
+  background: var(--fill-active);
+  color: var(--text-strong);
+}
+
+.session-tab-menu-status {
   flex: none;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.session-tab-menu-status[data-attention] {
+  color: var(--warning);
+}
+
+.session-tab-menu-side {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  color: var(--text-faint);
+}
+
+.session-tab-menu-empty {
+  margin: 0;
+  padding: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .session-tab-menu-icon,
@@ -231,15 +355,15 @@
 .session-tab-menu-name {
   min-width: 0;
   flex: 1;
-  overflow-wrap: anywhere;
+  overflow: hidden;
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .session-tab-menu-name small {
-  display: block;
-  margin-top: 2px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .session-tab-group {
@@ -402,11 +526,23 @@
 }
 
 .session-tab-label {
+  display: flex;
+  min-width: 0;
   overflow: hidden;
   flex: 1;
   text-align: left;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.session-tab-label-base {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-tab-label-suffix {
+  flex: none;
+  white-space: pre;
 }
 
 .session-tab-main.has-context .session-tab-label {

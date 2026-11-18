@@ -622,6 +622,22 @@
         "target": ".focus-departing-sidebar",
         "button": "Focus terminal"
       }
+    },
+    "tabs": {
+      "states": ["overflow", "overflow-menu"],
+      "ready": ".app-shell",
+      "prepare": {
+        "overflow-menu": [
+          {
+            "role": "button",
+            "name": "All terminals"
+          }
+        ]
+      },
+      "settled": {
+        "overflow": ".session-tab-scroll-region .session-tab-wrap.active",
+        "overflow-menu": ".session-tab-overflow-menu [aria-current='page']"
+      }
     }
   }
 }

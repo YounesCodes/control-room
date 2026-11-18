@@ -47,6 +47,7 @@ const workspaceView = {
   systemd: "services",
   scratchpad: "terminal",
   splits: "terminal",
+  tabs: "terminal",
   dialogs: "terminal",
   terminal: "terminal",
   ports: "ports",
@@ -232,7 +233,47 @@ const splitOutputs = [
   ],
   ["example$ psql -c 'select count(*) from jobs'", " count", "-------", "  4812", "example$ "],
 ];
+const stagingHost = { ...connection("host-b"), displayName: "Staging host" };
+const tabShells = [
+  { id: "git-bash", kind: "git-bash" as const, label: "Git Bash", elevated: false },
+  {
+    id: "windows-powershell",
+    kind: "windows-powershell" as const,
+    label: "Windows PowerShell",
+    elevated: false,
+  },
+  {
+    id: "command-prompt",
+    kind: "command-prompt" as const,
+    label: "Command Prompt",
+    elevated: false,
+  },
+];
+if (scenario === "tabs") {
+  const terminal = (id: string, target: { connectionId?: string; localShellId?: string }) => ({
+    id,
+    connectionId: target.connectionId ?? null,
+    localShellId: target.localShellId ?? null,
+    label: null,
+    view: "terminal" as const,
+    historyPaused: false,
+  });
+  workspace.workspaces = [
+    terminal("tab-git-bash", { localShellId: "git-bash" }),
+    terminal("tab-host-a", { connectionId: host.id }),
+    terminal("tab-powershell", { localShellId: "windows-powershell" }),
+    terminal("tab-git-bash-2", { localShellId: "git-bash" }),
+    terminal("tab-command-prompt", { localShellId: "command-prompt" }),
+    terminal("tab-host-b", { connectionId: stagingHost.id }),
+    terminal("tab-powershell-2", { localShellId: "windows-powershell" }),
+    terminal("tab-host-a-2", { connectionId: host.id }),
+    terminal("tab-command-prompt-2", { localShellId: "command-prompt" }),
+    terminal("tab-host-a-3", { connectionId: host.id }),
+  ];
+  workspace.activeWorkspaceId = "tab-host-a-3";
+}
 let sessionStarts = 0;
+const localShellStarts = new Map<string, number>();
 const listeners = new Map<string, Set<(event: { payload: any }) => void>>();
 let serviceReads = 0;
 
@@ -271,7 +312,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       };
       break;
     case "list_connections":
-      result = [{ ...host, tags }];
+      result = scenario === "tabs" ? [host, stagingHost] : [{ ...host, tags }];
       break;
     case "list_connection_groups":
       result = groups;
@@ -350,6 +391,10 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       };
       break;
     case "list_local_shells":
+      if (scenario === "tabs") {
+        result = { profiles: tabShells, administratorStatus: "disabled" };
+        break;
+      }
       result = {
         profiles: linux
           ? [{ id: "bash", kind: "bash", label: "Bash", elevated: false }]
@@ -388,13 +433,29 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
     case "refresh_capabilities":
       result = windowsHost
         ? { ...capabilities(host.id), osId: "windows", osName: "Windows Server 2022" }
-        : capabilities(host.id);
+        : capabilities(scenario === "tabs" ? args.connectionId : host.id);
       break;
     case "list_windows_services":
     case "discover_remote_shells":
     case "list_catalog_fonts":
       if (loading) return pending();
       throw new Error(`Missing UI review native fixture for ${command}`);
+    case "start_local_session": {
+      const sessionId = `example-local-${sessionStarts++}`;
+      const shellStarts = (localShellStarts.get(args.shellId) ?? 0) + 1;
+      localShellStarts.set(args.shellId, shellStarts);
+      result = { sessionId, shellId: args.shellId };
+      setTimeout(() => {
+        const output =
+          args.shellId === "git-bash" && shellStarts > 1
+            ? "example$ npm run build\r\n\x1b]633;E;npm run build\x07\x1b]133;C\x07> vite build"
+            : args.shellId === "command-prompt" && shellStarts === 1
+              ? "C:\\example> ping -t 192.0.2.10\r\nRequest timed out.\x07"
+              : "example$ ";
+        args.output.onmessage(new TextEncoder().encode(output).buffer);
+      }, 0);
+      break;
+    }
     case "start_session": {
       const start = sessionStarts++;
       const sessionId = args.containerId
@@ -407,7 +468,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
         listeners.get("session-state-changed")?.forEach((callback) =>
           callback({
             payload:
-              state === "notice-ended"
+              state === "notice-ended" || args.connectionId === stagingHost.id
                 ? {
                     sessionId,
                     state: "disconnected",
