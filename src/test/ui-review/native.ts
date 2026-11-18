@@ -20,6 +20,7 @@ const loading = scenario === "loading" ? state : null;
 const pending = <T>() => new Promise<T>(() => {});
 const windowsHost = loading === "windows-services" || loading === "shell-picker";
 const firstMacConnection = scenario === "dialogs" && state === "mac-shell-picker";
+const newHostTerminal = loading === "new-host-terminal";
 if (
   !Object.hasOwn(registry.scenarios, scenario) ||
   !registry.scenarios[scenario as keyof typeof registry.scenarios].states.includes(state)
@@ -398,7 +399,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       break;
     case "get_cached_capabilities":
     case "refresh_capabilities":
-      if (firstMacConnection) {
+      if (firstMacConnection || newHostTerminal) {
         if (command === "refresh_capabilities") return pending();
         result = null;
         break;
@@ -436,6 +437,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
           ? `example-session-${start + 1}`
           : "example-session";
       result = { sessionId, connectionId: host.id };
+      if (newHostTerminal) break;
       setTimeout(() => {
         listeners.get("session-state-changed")?.forEach((callback) =>
           callback({

@@ -62,6 +62,7 @@ import type { TerminalPaneHandle } from "./components/TerminalPane";
 import type { TerminalTargetGroup } from "./components/TerminalTargetMenu";
 import { WhatsNewDialog } from "./components/WhatsNewDialog";
 import { useAppUpdater } from "./hooks/use-app-updater";
+import { useProvisionalTerminals } from "./hooks/use-provisional-terminals";
 import { updateInfo } from "./lib/app-update";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { RemoteShellDialog } from "./components/RemoteShellDialog";
@@ -164,6 +165,7 @@ import type {
   LocalShellProfile,
   LogSourceSelection,
   RemoteWorkspace,
+  RemoteShellCatalog,
   RemoteShellProfile,
   SavedConnection,
   SettingsContract,
@@ -249,6 +251,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
   active,
   nativeClipboard,
   findRequest,
+  concealed,
   handlers,
 }: {
   workspace: Workspace;
@@ -258,6 +261,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
   active: boolean;
   nativeClipboard: boolean;
   findRequest: number;
+  concealed: boolean;
   handlers: TerminalHandlers;
 }) {
   const id = workspace.id;
@@ -284,6 +288,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
       onTitle={(title) => handlers.title(workspace, title)}
       onProcessing={(busy) => handlers.processing(workspace, busy)}
       findRequest={findRequest}
+      concealed={concealed}
       onSearchOpenChange={(open) => handlers.searchOpen(workspace, open)}
       onReconnect={() => handlers.reconnect(workspace)}
     />
@@ -497,6 +502,8 @@ export function App() {
   const [remoteShellRequest, setRemoteShellRequest] = useState<{
     connection: SavedConnection;
     split: boolean;
+    provisionalId?: string;
+    discovery?: Promise<RemoteShellCatalog>;
   } | null>(null);
   const [connections, setConnections] = useState<SavedConnection[]>([]);
   const connectionsRef = useRef(connections);
@@ -1437,12 +1444,10 @@ export function App() {
           return;
         }
       }
-      if (
-        hostCapabilities[connection.id]?.osId &&
-        hostCapabilities[connection.id]?.osId !== "windows" &&
-        hostCapabilities[connection.id]?.osId !== "macos"
-      ) {
+      const osId = hostCapabilities[connection.id]?.osId;
+      if (osId !== "windows" && osId !== "macos") {
         const workspace = createRemoteWorkspace(connection);
+        if (!osId) provisionalTerminals.start(workspace.id, connection.id);
         if (split) splitWithNewWorkspace(workspace);
         else openWorkspace(workspace);
       } else {
@@ -1452,8 +1457,49 @@ export function App() {
     });
   }
 
+  const provisionalTerminals = useProvisionalTerminals({
+    capabilities: rememberCapabilities,
+    choose(workspaceId, discovery) {
+      const workspace = workspaceStateRef.current.workspaces.find(
+        (item) => item.id === workspaceId,
+      );
+      if (!workspace || !isRemoteWorkspace(workspace)) return;
+      const connection =
+        connectionsRef.current.find((item) => item.id === workspace.connectionId) ??
+        workspace.connectionSnapshot;
+      setNewTerminalMenuOpen(false);
+      setRemoteShellRequest({ connection, split: false, provisionalId: workspaceId, discovery });
+    },
+    close(workspaceId) {
+      void performCloseWorkspace(workspaceId);
+    },
+  });
+
+  function closeRemoteShellRequest() {
+    const provisionalId = remoteShellRequest?.provisionalId;
+    setRemoteShellRequest(null);
+    if (provisionalId) provisionalTerminals.choice(provisionalId, "cancel");
+  }
+
   function selectRemoteShell(shell: RemoteShellProfile | null) {
     if (!remoteShellRequest) return;
+    const provisionalId = remoteShellRequest.provisionalId;
+    if (provisionalId) {
+      setRemoteShellRequest(null);
+      const step = provisionalTerminals.choice(provisionalId, shell ? "shell" : "default");
+      const workspace = workspaceStateRef.current.workspaces.find(
+        (item) => item.id === provisionalId,
+      );
+      if (step?.kind === "keep" && workspace && isRemoteWorkspace(workspace)) {
+        updateRemoteWorkspace(provisionalId, {
+          remoteShell: shell ?? undefined,
+          connectRequested: true,
+          restored: false,
+          reconnectToken: workspace.reconnectToken + 1,
+        });
+      }
+      return;
+    }
     const workspace = createRemoteWorkspace(remoteShellRequest.connection, shell);
     if (remoteShellRequest.split) splitWithNewWorkspace(workspace);
     else openWorkspace(workspace);
@@ -1704,6 +1750,7 @@ export function App() {
     const workspace = workspaceSession.current().workspaces.find((item) => item.id === id);
     if (!workspace || closingWorkspaceIdsRef.current.has(id)) return;
     closingWorkspaceIdsRef.current.add(id);
+    provisionalTerminals.forget(id);
     setActionError(null);
     if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
     workspaceSession.commit((current) => closeWorkspaceInSession(current, id));
@@ -2286,6 +2333,7 @@ export function App() {
       if (state === "connected" && isRemoteWorkspace(workspace)) {
         detectConnectionCapabilities(workspace.connectionId);
       }
+      provisionalTerminals.sessionState(workspace.id, state);
     },
     selection(workspace, hasSelection) {
       setTerminalHasSelection((current) =>
@@ -3058,6 +3106,7 @@ export function App() {
                           visible={terminalVisible}
                           active={terminalVisible && workspace.id === activeWorkspace.id}
                           findRequest={terminalFindRequests[workspace.id] ?? 0}
+                          concealed={provisionalTerminals.concealed(workspace.id)}
                           handlers={terminalHandlers}
                           nativeClipboard={clientPlatform === "linux" || clientPlatform === "macos"}
                         />
@@ -3255,7 +3304,8 @@ export function App() {
         <RemoteShellDialog
           connection={remoteShellRequest.connection}
           onCapabilities={rememberCapabilities}
-          onClose={() => setRemoteShellRequest(null)}
+          discovery={remoteShellRequest.discovery}
+          onClose={closeRemoteShellRequest}
           onSelect={selectRemoteShell}
         />
       )}
