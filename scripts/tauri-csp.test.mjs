@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -23,7 +23,14 @@ const cspDirective = (csp, name) => {
 describe("packaged app CSP", () => {
   it("allows the data: images the stylesheet draws", async () => {
     const csp = await readCsp();
-    const styles = await readFile(path.join(root, "src/styles.css"), "utf-8");
+    const sheets = await readdir(path.join(root, "src/styles"), { recursive: true });
+    const styles = (
+      await Promise.all(
+        sheets
+          .filter((sheet) => sheet.endsWith(".css"))
+          .map((sheet) => readFile(path.join(root, "src/styles", sheet), "utf-8")),
+      )
+    ).join("\n");
     // WebView2 loads CSS background images, including data: URLs, under img-src.
     const dataImageUrls = [...styles.matchAll(/url\(["']?data:/g)].length;
     expect(dataImageUrls).toBeGreaterThan(0);

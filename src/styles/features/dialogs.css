@@ -1,0 +1,650 @@
+.modal-copy {
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.connection-organization-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px;
+}
+
+.modal.connection-dialog {
+  width: min(640px, calc(100vw - 40px));
+}
+
+.connection-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 12px;
+  padding: 16px;
+}
+
+.connection-form label:not(.checkbox-label) {
+  min-width: 0;
+  gap: 5px;
+}
+
+.connection-form input:not([type="checkbox"]),
+.connection-form select {
+  min-width: 0;
+}
+
+.connection-form input:not([type="checkbox"]) {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.connection-key-field,
+.connection-organization-fields,
+.connection-form > .elevation-field,
+.connection-form > .connection-test-result,
+.connection-form > .inline-error,
+.connection-form > .modal-actions {
+  grid-column: 1 / -1;
+}
+
+.connection-form .elevation-field,
+.connection-form .connection-tag-selector {
+  gap: 5px;
+}
+
+.connection-form .elevation-field {
+  margin-top: 4px;
+}
+
+.connection-form .elevation-field .checkbox-label {
+  min-height: 24px;
+}
+
+.connection-form .elevation-field > small {
+  padding-left: 24px;
+}
+
+.connection-form .modal-actions {
+  margin: 0 -16px -16px;
+  padding: 12px 16px;
+}
+
+.connection-form .connection-test-button {
+  margin-right: auto;
+}
+
+@media (max-width: 640px) {
+  .connection-form,
+  .connection-organization-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.known-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.connection-tag-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.connection-tag-selector > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.control-reference {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.control-reference svg {
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
+.connection-tag-selector .connection-tag-badge {
+  max-width: 160px;
+  cursor: pointer;
+}
+
+.connection-tag-selector .connection-tag-badge[aria-pressed="true"] {
+  box-shadow: 0 0 0 1px var(--accent);
+  opacity: 1;
+}
+
+.connection-tag-selector .connection-tag-badge[aria-pressed="true"]::before {
+  content: "✓";
+  margin-right: 3px;
+  font-weight: 800;
+}
+
+.tag-color-control {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.tag-color-control input {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.tag-color-control input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.tag-color-control input::-webkit-color-swatch {
+  border: 1px solid var(--text-muted);
+  border-radius: 50%;
+}
+
+.connection-groups-dialog {
+  padding: 20px;
+}
+
+.connection-organization-heading {
+  margin: 22px 0 0;
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.connection-organization-heading:first-child {
+  margin-top: 0;
+}
+
+.connection-groups-dialog > .modal-actions {
+  margin-top: 20px;
+}
+
+.connection-group-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 9px;
+  margin-top: 10px;
+}
+
+.connection-group-create label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.connection-tag-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px auto;
+  align-items: end;
+  gap: 9px;
+  margin-top: 10px;
+}
+
+.connection-tag-create label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.connection-tag-create .connection-tag-color-field input {
+  width: 32px;
+  height: 32px;
+  padding: 7px;
+  cursor: pointer;
+}
+
+.connection-tag-create .connection-tag-color-field input::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.connection-tag-create .connection-tag-color-field input::-webkit-color-swatch {
+  border: 1px solid var(--text-muted);
+  border-radius: 50%;
+}
+
+.connection-group-list {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.connection-tag-manage-list {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.connection-group-list:empty,
+.connection-tag-manage-list:empty {
+  display: none;
+}
+
+.connection-group-manage-row {
+  display: flex;
+  min-height: 45px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.connection-tag-manage-row {
+  display: flex;
+  min-height: 45px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.connection-tag-manage-row > .connection-tag-badge {
+  min-height: 24px;
+  max-width: 180px;
+  padding: 3px 10px;
+  font-size: 11px;
+}
+
+.connection-group-manage-row > span {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connection-group-manage-row > div,
+.connection-group-manage-row form,
+.connection-group-delete-confirm,
+.connection-tag-manage-row > div,
+.connection-tag-manage-row form,
+.connection-tag-delete-confirm {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.connection-group-manage-row form input {
+  min-width: 0;
+  flex: 1;
+}
+
+.connection-tag-manage-row form input {
+  min-width: 0;
+  flex: 1;
+}
+
+.connection-group-delete-confirm > span,
+.connection-tag-delete-confirm > span {
+  min-width: 0;
+  flex: 1;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.input-action {
+  display: flex;
+  gap: 8px;
+}
+
+.input-action input {
+  min-width: 0;
+  flex: 1;
+}
+
+.modal-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 66%);
+  animation: overlay-in var(--motion-med) var(--ease);
+}
+
+.modal {
+  color: var(--text);
+  width: min(530px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-modal);
+  animation: dialog-in var(--motion-med) var(--ease);
+}
+
+.modal.prompt-dialog {
+  width: min(420px, calc(100vw - 40px));
+}
+
+.modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  height: 51px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-overlay);
+  padding: 0 12px 0 20px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.modal-actions {
+  position: sticky;
+  z-index: 1;
+  bottom: 0;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  background: var(--surface-overlay);
+  margin: 4px -20px -20px;
+  padding: 13px 20px;
+}
+
+.remote-shell-body {
+  display: grid;
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.remote-shell-heading,
+.remote-shell-host {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.remote-shell-heading {
+  justify-content: space-between;
+}
+
+.remote-shell-host .host-os-icon {
+  --identity-size: 24px;
+}
+
+.remote-shell-host > div {
+  display: grid;
+  gap: 4px;
+}
+
+.remote-shell-host strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.remote-shell-host > div > span,
+.remote-shell-note {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.remote-shell-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 65px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.remote-shell-groups {
+  display: grid;
+  gap: 14px;
+  max-height: min(370px, 50vh);
+  overflow: auto;
+}
+
+.remote-shell-options {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.remote-shell-options legend {
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.remote-shell-option {
+  display: flex;
+  min-height: 57px;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--fill-control);
+  cursor: pointer;
+}
+
+.remote-shell-option:not(.selected):has(input:enabled):hover {
+  border-color: var(--border-strong);
+  background: var(--fill-control-hover);
+}
+
+.remote-shell-option.selected {
+  border-color: var(--text-muted);
+  background: var(--surface-raised);
+}
+
+.remote-shell-option:has(input:focus-visible) {
+  outline: 2px solid var(--text-strong);
+  outline-offset: -2px;
+}
+
+.remote-shell-option input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--text-strong);
+  flex: none;
+  order: 3;
+}
+
+.remote-shell-option input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.remote-shell-option:has(input:disabled) {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.remote-shell-mark {
+  color: var(--text-muted);
+  flex: none;
+}
+
+.remote-shell-option-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.remote-shell-option-text strong {
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.remote-shell-option-text small {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.remote-shell-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-overlay);
+  position: sticky;
+  bottom: 0;
+}
+
+.remote-shell-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--failure) 9%, var(--surface-raised));
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
+.remote-shell-error strong {
+  color: color-mix(in srgb, var(--failure) 55%, var(--text));
+}
+
+.remote-shell-error > svg {
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  color: var(--failure);
+  flex: none;
+}
+
+.remote-shell-error p {
+  margin: 7px 0;
+  overflow-wrap: anywhere;
+}
+
+.remote-shell-error small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.remote-shell-recovery {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.connection-test-result {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 10px;
+  margin: 11px 0;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--success) 8%, var(--surface-raised));
+  padding: 9px 12px;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.connection-test-result,
+.connection-test-error {
+  scroll-margin-bottom: 72px;
+}
+
+.connection-test-icon {
+  margin-top: 2.5px;
+  color: var(--success);
+}
+
+.connection-test-body {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.connection-test-title {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.connection-test-capabilities {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: 2px 24px;
+  margin: 0;
+  padding: 0;
+  color: var(--text-muted);
+  list-style: none;
+}
+
+.connection-test-capabilities li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.connection-test-capabilities li > span:first-of-type {
+  color: var(--text);
+}
+
+.connection-test-capabilities svg {
+  color: var(--text-muted);
+}
+
+.connection-test-capabilities [data-available="true"] svg {
+  color: var(--success);
+}
+
+.connection-test-error > span {
+  display: grid;
+  gap: 2px;
+}
+
+.connection-test-error strong {
+  font-weight: 600;
+}
+
+.connection-test-error > span > span:last-child {
+  color: var(--text-muted);
+}
+
+@media (max-width: 859px) {
+  .modal-header h2 {
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+  .modal-header {
+    min-height: 51px;
+    height: auto;
+    padding-block: 10px;
+  }
+  .modal-header > button {
+    flex-shrink: 0;
+  }
+}

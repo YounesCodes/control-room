@@ -1,0 +1,78 @@
+:root {
+  --font-ui: "Inter Variable", "Inter", "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+  --font-display:
+    "Space Grotesk", "Inter Variable", "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, monospace;
+
+  --app-bg: #090909;
+  --topbar-bg: #000;
+  --sidebar-bg: #050505;
+  --terminal-bg: #000;
+  --text: #f2f2ee;
+  --text-muted: #adadaa;
+  --text-faint: #92928e;
+  --accent: #f2f2ee;
+  --accent-hover: #fff;
+  --success: #42d17a;
+  --warning: #d6a84a;
+  --failure: #ef5b6b;
+
+  --os-ubuntu: #e95420;
+  --os-debian: #d70a53;
+  --os-windows: #0078d4;
+  --docker-blue: #0288d1;
+  --os-fedora: #51a2da;
+  --os-arch: #1793d1;
+  --os-opensuse: #73ba25;
+  --os-alpine: #6293ac;
+  --os-mint: #86be43;
+  --os-kali: #557c94;
+  --os-rhel: #ee0000;
+  --os-centos: #8887b4;
+  --os-rocky: #10b981;
+  --os-alma: #7ea4bf;
+  --os-nixos: #5277c3;
+  --os-manjaro: #35bf5c;
+  --os-suse: #5aa48f;
+  --os-oracle: #f80000;
+  --os-amazon: #ff9900;
+  --shell-accent: #5391fe;
+  --shell-git: #f05032;
+  --identity-size: 18px;
+
+  --surface-base: #090909;
+  --surface-sunken: #050505;
+  --surface-chrome: #070707;
+  --surface-raised: #161616;
+  --surface-overlay: #1c1c1c;
+
+  --fill-hover: #1a1a1a;
+  --fill-active: #242424;
+  --fill-selected: #2a2a2a;
+  --fill-control: #171717;
+  --fill-control-hover: #242424;
+  --fill-text-selection: #474747;
+  --fill-current: #191918;
+  --border-current: #3b3a37;
+
+  --text-strong: #fff;
+  --on-accent: #000;
+
+  --border-strong: #454545;
+  --border: #343434;
+  --border-subtle: #232323;
+  --border-faint: #1a1a1a;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --shadow-popover: 0 10px 30px rgb(0 0 0 / 55%);
+  --shadow-modal: 0 24px 60px rgb(0 0 0 / 60%);
+
+  --motion-fast: 110ms;
+  --motion-med: 160ms;
+  --motion-focus: 180ms;
+  --motion-slow: 240ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}

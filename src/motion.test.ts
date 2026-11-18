@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { POPOVER_EXIT_MS } from "./hooks/use-popover-exit";
+import { stylesSource } from "./test/stylesheets";
 
-const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const appSource = readFileSync(new URL("./App.tsx", import.meta.url), "utf8");
 
 function rule(selector: string): string {
