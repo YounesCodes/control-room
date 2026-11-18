@@ -20,6 +20,8 @@ Enter a display name, SSH destination, and username. **Port** (1–65535) and **
 
 **Test structured access** checks whether the inspection views can connect without an SSH password prompt. It does not save the connection. The terminal can still use an interactive password login if that test fails.
 
+On Linux and macOS, the inspection views reuse one SSH connection per target and keep it open for a minute after their last call. Terminals always open their own connection. For inspection calls, this replaces any `ControlMaster`, `ControlPath` or `ControlPersist` setting in your SSH config. Windows opens a new connection for each call.
+
 Changing a connection's destination, username, port, or key clears its cached host facts and inspection results. Open terminals keep their existing sessions until you reconnect. A remote shell selected for the previous target is cleared.
 
 ## Windows 10 and 11 hosts
