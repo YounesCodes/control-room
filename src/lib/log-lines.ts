@@ -53,7 +53,7 @@ const LEVEL_WORDS: Record<string, LogLevel | null> = {
 const FIELD_LEVEL =
   /(?:^|[\s{,;(])["']?(?:log\.)?(?:level|lvl|loglevel|severity)["']?\s*[=:]\s*["']?([A-Za-z]+)/;
 
-export function statedLogLevel(message: string): LogLevel | null | undefined {
+function statedLogLevel(message: string): LogLevel | null | undefined {
   const field = FIELD_LEVEL.exec(message)?.[1].toLowerCase();
   if (field && field in LEVEL_WORDS) return LEVEL_WORDS[field];
   for (const token of message.trimStart().split(/\s+/, 5)) {

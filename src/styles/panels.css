@@ -122,18 +122,6 @@
   letter-spacing: 0.04em;
 }
 
-.protocol-tcp {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-  color: var(--accent);
-}
-
-.port-owner-label {
-  max-width: 150px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .detail-section-heading {
   margin: 20px 0 8px;
   color: var(--text-muted);

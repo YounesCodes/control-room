@@ -30,7 +30,7 @@ export interface TracePoint {
   value: number;
 }
 
-export function readingTime(sample: HeaderMetrics): number {
+function readingTime(sample: HeaderMetrics): number {
   return Date.parse(sample.sampledAt);
 }
 

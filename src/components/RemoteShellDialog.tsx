@@ -13,7 +13,7 @@ import { Bone, Skeleton, boneWidth, wave } from "./PanelState";
 
 const PLATFORM_NAMES: Record<string, string> = { macos: "macOS", windows: "Windows" };
 
-export function shellDescription(id: string): string {
+function shellDescription(id: string): string {
   if (id.startsWith("wsl:")) return "Linux distribution";
   if (id.startsWith("terminal:")) return "Windows Terminal profile";
   if (id === "powershell") return "Built-in Windows shell";

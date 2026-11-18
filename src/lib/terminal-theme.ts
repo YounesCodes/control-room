@@ -12,7 +12,7 @@ type TerminalColorSettings = Pick<
   | "terminalCyan"
 >;
 
-export const TERMINAL_BACKGROUND = "#000000";
+const TERMINAL_BACKGROUND = "#000000";
 
 export function buildTerminalTheme(colors: TerminalColorSettings): ITheme {
   return {
