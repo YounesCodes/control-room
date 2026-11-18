@@ -807,11 +807,12 @@ fn a_broken_local_pty_is_the_only_local_error_state() {
 }
 
 #[test]
-fn a_startup_log_line_splits_preparation_spawn_and_stage_time() {
+fn a_startup_log_line_splits_preparation_pty_spawn_and_stage_time() {
     let requested_at = std::time::Instant::now();
     let timing = StartupTiming {
         requested_at,
         prepared_at: requested_at + Duration::from_millis(7),
+        opened_at: requested_at + Duration::from_millis(10),
         spawned_at: requested_at + Duration::from_millis(52),
     };
     let local = SessionMode::Local {
@@ -825,7 +826,7 @@ fn a_startup_log_line_splits_preparation_spawn_and_stage_time() {
             "first_output",
             requested_at + Duration::from_millis(180),
         ),
-        "[control-room] terminal_start target=local:cmd prepare_ms=7 spawn_ms=45 first_output_ms=180"
+        "[control-room] terminal_start target=local:cmd prepare_ms=7 pty_ms=3 spawn_ms=42 first_output_ms=180"
     );
     assert_eq!(
         timing.log_line(
@@ -833,7 +834,7 @@ fn a_startup_log_line_splits_preparation_spawn_and_stage_time() {
             "connected",
             requested_at + Duration::from_millis(900),
         ),
-        "[control-room] terminal_start target=ssh prepare_ms=7 spawn_ms=45 connected_ms=900"
+        "[control-room] terminal_start target=ssh prepare_ms=7 pty_ms=3 spawn_ms=42 connected_ms=900"
     );
 }
 

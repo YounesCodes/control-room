@@ -27,6 +27,10 @@ use crate::{
 #[cfg(target_os = "linux")]
 #[path = "session_linux.rs"]
 mod linux;
+
+#[cfg(target_os = "macos")]
+#[path = "session_macos.rs"]
+mod macos;
 #[cfg(windows)]
 #[path = "session_windows.rs"]
 mod windows;
@@ -90,17 +94,19 @@ impl SessionMode {
 struct StartupTiming {
     requested_at: Instant,
     prepared_at: Instant,
+    opened_at: Instant,
     spawned_at: Instant,
 }
 
 impl StartupTiming {
     fn log_line(&self, target: &str, stage: &str, at: Instant) -> String {
         format!(
-            "[control-room] terminal_start target={target} prepare_ms={} spawn_ms={} {stage}_ms={}",
+            "[control-room] terminal_start target={target} prepare_ms={} pty_ms={} spawn_ms={} {stage}_ms={}",
             self.prepared_at
                 .duration_since(self.requested_at)
                 .as_millis(),
-            self.spawned_at.duration_since(self.prepared_at).as_millis(),
+            self.opened_at.duration_since(self.prepared_at).as_millis(),
+            self.spawned_at.duration_since(self.opened_at).as_millis(),
             at.duration_since(self.requested_at).as_millis(),
         )
     }
@@ -299,7 +305,12 @@ impl SessionManager {
                 pixel_height: 0,
             })
             .map_err(|error| format!("PTY initialization failed: {error}"))?;
+        let opened_at = Instant::now();
 
+        #[cfg(target_os = "macos")]
+        let mut child = macos::spawn(pair.master.as_ref(), &command)
+            .map_err(|error| mode.spawn_error(error))?;
+        #[cfg(not(target_os = "macos"))]
         let mut child = pair
             .slave
             .spawn_command(command)
@@ -308,6 +319,7 @@ impl SessionManager {
         let startup = StartupTiming {
             requested_at,
             prepared_at,
+            opened_at,
             spawned_at: Instant::now(),
         };
         let startup_target = mode.startup_target();

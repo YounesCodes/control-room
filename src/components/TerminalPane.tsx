@@ -594,15 +594,49 @@ export function TerminalPane({
     let initialRows = terminal.rows;
     const startupPhase = (phase: string) =>
       startupContainer?.setAttribute("data-terminal-startup-phase", phase);
+    const startBackend = () => {
+      startupPhase("native");
+      startupTiming.mark("layout");
+      initialCols = terminal.cols;
+      initialRows = terminal.rows;
+      const request =
+        workspace.kind === "local"
+          ? api.startLocalSession(workspace.shell.id, initialCols, initialRows, output)
+          : api.startSession(
+              workspace.connectionId,
+              initialCols,
+              initialRows,
+              output,
+              workspace.remoteShell?.id ?? null,
+              workspace.container?.id ?? null,
+            );
+      void request.then(
+        () => startupTiming.mark("started"),
+        () => undefined,
+      );
+      return request;
+    };
+    const startsBeforeGridSettles =
+      workspace.kind !== "local" &&
+      (!workspace.remoteShell || workspace.remoteShell.id.startsWith("macos:"));
     const started = (async () => {
       startupPhase("draining");
-      await new Promise<void>((resolve) => terminal.write("", resolve));
-      if (disposed || generation !== sessionGenerationRef.current) return null;
-      terminal.reset();
-      startupPhase("font");
-      await document.fonts
+      const fontLoaded = document.fonts
         ?.load(`${settings.terminalFontSize}px ${settings.terminalFontFamily}`, "MW")
         .catch(() => undefined);
+      await new Promise<void>((resolve) => terminal.write("", resolve));
+      if (disposed || generation !== sessionGenerationRef.current) return null;
+      startupTiming.mark("drained");
+      terminal.reset();
+      startupPhase("font");
+      await fontLoaded;
+      if (disposed || generation !== sessionGenerationRef.current) return null;
+      startupTiming.mark("fontLoaded");
+      let early: ReturnType<typeof startBackend> | null = null;
+      if (startsBeforeGridSettles) {
+        fitRef.current?.fit();
+        early = startBackend();
+      }
       let measuredCols: number | undefined;
       let measuredRows: number | undefined;
       let smallestCols = Number.POSITIVE_INFINITY;
@@ -613,9 +647,9 @@ export function TerminalPane({
         pass < 8 && !disposed && generation === sessionGenerationRef.current;
         pass++
       ) {
-        startupPhase("layout");
+        if (!early) startupPhase("layout");
         await nextFrameOrTimeout(WEBKIT_SUSPENDED_FRAME_TIMEOUT_MS);
-        if (disposed || generation !== sessionGenerationRef.current) return null;
+        if (disposed || generation !== sessionGenerationRef.current) return early;
         fitRef.current?.fit();
         smallestCols = Math.min(smallestCols, terminal.cols);
         smallestRows = Math.min(smallestRows, terminal.rows);
@@ -631,22 +665,9 @@ export function TerminalPane({
         measuredCols = terminal.cols;
         measuredRows = terminal.rows;
       }
-      if (disposed || generation !== sessionGenerationRef.current) return null;
+      if (disposed || generation !== sessionGenerationRef.current) return early;
       if (!settled) terminal.resize(smallestCols, smallestRows);
-      startupPhase("native");
-      startupTiming.mark("layout");
-      initialCols = terminal.cols;
-      initialRows = terminal.rows;
-      return workspace.kind === "local"
-        ? api.startLocalSession(workspace.shell.id, initialCols, initialRows, output)
-        : api.startSession(
-            workspace.connectionId,
-            initialCols,
-            initialRows,
-            output,
-            workspace.remoteShell?.id ?? null,
-            workspace.container?.id ?? null,
-          );
+      return early ?? startBackend();
     })();
 
     void started

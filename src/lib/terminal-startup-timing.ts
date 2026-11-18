@@ -1,6 +1,8 @@
 export const TERMINAL_PROMPT_QUIET_MS = 300;
 
 export const TERMINAL_STARTUP_STAGES = [
+  "drained",
+  "fontLoaded",
   "layout",
   "started",
   "firstOutput",
@@ -32,6 +34,8 @@ const browserClock: TerminalStartupClock = {
 };
 
 const STAGE_LOG_KEYS: Record<TerminalStartupStage, string> = {
+  drained: "drained_ms",
+  fontLoaded: "font_ms",
   layout: "layout_ms",
   started: "started_ms",
   firstOutput: "first_output_ms",

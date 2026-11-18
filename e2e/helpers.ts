@@ -1,5 +1,5 @@
 import { $, browser, expect } from "@wdio/globals";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, mkdtempSync, openSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { application, isMac, isLinux, isWindows, localShellLabel } from "./platform";
@@ -28,6 +28,13 @@ export async function stopMacApplication() {
     ),
   ]);
   macApplication = undefined;
+}
+
+const macApplicationLog = resolve("test-results/desktop/driver/macos-app.log");
+
+function openMacApplicationLog() {
+  mkdirSync(resolve(macApplicationLog, ".."), { recursive: true });
+  return openSync(macApplicationLog, "a");
 }
 
 export async function ipc<T>(command: string, args: object = {}): Promise<T> {
@@ -108,10 +115,12 @@ export async function restartApp(preserve = true) {
       { timeout: 20_000 },
     );
     const port = Number(browser.options.port || 4445);
+    const appLog = openMacApplicationLog();
     macApplication = spawn(application, [`--e2e-data-dir=${directory}`], {
       env: { ...process.env, TAURI_WEBDRIVER_PORT: String(port) },
-      stdio: "ignore",
+      stdio: ["ignore", appLog, appLog],
     });
+    closeSync(appLog);
     macApplication.unref();
     await browser.waitUntil(
       async () => {
