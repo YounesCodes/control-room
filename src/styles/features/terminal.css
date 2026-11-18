@@ -132,6 +132,7 @@
   position: relative;
   display: flex;
   width: 34px;
+  padding: 0;
   align-items: center;
   justify-content: center;
   gap: 1px;

@@ -465,6 +465,34 @@ describe("critical UI in Chromium", () => {
     });
   });
 
+  it("fits whole tabs beside the overflow controls however wide the engine draws them", async () => {
+    const wider = document.createElement("style");
+    wider.textContent = ".session-tab-pager { width: 41px; }";
+    document.head.append(wider);
+    try {
+      mount(<TabOverflowFixture />);
+      await page.getByRole("button", { name: "Add terminal" }).click();
+      const list = document.querySelector<HTMLElement>(".session-tab-list")!;
+      for (const step of ["Select first terminal", "Resize tabs", "Select last terminal"]) {
+        await page.getByRole("button", { name: step }).click();
+        await vi.waitFor(() => {
+          const bounds = list.getBoundingClientRect();
+          const content = list.querySelector<HTMLElement>(".session-tab-content")!;
+          const declared = parseFloat(content.style.getPropertyValue("--session-tab-width"));
+          expect(list.scrollWidth).toBeLessThanOrEqual(list.clientWidth + 1);
+          for (const tab of list.querySelectorAll<HTMLElement>(".session-tab-wrap")) {
+            const rect = tab.getBoundingClientRect();
+            expect(rect.width).toBeCloseTo(declared, 0);
+            expect(rect.left).toBeGreaterThanOrEqual(bounds.left - 1);
+            expect(rect.right).toBeLessThanOrEqual(bounds.right + 1);
+          }
+        });
+      }
+    } finally {
+      wider.remove();
+    }
+  });
+
   it("keeps New terminal reachable and reveals tabs when the strip overflows", async () => {
     mount(<TabOverflowFixture />);
     await expect

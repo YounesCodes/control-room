@@ -142,6 +142,7 @@ export function WorkspaceTabScroller({
   const pickerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
+  const [listWidth, setListWidth] = useState(0);
   const [start, setStart] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const { present: menuPresent, closing: menuClosing } = usePopoverExit(menuOpen);
@@ -151,7 +152,7 @@ export function WorkspaceTabScroller({
   const overflow = width > 0 && count * MIN_TAB_WIDTH > width;
   const showPager = overflow && width >= MIN_TAB_WIDTH + OVERFLOW_CONTROLS_WIDTH;
   const controlsWidth = showPager ? OVERFLOW_CONTROLS_WIDTH : overflow ? OVERFLOW_BUTTON_WIDTH : 0;
-  const available = Math.max(0, width - controlsWidth);
+  const available = overflow && listWidth > 0 ? listWidth : Math.max(0, width - controlsWidth);
   const pageSize = width > 0 ? Math.min(count, Math.floor(available / MIN_TAB_WIDTH)) : count;
   const tabWidth =
     width > 0 ? Math.min(MAX_TAB_WIDTH, available / Math.max(1, pageSize)) : MAX_TAB_WIDTH;
@@ -224,13 +225,18 @@ export function WorkspaceTabScroller({
   useLayoutEffect(() => {
     const region = regionRef.current;
     if (!region) return;
-    const measure = () => setWidth(region.getBoundingClientRect().width);
+    const list = listRef.current;
+    const measure = () => {
+      setWidth(region.getBoundingClientRect().width);
+      setListWidth(list?.getBoundingClientRect().width ?? 0);
+    };
     measure();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
     observer.observe(region);
+    if (list) observer.observe(list);
     return () => observer.disconnect();
-  }, []);
+  }, [showPager]);
 
   useLayoutEffect(() => {
     setStart((current) => {
