@@ -60,6 +60,12 @@ const noUpdaterHookOutsideApp = {
   selector: String.raw`ImportDeclaration[importKind='value'][source.value=/(^|\x2f)use-app-updater$/] > ImportSpecifier[importKind='value'][imported.name='useAppUpdater']`,
   message: "Call useAppUpdater once, in App, so the app keeps one update lifecycle.",
 };
+const workspaceSessionOwner = "src/hooks/use-workspace-session.ts";
+const noFocusTransitionOutsideSession = {
+  selector: String.raw`ImportDeclaration[source.value=/(^|\x2f)focus-mode-transition$/]`,
+  message:
+    "Change Focus Mode through useWorkspaceSession so every change animates and Focus Mode never outlives its Workspace.",
+};
 const pasteIconOnly = {
   selector:
     "JSXOpeningElement[name.name='Clipboard']:not(JSXElement:has(> JSXOpeningElement:has(> JSXAttribute[name.name='aria-label'][value.value=/^Paste\\b/])) > JSXElement > JSXOpeningElement)",
@@ -70,6 +76,7 @@ const appSyntax = [
   noXtermOutsideTerminalPane,
   noUpdaterCallsOutsideLifecycle,
   noUpdaterHookOutsideApp,
+  noFocusTransitionOutsideSession,
   pasteIconOnly,
 ];
 const withoutSyntax = (...excluded) => appSyntax.filter((rule) => !excluded.includes(rule));
@@ -128,6 +135,12 @@ export default tseslint.config(
     files: [updaterOwner],
     rules: {
       "no-restricted-syntax": ["error", ...withoutSyntax(noUpdaterHookOutsideApp)],
+    },
+  },
+  {
+    files: [workspaceSessionOwner],
+    rules: {
+      "no-restricted-syntax": ["error", ...withoutSyntax(noFocusTransitionOutsideSession)],
     },
   },
   {

@@ -1,0 +1,225 @@
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes popover-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.99);
+  }
+}
+
+[data-closing] {
+  pointer-events: none;
+  animation: popover-out var(--motion-fast) var(--ease) forwards;
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cue-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+@keyframes state-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes bell-ping {
+  from {
+    box-shadow:
+      0 0 0 2px var(--surface-chrome),
+      0 0 0 0 color-mix(in srgb, var(--warning) 45%, transparent);
+  }
+  to {
+    box-shadow:
+      0 0 0 2px var(--surface-chrome),
+      0 0 0 6px transparent;
+  }
+}
+
+@keyframes ready-ping {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 55%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+.icon-button:active:not(:disabled),
+.toolbar-button:active:not(:disabled),
+.app-bar-button:active:not(:disabled),
+.host-menu:active:not(:disabled),
+.session-strip-button:active:not(:disabled),
+.session-tab-scroll-button:active:not(:disabled),
+.session-new-terminal:active:not(:disabled),
+.session-tab-close:active:not(:disabled),
+.session-tab-rename:active:not(:disabled),
+.update-indicator-button:active:not(:disabled),
+.host-metrics-trigger:active:not(:disabled) {
+  transform: scale(0.93);
+}
+
+.host-menu:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.93);
+}
+
+.primary-button:active:not(:disabled),
+.secondary-button:active:not(:disabled),
+.danger-button:active:not(:disabled),
+.panel-state button:active:not(:disabled),
+.sidebar-primary:active:not(:disabled),
+.host-metrics-status:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.sidebar-primary:active:not(:disabled) {
+  transform: none;
+  background: var(--fill-selected);
+}
+
+.host-row:not(.active):active,
+.feature-nav button:not(.active):active,
+.session-tab-wrap:not(.active):active,
+.session-tab-group:not(.active):active,
+.connection-group-heading:active {
+  background: var(--fill-active);
+}
+
+.host-os-ubuntu {
+  --identity: var(--os-ubuntu);
+}
+
+.host-os-debian {
+  --identity: var(--os-debian);
+}
+
+.host-os-windows {
+  --identity: var(--os-windows);
+}
+
+.host-os-fedora {
+  --identity: var(--os-fedora);
+}
+
+.host-os-arch {
+  --identity: var(--os-arch);
+}
+
+.host-os-opensuse {
+  --identity: var(--os-opensuse);
+}
+
+.host-os-alpine {
+  --identity: var(--os-alpine);
+}
+
+.host-os-mint {
+  --identity: var(--os-mint);
+}
+
+.host-os-kali {
+  --identity: var(--os-kali);
+}
+
+.host-os-rhel {
+  --identity: var(--os-rhel);
+}
+
+.host-os-centos {
+  --identity: var(--os-centos);
+}
+
+.host-os-rocky {
+  --identity: var(--os-rocky);
+}
+
+.host-os-alma {
+  --identity: var(--os-alma);
+}
+
+.host-os-nixos {
+  --identity: var(--os-nixos);
+}
+
+.host-os-manjaro {
+  --identity: var(--os-manjaro);
+}
+
+.host-os-suse {
+  --identity: var(--os-suse);
+}
+
+.host-os-oracle {
+  --identity: var(--os-oracle);
+}
+
+.host-os-amazon {
+  --identity: var(--os-amazon);
+}
+
+.local-shell-mark.identity-mark:not(.local-shell-icon) {
+  --identity: var(--text-strong);
+}
+
+.session-tab-wrap:hover .identity-mark,
+.session-tab-wrap:focus-within .identity-mark,
+.session-tab-wrap.active .identity-mark,
+.host-row:hover .identity-mark,
+.host-row:focus-within .identity-mark,
+.host-row.active .identity-mark,
+.host-row.menu-open .identity-mark,
+.host-child-row:hover .identity-mark,
+.host-child-row:focus-within .identity-mark,
+.host-child-row.active .identity-mark,
+.terminal-target-group button:hover .identity-mark,
+.terminal-target-group button:focus-visible .identity-mark,
+.terminal-target-group button[data-active="true"] .identity-mark,
+.session-tab-overflow-menu > button:hover .identity-mark,
+.session-tab-overflow-menu > button:focus .identity-mark,
+.session-tab-overflow-menu > button:focus-visible .identity-mark,
+.session-tab-overflow-menu > button[aria-current="page"] .identity-mark,
+.command-item:hover .identity-mark,
+.command-item:focus-visible .identity-mark,
+.command-item.active .identity-mark {
+  color: var(--identity);
+  --shell-artwork-filter: none;
+}

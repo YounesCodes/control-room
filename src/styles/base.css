@@ -1,0 +1,387 @@
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("../assets/fonts/space-grotesk-latin.woff2") format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("../assets/fonts/space-grotesk-latin-ext.woff2") format("woff2");
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+:root {
+  color-scheme: dark;
+  color: #f2f2ee;
+  background: #000;
+  font-family: var(--font-ui);
+  font-feature-settings:
+    "liga" 1,
+    "calt" 1;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: var(--fill-text-selection);
+  color: var(--text-strong);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.app-tooltip {
+  white-space: pre-line;
+  position: fixed;
+  z-index: 1200;
+  width: max-content;
+  max-width: min(260px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-popover);
+  padding: 5px 8px;
+  color: var(--text);
+  font-size: 10px;
+  line-height: 1.35;
+  pointer-events: none;
+  animation: popover-in var(--motion-fast) var(--ease);
+}
+
+html,
+body,
+#root {
+  /* WebView2 can report a fractional content size just below Tauri's minimum after Windows scaling. */
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+  background: var(--app-bg);
+  user-select: none;
+}
+
+/* Linux has no native rounded corners, so the transparent window clips the page itself. */
+
+html[data-window-corners="rounded"],
+html[data-window-corners="rounded"] body {
+  background: transparent;
+}
+
+html[data-window-corners="rounded"] body {
+  clip-path: inset(0 round var(--radius-lg));
+}
+
+html[data-window-corners="rounded"] .app-shell {
+  overflow: clip;
+  border-radius: var(--radius-lg);
+}
+
+button,
+input,
+select,
+textarea {
+  color: inherit;
+  font: inherit;
+}
+
+button {
+  border: 0;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease),
+    border-color var(--motion-fast) var(--ease),
+    transform var(--motion-fast) var(--ease);
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+input,
+select,
+textarea {
+  border: 1.5px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  padding: 6px 10px;
+  transition:
+    border-color var(--motion-fast) var(--ease),
+    box-shadow var(--motion-fast) var(--ease),
+    --scrollbar-thumb var(--motion-fast) var(--ease);
+}
+
+input:not([type="checkbox"], [type="color"], [type="range"], [type="file"], [type="hidden"]),
+select {
+  min-height: 32px;
+  height: 32px;
+  padding-block: 4.5px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+select {
+  appearance: none;
+  border-radius: var(--radius-md);
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5l5-5' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 8px 5.5px;
+  background-position: right 10px center;
+}
+
+@supports (appearance: base-select) {
+  select:not([multiple]):not([size]),
+  select:not([multiple]):not([size])::picker(select) {
+    appearance: base-select;
+  }
+
+  select::picker-icon {
+    display: none;
+  }
+
+  select::picker(select) {
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    background: var(--surface-overlay);
+    color: var(--text);
+    box-shadow: var(--shadow-popover);
+    margin-block: 4px;
+    padding: 4px;
+    overflow: auto;
+    max-height: min(320px, 60vh);
+  }
+
+  select:not([multiple]):not([size]) option {
+    border-radius: var(--radius-sm);
+    padding: 5px 10px;
+    font-size: 13px;
+    line-height: 20px;
+  }
+
+  select option::checkmark {
+    display: none;
+  }
+
+  select option:checked {
+    background: var(--fill-active);
+    color: var(--text-strong);
+  }
+
+  select option:hover:not(:disabled) {
+    background: var(--fill-hover);
+  }
+
+  select option:focus-visible {
+    outline: 1px solid var(--text-muted);
+    outline-offset: -1px;
+  }
+}
+
+input:hover:not(:disabled),
+select:hover:not(:disabled),
+textarea:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--text-muted);
+  box-shadow: none;
+}
+
+input[type="checkbox"] {
+  appearance: none;
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin: 0;
+  padding: 0;
+  border: 1.5px solid #686868;
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 11px 10px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+input[type="number"] {
+  appearance: textfield;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+input[type="checkbox"]:checked,
+input[type="checkbox"]:indeterminate {
+  border-color: #909090;
+  background-color: #151515;
+}
+
+input[type="checkbox"]:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 10'%3E%3Cpath d='M1 5 4.5 8.5 11 1.5' fill='none' stroke='%23eee' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+input[type="checkbox"]:indeterminate {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 10'%3E%3Cpath d='M2 5h8' fill='none' stroke='%23eee' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+input[type="checkbox"]:hover:not(:disabled),
+label:hover > input[type="checkbox"]:not(:disabled) {
+  border-color: #aaa;
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  box-shadow: none;
+}
+
+input[type="checkbox"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (forced-colors: active) {
+  input[type="checkbox"],
+  input[type="checkbox"]:checked,
+  input[type="checkbox"]:indeterminate {
+    appearance: auto;
+    background: none;
+    border: revert;
+  }
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-faint);
+}
+
+code,
+.technical,
+.log-output {
+  font-family: "Cascadia Mono", Consolas, Menlo, Monaco, monospace;
+}
+
+.firewall-rules {
+  max-height: 240px;
+  max-width: 100%;
+  overflow: auto;
+  font-size: 12px;
+}
+
+/* Chromium cannot transition ::-webkit-scrollbar pseudo-elements, so the thumb inherits this property. */
+
+@property --scrollbar-thumb {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+
+* {
+  --scrollbar-thumb: transparent;
+  transition: --scrollbar-thumb var(--motion-fast) var(--ease);
+}
+
+*:hover {
+  --scrollbar-thumb: #4a4a4a;
+}
+
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 8px;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(from var(--scrollbar-thumb) 106 106 106 / alpha);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* xterm draws a DOM scrollbar that only fades on its own auto-hide path. */
+
+.xterm .xterm-scrollable-element > .scrollbar {
+  transition: opacity var(--motion-fast) var(--ease);
+}
+
+.xterm:not(:hover) .xterm-scrollable-element > .scrollbar {
+  opacity: 0;
+  pointer-events: none;
+}

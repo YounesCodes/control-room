@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { Terminal } from "@xterm/xterm";
-import { ChevronDown, ChevronUp, RotateCw, X } from "lucide-react";
+import { ChevronDown, ChevronUp, LoaderCircle, RotateCw, X } from "lucide-react";
 import { api, errorMessage } from "../lib/api";
 import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
 import { notifyHistoryChanged } from "../lib/history-events";
@@ -56,6 +56,7 @@ interface TerminalPaneProps {
   onTitle?: (title: string | null) => void;
   findRequest?: number;
   onReconnect?: () => void;
+  concealed?: boolean;
 }
 
 interface PendingHistory {
@@ -86,6 +87,7 @@ export function TerminalPane({
   onTitle = () => undefined,
   findRequest = 0,
   onReconnect,
+  concealed = false,
 }: TerminalPaneProps) {
   const remote = isRemoteWorkspace(workspace) ? workspace : null;
   const containerRef = useRef<HTMLDivElement>(null);
@@ -810,15 +812,21 @@ export function TerminalPane({
     terminalRef.current?.focus();
   }
 
+  const wasConcealedRef = useRef(concealed);
+  useEffect(() => {
+    if (wasConcealedRef.current && !concealed && activeRef.current) terminalRef.current?.focus();
+    wasConcealedRef.current = concealed;
+  }, [concealed]);
+
   const terminalEnded = workspace.state === "disconnected" || workspace.state === "error";
   const noticeTone =
     localNotice?.tone ?? (workspace.state === "disconnected" ? "neutral" : "error");
   return (
     <section
-      className={`terminal-pane ${visible ? "terminal-visible" : "terminal-hidden"}`}
+      className={`terminal-pane ${visible ? "terminal-visible" : "terminal-hidden"}${concealed ? " terminal-concealed" : ""}`}
       onPointerDown={onActivate}
     >
-      {(localNotice || workspace.reason) && (
+      {!concealed && (localNotice || workspace.reason) && (
         <div
           className="terminal-notice"
           data-tone={noticeTone}
@@ -851,6 +859,12 @@ export function TerminalPane({
       )}
       <div className="terminal-content">
         <div className="terminal-container" ref={containerRef} />
+        {concealed && (
+          <div className="terminal-connecting" role="status">
+            <LoaderCircle size={18} className="spinning" aria-hidden="true" />
+            <span>Connecting…</span>
+          </div>
+        )}
         {searchOpen && (
           <form
             className="search-field terminal-search"

@@ -43,6 +43,7 @@ vi.mock("./components/WindowControls", () => ({
 vi.mock("./components/TerminalPane", () => ({
   TerminalPane: ({
     workspace,
+    concealed,
     onState,
     onSession,
   }: {
@@ -53,7 +54,10 @@ vi.mock("./components/TerminalPane", () => ({
       sessionId: string | null;
       shell?: { id: string };
       connectionId?: string;
+      remoteShell?: { id: string };
+      reconnectToken?: number;
     };
+    concealed?: boolean;
     onState: (state: string, reason: string | null) => void;
     onSession: (sessionId: string | null) => void;
   }) => (
@@ -63,9 +67,15 @@ vi.mock("./components/TerminalPane", () => ({
       data-target={workspace.kind === "local" ? workspace.shell?.id : workspace.connectionId}
       data-connect-requested={String(workspace.connectRequested)}
       data-session={String(workspace.sessionId)}
+      data-concealed={String(!!concealed)}
+      data-remote-shell={workspace.remoteShell?.id ?? ""}
+      data-reconnect-token={String(workspace.reconnectToken ?? 0)}
     >
       <button type="button" onClick={() => onState("connected", null)}>
         report connected
+      </button>
+      <button type="button" onClick={() => onState("error", "SSH session ended.")}>
+        report ended
       </button>
       <button type="button" onClick={() => onSession(`${workspace.id}-session`)}>
         report session
@@ -1250,9 +1260,16 @@ describe("Local Terminal", () => {
     const { container } = render(<App />);
     await openConnection(user, "Windows host");
     await screen.findByRole("radio", { name: "WSL: Ubuntu" });
-    expect(screen.queryByTestId(/^terminal-/)).toBeNull();
+    const provisional = screen.getByTestId(/^terminal-/);
+    expect(provisional.dataset.concealed).toBe("true");
     await user.click(screen.getByRole("button", { name: "Connect" }));
-    await screen.findByTestId(/^terminal-/);
+    const replaced = await screen.findByTestId(/^terminal-/);
+    expect(replaced).toBe(provisional);
+    expect(replaced.dataset.remoteShell).toBe("wsl:Ubuntu");
+    expect(replaced.dataset.reconnectToken).toBe("1");
+    expect(replaced.dataset.concealed).toBe("true");
+    await user.click(within(replaced).getByRole("button", { name: "report connected" }));
+    expect(replaced.dataset.concealed).toBe("false");
     expect(container.querySelector(".feature-nav")?.textContent).not.toContain("Overview");
     expect(container.querySelector(".feature-nav")?.textContent).toContain("Docker");
     expect(container.querySelector(".feature-nav")?.textContent).toContain("Logs");
@@ -1262,5 +1279,88 @@ describe("Local Terminal", () => {
       const [state] = api.saveWorkspaceState.mock.calls.at(-1) as [PersistedWorkspaceState];
       expect(state.workspaces[0].remoteShell?.id).toBe("wsl:Ubuntu");
     });
+  });
+
+  it("opens a new Linux host's terminal without waiting for platform detection", async () => {
+    const user = userEvent.setup();
+    const saved = connection("22222222-2222-4222-8222-222222222222", "New Linux host");
+    api.listConnections.mockResolvedValue([saved]);
+    let answer: (catalog: unknown) => void = () => undefined;
+    api.discoverRemoteShells.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    render(<App />);
+    await openConnection(user, "New Linux host");
+    const terminal = await screen.findByTestId(/^terminal-/);
+    expect(terminal.dataset.connectRequested).toBe("true");
+    expect(terminal.dataset.concealed).toBe("true");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    answer({ platform: "linux", shells: [], windowsTerminalAvailable: false, wslError: null });
+    await waitFor(() => expect(terminal.dataset.concealed).toBe("false"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(terminal.dataset.reconnectToken).toBe("0");
+  });
+
+  it("closes a new Windows host's failed default terminal when the shell choice is cancelled", async () => {
+    const user = userEvent.setup();
+    const saved = connection("33333333-3333-4333-8333-333333333333", "New Windows host");
+    api.listConnections.mockResolvedValue([saved]);
+    let answer: (catalog: unknown) => void = () => undefined;
+    api.discoverRemoteShells.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    render(<App />);
+    await openConnection(user, "New Windows host");
+    const terminal = await screen.findByTestId(/^terminal-/);
+    await user.click(within(terminal).getByRole("button", { name: "report ended" }));
+    expect(terminal.dataset.concealed).toBe("true");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    answer({
+      platform: "windows",
+      shells: [{ id: "cmd", label: "Command Prompt" }],
+      windowsTerminalAvailable: false,
+      wslError: null,
+    });
+    const dialog = await screen.findByRole("dialog", { name: "Connect to New Windows host" });
+    await within(dialog).findByRole("radio", { name: "Command Prompt" });
+    expect(api.discoverRemoteShells).toHaveBeenCalledTimes(1);
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByTestId(/^terminal-/)).toBeNull());
+  });
+
+  it("shows an unreachable new host's own terminal error without opening a dialog", async () => {
+    const user = userEvent.setup();
+    const saved = connection("55555555-5555-4555-8555-555555555555", "Offline host");
+    api.listConnections.mockResolvedValue([saved]);
+    let fail: (error: Error) => void = () => undefined;
+    api.discoverRemoteShells.mockReturnValue(new Promise((_, reject) => (fail = reject)));
+    render(<App />);
+    await openConnection(user, "Offline host");
+    const terminal = await screen.findByTestId(/^terminal-/);
+    await user.click(within(terminal).getByRole("button", { name: "report ended" }));
+    fail(new Error("Connection refused"));
+    await waitFor(() => expect(terminal.dataset.concealed).toBe("false"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("keeps a new Mac's working shell when the shell choice is cancelled", async () => {
+    const user = userEvent.setup();
+    const saved = connection("44444444-4444-4444-8444-444444444444", "New Mac");
+    api.listConnections.mockResolvedValue([saved]);
+    let answer: (catalog: unknown) => void = () => undefined;
+    api.discoverRemoteShells.mockReturnValue(new Promise((resolve) => (answer = resolve)));
+    render(<App />);
+    await openConnection(user, "New Mac");
+    const terminal = await screen.findByTestId(/^terminal-/);
+    await user.click(within(terminal).getByRole("button", { name: "report connected" }));
+    expect(terminal.dataset.concealed).toBe("false");
+    answer({
+      platform: "macos",
+      shells: [{ id: "macos:zsh", label: "zsh" }],
+      windowsTerminalAvailable: false,
+      wslError: null,
+    });
+    const dialog = await screen.findByRole("dialog", { name: "Connect to New Mac" });
+    await within(dialog).findByRole("radio", { name: "zsh" });
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.getByTestId(/^terminal-/)).toBe(terminal);
+    expect(terminal.dataset.concealed).toBe("false");
+    expect(terminal.dataset.reconnectToken).toBe("0");
   });
 });

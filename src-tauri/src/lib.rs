@@ -18,6 +18,7 @@ mod platform;
 mod remote;
 mod session;
 mod ssh;
+mod ssh_mux;
 mod systemd;
 mod updater;
 #[cfg(target_os = "linux")]
@@ -210,6 +211,7 @@ pub fn run() {
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 window.state::<SessionManager>().close_all();
                 window.state::<StreamManager>().stop_all();
+                ssh_mux::exit_all();
             }
         })
         .build(tauri::generate_context!())
@@ -219,6 +221,7 @@ pub fn run() {
             if matches!(&event, tauri::RunEvent::Exit) {
                 app.state::<SessionManager>().close_all();
                 app.state::<StreamManager>().stop_all();
+                ssh_mux::exit_all();
             }
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen {

@@ -48,6 +48,11 @@ describe("frontend lint boundaries", () => {
     ],
     [
       "src/App.tsx",
+      'import { transitionFocusMode } from "./lib/focus-mode-transition"; void transitionFocusMode;',
+      "no-restricted-syntax",
+    ],
+    [
+      "src/App.tsx",
       'import { api } from "./lib/api"; void api.installUpdate();',
       "no-restricted-syntax",
     ],
@@ -94,6 +99,10 @@ describe("frontend lint boundaries", () => {
     [
       "src/pages/SettingsPane.tsx",
       'import type { ManualCheckResult } from "../hooks/use-app-updater"; export type R = ManualCheckResult;',
+    ],
+    [
+      "src/hooks/use-workspace-session.ts",
+      'import { transitionFocusMode } from "../lib/focus-mode-transition"; void transitionFocusMode;',
     ],
     [
       "src/hooks/use-app-updater.ts",

@@ -1,5 +1,4 @@
 import type { PublishedPortSelection } from "./lib/port-inspector";
-import { transitionFocusMode } from "./lib/focus-mode-transition";
 import { Search } from "./components/MagnifierIcon";
 import { DockerIcon } from "./components/DockerIcon";
 import {
@@ -63,6 +62,7 @@ import type { TerminalPaneHandle } from "./components/TerminalPane";
 import type { TerminalTargetGroup } from "./components/TerminalTargetMenu";
 import { WhatsNewDialog } from "./components/WhatsNewDialog";
 import { useAppUpdater } from "./hooks/use-app-updater";
+import { useProvisionalTerminals } from "./hooks/use-provisional-terminals";
 import { updateInfo } from "./lib/app-update";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { RemoteShellDialog } from "./components/RemoteShellDialog";
@@ -78,6 +78,8 @@ import { WorkspaceTabScroller, type TabDragOut } from "./components/WorkspaceTab
 import { TerminalLayoutControls } from "./components/TerminalLayoutControls";
 import { useTerminalLayoutMotion } from "./hooks/use-terminal-layout-motion";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
+import { useWorkspaceSession } from "./hooks/use-workspace-session";
+import { closeWorkspaceInSession, removeConnectionFromSession } from "./lib/workspace-session";
 import { useLatestHandlers } from "./hooks/use-latest-handlers";
 import { usePopoverExit } from "./hooks/use-popover-exit";
 import { api, errorMessage } from "./lib/api";
@@ -112,7 +114,6 @@ import type {
 import {
   deleteTerminalGroup,
   nextTerminalGroupName,
-  pruneTerminalGroups,
   renameTerminalGroup,
   terminalGroupForWorkspace,
   type TerminalGroup,
@@ -164,6 +165,7 @@ import type {
   LocalShellProfile,
   LogSourceSelection,
   RemoteWorkspace,
+  RemoteShellCatalog,
   RemoteShellProfile,
   SavedConnection,
   SettingsContract,
@@ -249,6 +251,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
   active,
   nativeClipboard,
   findRequest,
+  concealed,
   handlers,
 }: {
   workspace: Workspace;
@@ -258,6 +261,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
   active: boolean;
   nativeClipboard: boolean;
   findRequest: number;
+  concealed: boolean;
   handlers: TerminalHandlers;
 }) {
   const id = workspace.id;
@@ -284,6 +288,7 @@ const WorkspaceTerminal = memo(function WorkspaceTerminal({
       onTitle={(title) => handlers.title(workspace, title)}
       onProcessing={(busy) => handlers.processing(workspace, busy)}
       findRequest={findRequest}
+      concealed={concealed}
       onSearchOpenChange={(open) => handlers.searchOpen(workspace, open)}
       onReconnect={() => handlers.reconnect(workspace)}
     />
@@ -497,6 +502,8 @@ export function App() {
   const [remoteShellRequest, setRemoteShellRequest] = useState<{
     connection: SavedConnection;
     split: boolean;
+    provisionalId?: string;
+    discovery?: Promise<RemoteShellCatalog>;
   } | null>(null);
   const [connections, setConnections] = useState<SavedConnection[]>([]);
   const connectionsRef = useRef(connections);
@@ -506,7 +513,10 @@ export function App() {
     useState<AdministratorTerminalStatus>("unsupportedWindows");
   const [connectionGroups, setConnectionGroups] = useState<ConnectionGroup[]>([]);
   const [knownTags, setKnownTags] = useState<ConnectionTag[]>([]);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [newTerminalMenuOpen, setNewTerminalMenuOpen] = useState(false);
+  const [{ workspaces, activeWorkspaceId, terminalGroups, terminalFocusMode }, workspaceSession] =
+    useWorkspaceSession(() => setNewTerminalMenuOpen(false));
+  const { setWorkspaces, setActiveWorkspaceId, setTerminalGroups } = workspaceSession;
   const [systemdPortFocus, setSystemdPortFocus] = useState<{
     workspaceId: string;
     unit: string;
@@ -533,7 +543,6 @@ export function App() {
     )
       setPortFocus(null);
   }, [workspaces, portFocus]);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [settingsContract, setSettingsContract] = useState<SettingsContract | null>(null);
   const [environment, setEnvironment] = useState<EnvironmentInfo | null>(null);
   const clientPlatform = environment?.platform ?? provisionalPlatform;
@@ -580,12 +589,9 @@ export function App() {
     () => ({ sizes: panelSizes, setSize: setPanelSize }),
     [panelSizes, setPanelSize],
   );
-  const [terminalFocusMode, setTerminalFocusMode] = useState(false);
-  const [terminalGroups, setTerminalGroups] = useState<TerminalGroup[]>([]);
   const [splitDirection, setSplitDirection] = useState<TerminalSplitDirection>("vertical");
   const [newTerminalMode, setNewTerminalMode] = useState<"tab" | "split">("tab");
   const [tabSplit, setTabSplit] = useState<TabSplit | null>(null);
-  const [newTerminalMenuOpen, setNewTerminalMenuOpen] = useState(false);
   const [scratchpadOpen, setScratchpadOpen] = useState(false);
   const newTerminalButtonRef = useRef<HTMLButtonElement>(null);
   const scratchpadButtonRef = useRef<HTMLButtonElement>(null);
@@ -630,21 +636,6 @@ export function App() {
   const [workspacePersistenceReady, setWorkspacePersistenceReady] = useState(false);
   const capabilityDetectionsRef = useRef(new Set<string>());
 
-  const workspaceStateRef = useRef({
-    workspaces,
-    activeWorkspaceId,
-    terminalGroups,
-    terminalFocusMode,
-  });
-  useEffect(() => {
-    workspaceStateRef.current = {
-      workspaces,
-      activeWorkspaceId,
-      terminalGroups,
-      terminalFocusMode,
-    };
-  }, [workspaces, activeWorkspaceId, terminalGroups, terminalFocusMode]);
-
   useEffect(() => {
     let current = true;
     void api.environment().then(
@@ -676,6 +667,7 @@ export function App() {
           const detectedShells = localShellCatalog.profiles;
           setLocalShells(detectedShells);
           setAdministratorTerminalStatus(localShellCatalog.administratorStatus);
+          let terminalFocusMode = false;
           const restored = restoreWorkspaceState(
             connectionsResult.status === "fulfilled" ? connectionsResult.value : [],
             workspaceStateResult.status === "fulfilled"
@@ -700,14 +692,12 @@ export function App() {
               if (!existing) restored.workspaces.push(workspace);
               workspace.view = "terminal";
               restored.activeWorkspaceId = workspace.id;
-              setTerminalFocusMode(true);
+              terminalFocusMode = true;
             }
           }
           if (workspaceStateResult.status === "fulfilled")
             setPanelSizes(restorePanelSizes(workspaceStateResult.value.panelSizes));
-          setWorkspaces(restored.workspaces);
-          setActiveWorkspaceId(restored.activeWorkspaceId);
-          setTerminalGroups(restored.terminalGroups);
+          workspaceSession.restore({ ...restored, terminalFocusMode });
           setWorkspacePersistenceReady(
             connectionsResult.status === "fulfilled" && workspaceStateResult.status === "fulfilled",
           );
@@ -1231,17 +1221,11 @@ export function App() {
 
   function enterTerminalFocus() {
     if (!activeWorkspace || settingsOpen || activeWorkspace.view !== "terminal") return;
-    transitionFocusMode("enter", () => {
-      setNewTerminalMenuOpen(false);
-      setTerminalFocusMode(true);
-    });
+    workspaceSession.setTerminalFocusMode(true);
   }
 
   function exitTerminalFocus() {
-    transitionFocusMode("exit", () => {
-      setNewTerminalMenuOpen(false);
-      setTerminalFocusMode(false);
-    });
+    workspaceSession.setTerminalFocusMode(false);
   }
 
   function openScratchpad() {
@@ -1428,9 +1412,8 @@ export function App() {
   function removeTerminalGroup(groupId: string) {
     if (!terminalGroups.some((group) => group.id === groupId)) return;
     const removingActiveGroup = activeTerminalGroup?.id === groupId;
-    const nextGroups = deleteTerminalGroup(terminalGroups, groupId);
     terminalGroupActiveWorkspaceRef.current.delete(groupId);
-    setTerminalGroups(nextGroups);
+    setTerminalGroups((current) => deleteTerminalGroup(current, groupId));
     if (terminalFocusMode && removingActiveGroup && activeWorkspaceId) {
       updateWorkspace(activeWorkspaceId, { view: "terminal" });
     }
@@ -1461,12 +1444,10 @@ export function App() {
           return;
         }
       }
-      if (
-        hostCapabilities[connection.id]?.osId &&
-        hostCapabilities[connection.id]?.osId !== "windows" &&
-        hostCapabilities[connection.id]?.osId !== "macos"
-      ) {
+      const osId = hostCapabilities[connection.id]?.osId;
+      if (osId !== "windows" && osId !== "macos") {
         const workspace = createRemoteWorkspace(connection);
+        if (!osId) provisionalTerminals.start(workspace.id, connection.id);
         if (split) splitWithNewWorkspace(workspace);
         else openWorkspace(workspace);
       } else {
@@ -1476,8 +1457,49 @@ export function App() {
     });
   }
 
+  const provisionalTerminals = useProvisionalTerminals({
+    capabilities: rememberCapabilities,
+    choose(workspaceId, discovery) {
+      const workspace = workspaceStateRef.current.workspaces.find(
+        (item) => item.id === workspaceId,
+      );
+      if (!workspace || !isRemoteWorkspace(workspace)) return;
+      const connection =
+        connectionsRef.current.find((item) => item.id === workspace.connectionId) ??
+        workspace.connectionSnapshot;
+      setNewTerminalMenuOpen(false);
+      setRemoteShellRequest({ connection, split: false, provisionalId: workspaceId, discovery });
+    },
+    close(workspaceId) {
+      void performCloseWorkspace(workspaceId);
+    },
+  });
+
+  function closeRemoteShellRequest() {
+    const provisionalId = remoteShellRequest?.provisionalId;
+    setRemoteShellRequest(null);
+    if (provisionalId) provisionalTerminals.choice(provisionalId, "cancel");
+  }
+
   function selectRemoteShell(shell: RemoteShellProfile | null) {
     if (!remoteShellRequest) return;
+    const provisionalId = remoteShellRequest.provisionalId;
+    if (provisionalId) {
+      setRemoteShellRequest(null);
+      const step = provisionalTerminals.choice(provisionalId, shell ? "shell" : "default");
+      const workspace = workspaceStateRef.current.workspaces.find(
+        (item) => item.id === provisionalId,
+      );
+      if (step?.kind === "keep" && workspace && isRemoteWorkspace(workspace)) {
+        updateRemoteWorkspace(provisionalId, {
+          remoteShell: shell ?? undefined,
+          connectRequested: true,
+          restored: false,
+          reconnectToken: workspace.reconnectToken + 1,
+        });
+      }
+      return;
+    }
     const workspace = createRemoteWorkspace(remoteShellRequest.connection, shell);
     if (remoteShellRequest.split) splitWithNewWorkspace(workspace);
     else openWorkspace(workspace);
@@ -1725,46 +1747,13 @@ export function App() {
   }
 
   async function performCloseWorkspace(id: string) {
-    const workspace = workspaceStateRef.current.workspaces.find((item) => item.id === id);
+    const workspace = workspaceSession.current().workspaces.find((item) => item.id === id);
     if (!workspace || closingWorkspaceIdsRef.current.has(id)) return;
     closingWorkspaceIdsRef.current.add(id);
+    provisionalTerminals.forget(id);
     setActionError(null);
     if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
-    const current = workspaceStateRef.current;
-    const index = current.workspaces.findIndex((item) => item.id === id);
-    const remaining = current.workspaces.filter((item) => item.id !== id);
-    const previousGroup = terminalGroupForWorkspace(current.terminalGroups, id);
-    const nextGroups = pruneTerminalGroups(
-      current.terminalGroups,
-      new Set(remaining.map((item) => item.id)),
-    );
-    const remainingGroup = previousGroup
-      ? nextGroups.find((group) => group.id === previousGroup.id)
-      : null;
-    const remainingSplitIds = remainingGroup
-      ? getTerminalLayoutIds(remainingGroup.layout)
-      : previousGroup
-        ? getTerminalLayoutIds(previousGroup.layout).filter((memberId) => memberId !== id)
-        : [];
-    const closingActiveWorkspace = current.activeWorkspaceId === id;
-    const keepFocusGroup = current.terminalFocusMode && previousGroup;
-    const nextActive = closingActiveWorkspace
-      ? ((keepFocusGroup ? remaining.find((item) => item.id === remainingSplitIds[0]) : null) ??
-        remaining[Math.min(index, remaining.length - 1)] ??
-        null)
-      : null;
-    setWorkspaces(
-      keepFocusGroup && nextActive
-        ? remaining.map((item) =>
-            item.id === nextActive.id ? { ...item, view: "terminal" } : item,
-          )
-        : remaining,
-    );
-    if (closingActiveWorkspace) {
-      setActiveWorkspaceId(nextActive?.id ?? null);
-    }
-    setTerminalGroups(nextGroups);
-    if (!remaining.length) exitTerminalFocus();
+    workspaceSession.commit((current) => closeWorkspaceInSession(current, id));
     closingWorkspaceIdsRef.current.delete(id);
   }
 
@@ -1797,7 +1786,7 @@ export function App() {
       return next;
     });
 
-    const beforeTeardown = workspaceStateRef.current;
+    const beforeTeardown = workspaceSession.current();
     const owned = removeConnectionWorkspaces(
       beforeTeardown.workspaces,
       connection.id,
@@ -1808,17 +1797,7 @@ export function App() {
       if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
     }
 
-    const current = workspaceStateRef.current;
-    const removal = removeConnectionWorkspaces(
-      current.workspaces,
-      connection.id,
-      current.activeWorkspaceId,
-      current.terminalGroups,
-    );
-    setWorkspaces(removal.remaining);
-    setTerminalGroups(removal.nextGroups);
-    setActiveWorkspaceId(removal.nextActiveId);
-    if (!removal.nextActiveId) exitTerminalFocus();
+    workspaceSession.commit((current) => removeConnectionFromSession(current, connection.id));
   }
 
   function saveConnection(saved: SavedConnection) {
@@ -2354,6 +2333,7 @@ export function App() {
       if (state === "connected" && isRemoteWorkspace(workspace)) {
         detectConnectionCapabilities(workspace.connectionId);
       }
+      provisionalTerminals.sessionState(workspace.id, state);
     },
     selection(workspace, hasSelection) {
       setTerminalHasSelection((current) =>
@@ -3126,6 +3106,7 @@ export function App() {
                           visible={terminalVisible}
                           active={terminalVisible && workspace.id === activeWorkspace.id}
                           findRequest={terminalFindRequests[workspace.id] ?? 0}
+                          concealed={provisionalTerminals.concealed(workspace.id)}
                           handlers={terminalHandlers}
                           nativeClipboard={clientPlatform === "linux" || clientPlatform === "macos"}
                         />
@@ -3323,7 +3304,8 @@ export function App() {
         <RemoteShellDialog
           connection={remoteShellRequest.connection}
           onCapabilities={rememberCapabilities}
-          onClose={() => setRemoteShellRequest(null)}
+          discovery={remoteShellRequest.discovery}
+          onClose={closeRemoteShellRequest}
           onSelect={selectRemoteShell}
         />
       )}

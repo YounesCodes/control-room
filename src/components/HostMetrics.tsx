@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import {
   Circle,
   CircleAlert,
@@ -21,9 +21,45 @@ import {
   formatByteRate,
   formatPercent,
   formatUptime,
-  metricTrend,
 } from "../lib/header-metrics";
+import {
+  CHART_HEIGHT,
+  CHART_WIDTH,
+  DEFAULT_METRIC_RANGE,
+  METRIC_RANGES,
+  areaPath,
+  chartPoint,
+  coveredSeconds,
+  formatCoverage,
+  missingReadingGap,
+  peakReading,
+  rateScale,
+  readingsInRange,
+  tracePath,
+  traceSegments,
+  type MetricRangeSeconds,
+  type ReadingValue,
+  type TimedReading,
+} from "../lib/metric-history";
 import type { HeaderMetric, HeaderMetrics } from "../types";
+
+const PERCENT_METRICS = new Set<HeaderMetric>(["cpu", "ram", "gpu", "disk"]);
+
+function validRate(value: number | null | undefined): number | null {
+  return value != null && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+const readRate: ReadingValue = (sample) => validRate(sample.diskReadBytesPerSecond);
+const writeRate: ReadingValue = (sample) => validRate(sample.diskWriteBytesPerSecond);
+
+function chartTraces(metric: HeaderMetric): { value: ReadingValue; kind: "main" | "read" }[] {
+  if (metric === "diskIo")
+    return [
+      { value: readRate, kind: "read" },
+      { value: writeRate, kind: "main" },
+    ];
+  return [{ value: (sample) => headerMetricNumber(metric, sample), kind: "main" }];
+}
 
 function MetricValue({
   metric,
@@ -70,13 +106,93 @@ function MetricValue({
   );
 }
 
-function MetricTrace({ metric, history }: { metric: HeaderMetric; history: HeaderMetrics[] }) {
-  const path = metricTrend(metric, history);
-  if (!path) return null;
+function MetricChart({
+  metric,
+  readings,
+  end,
+  rangeSeconds,
+  rangeLabel,
+  gap,
+}: {
+  metric: HeaderMetric;
+  readings: TimedReading[];
+  end: number;
+  rangeSeconds: number;
+  rangeLabel: string;
+  gap: number;
+}) {
+  const traces = chartTraces(metric);
+  const peak = peakReading(readings, ...traces.map((trace) => trace.value));
+  const percent = PERCENT_METRICS.has(metric);
+  const frame = {
+    start: end - rangeSeconds * 1000,
+    rangeSeconds,
+    max: percent ? 100 : rateScale(peak),
+    width: CHART_WIDTH,
+    height: CHART_HEIGHT,
+  };
+  const peakText = peak === null ? null : percent ? formatPercent(peak) : formatByteRate(peak);
+  const latest = readings.at(-1);
+  const main = traces.find((trace) => trace.kind === "main")!;
+  const latestValue = latest ? main.value(latest.sample) : null;
+  const dot =
+    latest && latestValue !== null
+      ? chartPoint({ at: latest.at, value: latestValue }, frame)
+      : null;
+  const label = HEADER_METRIC_LABELS[metric];
   return (
-    <svg className="host-metric-trend" viewBox="0 0 34 16" aria-hidden="true" focusable="false">
-      <path d={path} style={{ d: `path("${path}")` }} />
-    </svg>
+    <div
+      className="metric-chart"
+      role="img"
+      aria-label={`${label} over the last ${rangeLabel}, ${peakText ? `peak ${peakText}` : "no readings"}`}
+    >
+      <svg
+        viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+        preserveAspectRatio="none"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <line
+          className="metric-chart-guide"
+          x1="0"
+          x2={CHART_WIDTH}
+          y1={CHART_HEIGHT / 2}
+          y2={CHART_HEIGHT / 2}
+        />
+        <line
+          className="metric-chart-baseline"
+          x1="0"
+          x2={CHART_WIDTH}
+          y1={CHART_HEIGHT - 0.5}
+          y2={CHART_HEIGHT - 0.5}
+        />
+        {traces.map((trace) =>
+          traceSegments(readings, trace.value, gap).map((segment) => (
+            <g key={`${trace.kind}:${segment[0].at}`} data-trace={trace.kind}>
+              {trace.kind === "main" && (
+                <path className="metric-chart-area" d={areaPath(segment, frame)} />
+              )}
+              <path className="metric-chart-line" d={tracePath(segment, frame)} />
+            </g>
+          )),
+        )}
+      </svg>
+      {dot && (
+        <span
+          className="metric-chart-dot"
+          aria-hidden="true"
+          style={{
+            left: `${(dot.x / CHART_WIDTH) * 100}%`,
+            top: `${(dot.y / CHART_HEIGHT) * 100}%`,
+          }}
+        />
+      )}
+      {peakText && (
+        <span className="metric-chart-peak" aria-hidden="true">
+          peak {peakText}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -84,14 +200,12 @@ function MetricCell({
   metric,
   overflow,
   sample,
-  history,
   failed,
   animate,
 }: {
   metric: HeaderMetric;
   overflow: boolean;
   sample: HeaderMetrics | null;
-  history: HeaderMetrics[];
   failed: boolean;
   animate: boolean;
 }) {
@@ -120,10 +234,13 @@ function MetricCell({
             fallback={compact}
           />
         </span>
-        <MetricTrace metric={metric} history={history} />
       </strong>
     </span>
   );
+}
+
+function bone(width: string): CSSProperties {
+  return { "--bone-width": width } as CSSProperties;
 }
 
 export function HostMetrics({
@@ -141,6 +258,7 @@ export function HostMetrics({
 }) {
   const reading = useHeaderMetrics(target, metrics, seconds);
   const [open, setOpen] = useState(false);
+  const [range, setRange] = useState<MetricRangeSeconds>(DEFAULT_METRIC_RANGE);
   const { present, closing } = usePopoverExit(open);
   const container = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -161,6 +279,15 @@ export function HostMetrics({
           ? "Live"
           : "Reading";
   const readingTime = reading.sample ? formatReadingTime(reading.sample.sampledAt) : null;
+  const rangeLabel = METRIC_RANGES.find((option) => option.seconds === range)!.label;
+  const end = reading.now;
+  const visibleReadings = readingsInRange(reading.history, end, range);
+  const gap = missingReadingGap(reading.interval);
+  const covered = coveredSeconds(reading.history, end, range);
+  const partial = reading.history.length > 0 && covered < range - reading.interval * 2;
+  const charted = metrics.filter((metric) => metric !== "uptime");
+  const animate = status === "Live";
+  const waiting = status === "Reading";
   const StatusIcon = {
     Live: Circle,
     Reading: CircleDashed,
@@ -254,9 +381,8 @@ export function HostMetrics({
             metric={metric}
             overflow={index >= visibleCount}
             sample={reading.sample}
-            history={reading.history}
             failed={!!reading.error}
-            animate={status === "Live"}
+            animate={animate}
           />
         ))}
       </div>
@@ -268,6 +394,7 @@ export function HostMetrics({
           aria-hidden={closing || undefined}
           inert={closing || undefined}
           data-closing={closing || undefined}
+          data-state={status.toLowerCase()}
           data-app-popover=""
         >
           <header>
@@ -295,41 +422,123 @@ export function HostMetrics({
               <X size={15} />
             </button>
           </header>
-          <p>
-            {status}
-            {readingTime === null
-              ? " · Waiting for a reading"
-              : readingTime === "Unavailable"
-                ? " · Update time unknown"
-                : ` · Updated ${readingTime}`}
-          </p>
-          <dl>
-            {metrics.map((metric) => {
-              const detail = headerMetricDetail(metric, reading.sample);
+          <div className="host-metrics-summary">
+            <p>
+              <span className="host-metrics-status" data-state={status.toLowerCase()}>
+                <StatusIcon size={12} aria-hidden="true" />
+                {status}
+              </span>
+              <span>
+                {readingTime === null
+                  ? waiting
+                    ? "Waiting for a reading"
+                    : "No readings yet"
+                  : readingTime === "Unavailable"
+                    ? "Update time unknown"
+                    : `Updated ${readingTime}`}
+              </span>
+              {partial && <span>{`${formatCoverage(covered)} of history`}</span>}
+            </p>
+            <fieldset className="host-metrics-range">
+              <legend className="sr-only">History range</legend>
+              {METRIC_RANGES.map((option) => (
+                <label key={option.seconds} data-selected={option.seconds === range || undefined}>
+                  <input
+                    className="sr-only"
+                    type="radio"
+                    name={`${panelId}-range`}
+                    value={option.seconds}
+                    checked={option.seconds === range}
+                    onChange={() => setRange(option.seconds)}
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </fieldset>
+          </div>
+          {reading.error && <p className="inline-error host-metrics-error">{reading.error}</p>}
+          <dl aria-busy={waiting || undefined}>
+            {charted.map((metric, index) => {
+              const detail =
+                metric === "diskIo" ? null : headerMetricDetail(metric, reading.sample);
               const unavailable =
-                !reading.sample || headerMetricValue(metric, reading.sample) === "Unavailable";
+                !waiting && headerMetricValue(metric, reading.sample) === "Unavailable";
               return (
-                <div key={`${target}:${metric}`}>
+                <div
+                  key={`${target}:${metric}`}
+                  className={waiting ? "skeleton-row" : undefined}
+                  style={{ "--skeleton-row": index } as CSSProperties}
+                  data-metric={metric}
+                >
                   <dt>{HEADER_METRIC_LABELS[metric]}</dt>
-                  <dd>
-                    <div className="host-metric-detail-value">
+                  <dd className="host-metric-figure">
+                    {waiting ? (
+                      <span className="skeleton-bone" data-shape="title" style={bone("56%")} />
+                    ) : (
                       <strong data-unavailable={unavailable || undefined}>
-                        <MetricValue
-                          metric={metric}
-                          sample={reading.sample}
-                          animate={status === "Live"}
-                        />
+                        {metric === "diskIo" ? (
+                          <>
+                            <AnimatedNumber
+                              value={
+                                unavailable || !reading.sample ? null : writeRate(reading.sample)
+                              }
+                              format={formatByteRate}
+                              animate={animate}
+                            />
+                            {!unavailable && (
+                              <span className="host-metric-direction" data-trace="main">
+                                write
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <MetricValue metric={metric} sample={reading.sample} animate={animate} />
+                        )}
                       </strong>
-                      <MetricTrace metric={metric} history={reading.history} />
-                    </div>
-                    {detail && <small>{detail}</small>}
+                    )}
+                    <small>
+                      {metric === "diskIo" && reading.sample && !unavailable ? (
+                        <>
+                          <span className="host-metric-direction" data-trace="read">
+                            Read
+                          </span>
+                          <AnimatedNumber
+                            value={readRate(reading.sample)}
+                            format={formatByteRate}
+                            animate={animate}
+                          />
+                        </>
+                      ) : (
+                        (detail ?? " ")
+                      )}
+                    </small>
+                  </dd>
+                  <dd className="host-metric-chart">
+                    <MetricChart
+                      metric={metric}
+                      readings={visibleReadings}
+                      end={end}
+                      rangeSeconds={range}
+                      rangeLabel={rangeLabel}
+                      gap={gap}
+                    />
                   </dd>
                 </div>
               );
             })}
           </dl>
-          {reading.error && <p className="host-metrics-error">{reading.error}</p>}
           <footer>
+            {metrics.includes("uptime") && (
+              <span className="host-metrics-uptime">
+                {waiting ? (
+                  <span className="skeleton-bone" data-shape="caption" style={bone("64px")} />
+                ) : formatUptime(reading.sample?.uptimeSeconds) === "Unavailable" ? (
+                  "Uptime unavailable"
+                ) : (
+                  `Up ${formatUptime(reading.sample?.uptimeSeconds)}`
+                )}
+              </span>
+            )}
             <button className="secondary-button" type="button" onClick={onSettings}>
               Customize in Settings
             </button>

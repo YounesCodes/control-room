@@ -7,7 +7,6 @@ import {
   headerMetricValue,
   formatByteRate,
   headerMetricNumber,
-  metricTrend,
   displayedHeaderMetrics,
 } from "./header-metrics";
 import type { HeaderMetrics } from "../types";
@@ -59,24 +58,6 @@ describe("header metric values", () => {
     expect(formatByteRate(12 * 1024 * 1024)).toBe("12 MiB/s");
     for (const invalid of [{ diskFreeKib: -1 }, { diskFreeKib: 4096 }, { diskTotalKib: NaN }])
       expect(headerMetricValue("disk", { ...sample, ...invalid })).toBe("Unavailable");
-  });
-  it("draws measured samples on fixed percentage scales and breaks missing points", () => {
-    expect(metricTrend("cpu", [])).toBeNull();
-    expect(
-      metricTrend("cpu", [
-        { ...sample, cpuPercent: 0 },
-        { ...sample, cpuPercent: null },
-        { ...sample, cpuPercent: 100 },
-      ]),
-    ).toBe("M29.63,13.00  M33.00,2.00");
-    expect(
-      metricTrend(
-        "cpu",
-        Array.from({ length: 30 }, () => sample),
-      )!.split(" "),
-    ).toHaveLength(20);
-    expect(metricTrend("diskIo", [sample])).toBeNull();
-    expect(metricTrend("uptime", [sample])).toBeNull();
   });
   it("keeps zero usage distinct from unsupported or malformed readings", () => {
     expect(headerMetricValue("cpu", sample)).toBe("0%");
