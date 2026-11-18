@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { mkdirSync } from "node:fs";
 import { $, browser, expect } from "@wdio/globals";
-import { ipc, runtime, terminalContains } from "./helpers";
+import { ipc, managedLinuxWindow, runtime, terminalContains } from "./helpers";
 
 const mac = process.platform === "darwin";
 const windows = process.platform === "win32";
@@ -178,16 +178,10 @@ export async function focusNativeApp() {
   const pid = (await runtime()).appPid;
   if (windows) powershell("focus", String(pid));
   else if (mac) await ipc("plugin:window|set_focus", { label: "main" });
-  else {
-    const id = execFileSync(
-      "xdotool",
-      ["search", "--onlyvisible", "--pid", String(pid), "--name", "^Control Room$"],
-      { encoding: "utf8", timeout: 5000 },
-    )
-      .trim()
-      .split("\n")[0];
-    execFileSync("xdotool", ["windowactivate", "--sync", id], { timeout: 5000 });
-  }
+  else
+    execFileSync("xdotool", ["windowactivate", "--sync", managedLinuxWindow(pid)], {
+      timeout: 5000,
+    });
   // On Windows the WebView child can own focus while the Tauri window reports false.
   if (!windows)
     await browser.waitUntil(() => ipc<boolean>("plugin:window|is_focused", { label: "main" }));

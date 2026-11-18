@@ -378,7 +378,12 @@
     {
       "name": "Focus Mode",
       "docs": "terminal.mdx#splits-and-focus-mode",
-      "capture": null,
+      "capture": [
+        {
+          "scenario": "splits",
+          "states": ["before-focus", "focus"]
+        }
+      ],
       "entryPoints": [
         {
           "kind": "toolbar",
@@ -522,7 +527,12 @@
     {
       "name": "Terminal splits",
       "docs": "terminal.mdx#splits-and-focus-mode",
-      "capture": null,
+      "capture": [
+        {
+          "scenario": "splits",
+          "states": ["two-pane", "three-pane"]
+        }
+      ],
       "entryPoints": [
         {
           "kind": "palette",
@@ -572,7 +582,12 @@
     {
       "name": "Terminal groups",
       "docs": "terminal.mdx#splits-and-focus-mode",
-      "capture": null,
+      "capture": [
+        {
+          "scenario": "splits",
+          "states": ["two-pane", "three-pane"]
+        }
+      ],
       "entryPoints": [
         {
           "kind": "tabs",
