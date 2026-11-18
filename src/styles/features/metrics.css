@@ -105,10 +105,8 @@
   text-align: right;
 }
 
-.host-metric:is([data-metric="cpu"], [data-metric="ram"], [data-metric="gpu"])
-  .host-metric-reading {
-  display: grid;
-  grid-template-columns: 4.5ch 34px;
+.host-metric:is([data-metric="cpu"], [data-metric="ram"], [data-metric="gpu"]) .host-metric-value {
+  width: 4.5ch;
 }
 
 .host-metric-direction {
@@ -143,24 +141,6 @@
   text-align: left;
 }
 
-.host-metric-detail-value > strong:has(.host-metric-direction) {
-  display: inline-grid;
-  grid-template-columns: auto auto;
-  column-gap: 12px;
-  row-gap: 3px;
-  align-items: baseline;
-}
-
-.host-metric-detail-value .host-metric-direction {
-  margin-left: 0;
-  font-size: 11px;
-}
-
-.host-metric-detail-value > strong:has(.host-metric-direction) .animated-number {
-  min-width: 0;
-  text-align: right;
-}
-
 .host-metric[data-metric="uptime"] {
   min-width: 56px;
 }
@@ -169,45 +149,8 @@
   color: var(--text-faint);
 }
 
-.host-metric-trend {
-  width: 34px;
-  height: 16px;
-  flex: none;
-  color: var(--text-muted);
-  opacity: 0.65;
-  overflow: visible;
-  pointer-events: none;
-  transition: opacity var(--motion-med) var(--ease);
-}
-
-.host-metric-trend path {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.25;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-  transition: d var(--motion-med) var(--ease);
-}
-
-.host-metrics:not([data-state="live"]) .host-metric-trend {
-  opacity: 0.25;
-}
-
 .host-metrics[data-state="live"][data-sampling] .host-metrics-status svg {
   animation: metric-reading 1s var(--ease) infinite;
-}
-
-.host-metric-detail-value {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.host-metric-detail-value .host-metric-trend {
-  width: 68px;
-  height: 22px;
 }
 
 @keyframes metric-reading {
@@ -248,11 +191,11 @@
   position: absolute;
   top: calc(100% + 10px);
   left: 12px;
-  width: min(420px, calc(100vw - var(--connection-rail-width) - 26px));
+  width: min(484px, calc(100vw - var(--connection-rail-width) - 26px));
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   background: var(--surface-overlay);
-  padding: 16px;
+  padding: 14px 16px 12px;
   color: var(--text-strong);
   max-height: calc(100vh - 100px);
   overflow-y: auto;
@@ -266,10 +209,6 @@
   gap: 4px;
 }
 
-.host-metrics-panel footer {
-  justify-content: flex-end;
-}
-
 .host-metrics-panel h3 {
   flex: 1;
   min-width: 0;
@@ -278,39 +217,277 @@
   overflow-wrap: anywhere;
 }
 
-.host-metrics-panel strong[data-unavailable] {
-  color: var(--text-faint);
-  font-weight: 500;
+.host-metrics-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin: 4px 0 6px;
 }
 
-.host-metrics-panel p {
+.host-metrics-summary p {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 6px;
+  min-width: 0;
+  margin: 0;
   color: var(--text-muted);
   font-size: 12px;
-  margin: 8px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.host-metrics-summary p > span + span::before {
+  content: "·";
+  margin-right: 6px;
+  color: var(--text-faint);
+}
+
+.host-metrics-range {
+  display: inline-flex;
+  flex: none;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--fill-control);
+}
+
+.host-metrics-range label {
+  min-width: 32px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--ease),
+    color var(--motion-fast) var(--ease);
+}
+
+.host-metrics-range label:hover {
+  background: var(--fill-hover);
+  color: var(--text);
+}
+
+.host-metrics-range label[data-selected] {
+  background: var(--fill-selected);
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.host-metrics-range label:has(:focus-visible) {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
 }
 
 .host-metrics-panel dl {
-  margin: 12px 0;
+  margin: 0 0 8px;
 }
 
 .host-metrics-panel dl > div {
   display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  padding: 8px 0;
+  grid-template-columns: 148px minmax(0, 1fr);
+  grid-template-areas:
+    "label chart"
+    "figure chart";
+  column-gap: 16px;
+  align-items: center;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.host-metrics-panel dt {
+  grid-area: label;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 12px;
+}
+
 .host-metrics-panel dd {
+  min-width: 0;
   margin: 0;
 }
 
-.host-metrics-panel small {
+.host-metric-figure {
+  grid-area: figure;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.host-metric-figure strong {
   display: block;
+  min-height: 28px;
+  color: var(--text-strong);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  line-height: 28px;
+  white-space: nowrap;
+}
+
+.host-metric-figure strong[data-unavailable] {
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.host-metric-figure .skeleton-bone {
+  margin: 8px 0 9px;
+}
+
+.host-metric-figure small {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 16px;
+  overflow: hidden;
   color: var(--text-muted);
-  margin-top: 4px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.host-metric-figure .host-metric-direction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-faint);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.host-metric-figure strong .host-metric-direction {
+  margin-left: 6px;
+  vertical-align: 3px;
+}
+
+.host-metric-figure .host-metric-direction::before {
+  content: "";
+  width: 10px;
+  border-top: 1.5px solid var(--text);
+}
+
+.host-metric-figure .host-metric-direction[data-trace="read"]::before {
+  border-top: 1.5px dashed var(--text-faint);
+}
+
+.host-metric-chart {
+  grid-area: chart;
+}
+
+.metric-chart {
+  position: relative;
+  width: 100%;
+  max-width: 286px;
+  height: 46px;
+  margin-left: auto;
+}
+
+.metric-chart svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.metric-chart line,
+.metric-chart path {
+  vector-effect: non-scaling-stroke;
+}
+
+.metric-chart-baseline {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.metric-chart-guide {
+  stroke: var(--border-subtle);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.metric-chart-area {
+  fill: var(--text);
+  opacity: 0.07;
+}
+
+.metric-chart-line {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.metric-chart [data-trace="read"] .metric-chart-line {
+  stroke: var(--text-faint);
+  stroke-width: 1.25;
+  stroke-dasharray: 3 2;
+}
+
+.metric-chart-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-strong);
+  box-shadow: 0 0 0 2px var(--surface-overlay);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.metric-chart-peak {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  padding: 0 0 1px 4px;
+  background: var(--surface-overlay);
+  color: var(--text-faint);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 12px;
+  pointer-events: none;
+}
+
+.host-metrics-panel:not([data-state="live"]) .metric-chart :is(svg g, .metric-chart-dot) {
+  opacity: 0.45;
+}
+
+.host-metrics-panel footer {
+  justify-content: space-between;
+}
+
+.host-metrics-uptime {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.host-metrics-uptime .skeleton-bone {
+  margin: 0;
+}
+
+.host-metrics-panel footer > button:only-child {
+  margin-left: auto;
 }
 
 .host-metrics-panel .host-metrics-error {
+  margin: 4px 0 6px;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
@@ -539,9 +716,6 @@
   .host-metric[data-metric="uptime"] {
     min-width: 54px;
   }
-  .host-metric-trend {
-    width: 26px;
-  }
 }
 
 @media (max-width: 680px) {
@@ -556,7 +730,12 @@
   }
 
   .host-metrics-panel {
-    width: min(420px, calc(100vw - 26px));
+    position: fixed;
+    top: 52px;
+    right: 13px;
+    left: 13px;
+    width: auto;
+    max-width: 484px;
     max-height: calc(100vh - 64px);
   }
 }
@@ -571,4 +750,21 @@
 .app-shell[data-compact] .app-bar > .host-metrics {
   min-width: 0;
   flex: 1;
+}
+
+@media (max-width: 440px) {
+  .host-metrics-panel dl > div {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "label"
+      "figure"
+      "chart";
+    row-gap: 6px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .host-metrics-range label {
+    transition: none;
+  }
 }

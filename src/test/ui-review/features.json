@@ -292,6 +292,10 @@
         {
           "scenario": "dialogs",
           "states": ["metrics"]
+        },
+        {
+          "scenario": "metrics",
+          "states": ["live", "reading", "stale", "unavailable", "short-history"]
         }
       ],
       "entryPoints": [

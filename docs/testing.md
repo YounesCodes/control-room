@@ -166,7 +166,10 @@ state-specific settled selectors. Actions click by default. Mark a preparation c
 when only some viewports render its target, such as the compact navigation
 toggle. Use `"wait": true` to wait for the target, `"hover": true` to hover instead of click, for controls that only
 appear under the pointer, `"option"` to choose that value in a select, `"fill"` to type that text into a
-field, and `"scroll": true` to bring a target below the fold into view. Configure synthetic native responses in
+field, and `"scroll": true` to bring a target below the fold into view. Captures run with the clock fixed at
+2026-11-01 10:00 UTC. A scenario with `"clock": "manual"` instead starts a fake clock at that time, and an
+`{ "advance": ms }` action runs its timers forward, so polled readings such as host metrics build history in
+moments. Configure synthetic native responses in
 `src/test/ui-review/native.ts`, reusing `src/test/` fixture data. The capture
 server aliases Tauri imports to that browser-only module; the product build does
 not. Prefer the real App layout over duplicated shell markup. Keep ready

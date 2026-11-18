@@ -1,13 +1,16 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { page } from "vitest/browser";
+import type { TimedReading } from "../lib/metric-history";
 import type { HeaderMetrics } from "../types";
 import { HostMetrics } from "./HostMetrics";
 import "../styles.css";
 
 const reading = vi.hoisted(() => ({
   sample: null as HeaderMetrics | null,
-  history: [] as HeaderMetrics[],
+  history: [] as TimedReading[],
+  interval: 5,
+  now: Date.now(),
   error: null as string | null,
   stale: false,
   sampling: false,
@@ -15,6 +18,10 @@ const reading = vi.hoisted(() => ({
   refresh: vi.fn(),
 }));
 vi.mock("../hooks/use-header-metrics", () => ({ useHeaderMetrics: () => reading }));
+const timed = (value: HeaderMetrics): TimedReading => ({
+  at: Date.parse(value.sampledAt),
+  sample: value,
+});
 const sample = (cpu: number): HeaderMetrics => ({
   sampledAt: new Date().toISOString(),
   cpuPercent: cpu,
@@ -31,7 +38,8 @@ const sample = (cpu: number): HeaderMetrics => ({
 beforeEach(() => {
   Object.assign(reading, {
     sample: sample(10),
-    history: [sample(10)],
+    history: [timed(sample(10))],
+    now: Date.now(),
     error: null,
     stale: false,
     sampling: false,
@@ -86,12 +94,12 @@ it("smooths host percentages, rates, and uptime while keeping evidence exact and
     diskWriteBytesPerSecond: 2048,
     uptimeSeconds: 50,
   };
-  reading.history = [...reading.history, reading.sample];
+  reading.history = [...reading.history, timed(reading.sample)];
   view.rerender(pane());
   expect(cell("cpu")).toHaveAccessibleName("CPU: 90%");
   expect(cell("diskIo")).toHaveAccessibleName("Disk I/O: Read 4.0 KiB/s · Write 2.0 KiB/s");
   expect(cell("cpu").hasAttribute("title")).toBe(false);
-  const path = cell("cpu").querySelector("path")!.getAttribute("d");
+  expect(cell("cpu").querySelector("svg")).toBeNull();
   const duration = parseFloat(getComputedStyle(visual("cpu")).getPropertyValue("--motion-slow"));
   expect(visual("cpu").textContent).toBe("10%");
   tick(duration / 2);
@@ -109,7 +117,6 @@ it("smooths host percentages, rates, and uptime while keeping evidence exact and
   expect(
     document.querySelector(".host-metrics-panel .animated-number > [aria-hidden]")!.textContent,
   ).toBe(visual("cpu").textContent);
-  expect(cell("cpu").querySelector("path")!.getAttribute("d")).toBe(path);
   expect(reading.history).toHaveLength(2);
   tick(duration / 2);
   expect(visual("cpu").textContent).toBe("90%");
@@ -162,7 +169,7 @@ it("anchors rate labels, neighboring values, and percent signs across animated u
   fireEvent.click(screen.getByRole("button", { name: "Live: Host metrics for rates" }));
   const panel = document.querySelector(".host-metrics-panel")!;
   panel.getAnimations({ subtree: true }).forEach((animation) => animation.finish());
-  const rates = panel.querySelector(".host-metric-detail-value:has(.host-metric-direction)")!;
+  const rates = panel.querySelector('[data-metric="diskIo"] .host-metric-figure')!;
   const fixed = [
     cell.querySelectorAll(".host-metric-direction")[1],
     cell.querySelectorAll(".animated-number")[1],
@@ -191,7 +198,7 @@ it("anchors rate labels, neighboring values, and percent signs across animated u
       diskReadBytesPerSecond: rate,
       diskWriteBytesPerSecond: 0,
     };
-    reading.history = rate === 1024 ? [] : [reading.sample];
+    reading.history = rate === 1024 ? [] : [timed(reading.sample)];
     view.rerender(pane());
     for (let step = 0; step < 16; step++) {
       now += 16;

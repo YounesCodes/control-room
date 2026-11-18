@@ -143,9 +143,12 @@ describe("Settings and native window", () => {
       }
       if (narrow) {
         await $(".host-metrics-trigger").click();
-        await expect($(".host-metrics-panel").$("dt=Uptime")).toBeDisplayed();
+        const details = $("aria/Readings for Local machine");
+        await expect(details).toBeDisplayed();
+        await expect(details.$("dt=Disk I/O")).toBeDisplayed();
+        await expect(details.$(".host-metrics-uptime")).toHaveText(expect.stringMatching(/^Up/));
         await $("aria/Close host metrics").click();
-        await expect($(".host-metrics-panel")).not.toExist();
+        await expect(details).not.toExist();
       }
     }
   });
