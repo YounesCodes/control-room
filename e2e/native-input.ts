@@ -173,18 +173,41 @@ export async function nativeKey(shortcut: string) {
       { timeout: 5000 },
     );
 }
+function linuxFocusState(window: string) {
+  const read = (command: string, ...args: string[]) => {
+    try {
+      return execFileSync(command, args, { encoding: "utf8", timeout: 5000 }).trim();
+    } catch (error) {
+      return `unavailable (${(error as Error).message.split("\n")[0]})`;
+    }
+  };
+  return [
+    `app window ${Number(window)}`,
+    `WM active ${read("xdotool", "getactivewindow")}`,
+    `X input focus ${read("xdotool", "getwindowfocus")}`,
+    `clients ${read("xprop", "-root", "_NET_CLIENT_LIST")}`,
+  ].join("; ");
+}
 export async function focusNativeApp() {
   requireMacDesktop();
   const pid = (await runtime()).appPid;
+  let linuxWindow = "";
   if (windows) powershell("focus", String(pid));
   else if (mac) await ipc("plugin:window|set_focus", { label: "main" });
-  else
-    execFileSync("xdotool", ["windowactivate", "--sync", managedLinuxWindow(pid)], {
-      timeout: 5000,
-    });
+  else {
+    linuxWindow = managedLinuxWindow(pid);
+    execFileSync("xdotool", ["windowactivate", "--sync", linuxWindow], { timeout: 5000 });
+  }
   // On Windows the WebView child can own focus while the Tauri window reports false.
-  if (!windows)
+  if (windows) return;
+  try {
     await browser.waitUntil(() => ipc<boolean>("plugin:window|is_focused", { label: "main" }));
+  } catch (error) {
+    if (linuxWindow)
+      (error as Error).message +=
+        ` (the app window never reported focus: ${linuxFocusState(linuxWindow)})`;
+    throw error;
+  }
 }
 export async function openNativeShell() {
   const catalog = await ipc<{ profiles: { id: string; label: string; elevated: boolean }[] }>(
