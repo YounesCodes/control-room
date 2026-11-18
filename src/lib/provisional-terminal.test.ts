@@ -43,17 +43,20 @@ describe("provisional terminal for a host with no saved platform", () => {
     expect(provisionalChoice(next(choosing), "cancel")).toEqual({ kind: "reveal" });
   });
 
-  it("never reveals a shell that ended before connecting, and opens the chooser at once", () => {
-    const choosing = provisionalSessionState(startProvisional(), "error");
+  it("keeps a shell that ended before connecting hidden until discovery answers", () => {
+    const ended = next(provisionalSessionState(startProvisional(), "error"));
+    expect(ended).toEqual({ phase: "detecting", concealed: true, shellConnected: false });
+    const choosing = provisionalDiscovery(ended, catalog("windows"));
     expect(choosing).toEqual({
       kind: "choose",
       next: { phase: "choosing", concealed: true, shellConnected: false },
     });
-    expect(provisionalDiscovery(next(choosing), catalog("windows"))).toEqual({
-      kind: "keep",
-      next: next(choosing),
-    });
     expect(provisionalChoice(next(choosing), "cancel")).toEqual({ kind: "close" });
+  });
+
+  it("shows an unreachable host's own connection error instead of a chooser", () => {
+    const ended = next(provisionalSessionState(startProvisional(), "error"));
+    expect(provisionalDiscovery(ended, null)).toEqual({ kind: "reveal" });
   });
 
   it("keeps the tab hidden while it is replaced, then reveals the chosen shell", () => {
@@ -77,7 +80,8 @@ describe("provisional terminal for a host with no saved platform", () => {
   });
 
   it("ignores discovery that answers after the chooser has already opened", () => {
-    const choosing = next(provisionalSessionState(startProvisional(), "error"));
+    const connected = next(provisionalSessionState(startProvisional(), "connected"));
+    const choosing = next(provisionalDiscovery(connected, catalog("macos")));
     expect(provisionalDiscovery(choosing, catalog("linux"))).toEqual({
       kind: "keep",
       next: choosing,

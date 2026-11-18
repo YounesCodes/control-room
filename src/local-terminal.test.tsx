@@ -1303,17 +1303,40 @@ describe("Local Terminal", () => {
     const user = userEvent.setup();
     const saved = connection("33333333-3333-4333-8333-333333333333", "New Windows host");
     api.listConnections.mockResolvedValue([saved]);
-    api.discoverRemoteShells.mockReturnValue(new Promise(() => undefined));
+    let answer: (catalog: unknown) => void = () => undefined;
+    api.discoverRemoteShells.mockReturnValue(new Promise((resolve) => (answer = resolve)));
     render(<App />);
     await openConnection(user, "New Windows host");
     const terminal = await screen.findByTestId(/^terminal-/);
     await user.click(within(terminal).getByRole("button", { name: "report ended" }));
     expect(terminal.dataset.concealed).toBe("true");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    answer({
+      platform: "windows",
+      shells: [{ id: "cmd", label: "Command Prompt" }],
+      windowsTerminalAvailable: false,
+      wslError: null,
+    });
     const dialog = await screen.findByRole("dialog", { name: "Connect to New Windows host" });
-    expect(within(dialog).getByRole("status").textContent).toBe("Finding available shells…");
+    await within(dialog).findByRole("radio", { name: "Command Prompt" });
     expect(api.discoverRemoteShells).toHaveBeenCalledTimes(1);
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() => expect(screen.queryByTestId(/^terminal-/)).toBeNull());
+  });
+
+  it("shows an unreachable new host's own terminal error without opening a dialog", async () => {
+    const user = userEvent.setup();
+    const saved = connection("55555555-5555-4555-8555-555555555555", "Offline host");
+    api.listConnections.mockResolvedValue([saved]);
+    let fail: (error: Error) => void = () => undefined;
+    api.discoverRemoteShells.mockReturnValue(new Promise((_, reject) => (fail = reject)));
+    render(<App />);
+    await openConnection(user, "Offline host");
+    const terminal = await screen.findByTestId(/^terminal-/);
+    await user.click(within(terminal).getByRole("button", { name: "report ended" }));
+    fail(new Error("Connection refused"));
+    await waitFor(() => expect(terminal.dataset.concealed).toBe("false"));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("keeps a new Mac's working shell when the shell choice is cancelled", async () => {

@@ -32,9 +32,7 @@ export function provisionalSessionState(
     return { kind: "keep", next: { ...current, concealed: false, shellConnected: true } };
   }
   if (!ended(state)) return { kind: "keep", next: current };
-  const next = { ...current, shellConnected: false };
-  if (current.phase === "choosing" || !current.concealed) return { kind: "keep", next };
-  return { kind: "choose", next: { ...next, phase: "choosing" } };
+  return { kind: "keep", next: { ...current, shellConnected: false } };
 }
 
 export function provisionalDiscovery(
