@@ -743,7 +743,7 @@ describe("TerminalPane sessions", () => {
     expect(api.startSession).not.toHaveBeenCalled();
   });
 
-  it("hides a concealed session behind a connecting status until it is revealed", async () => {
+  it("hides a concealed session behind a connecting status until the host is known to run it", async () => {
     const workspace = {
       ...createRemoteWorkspace(connection),
       state: "error" as const,

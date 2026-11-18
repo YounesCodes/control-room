@@ -55,7 +55,6 @@ interface TerminalPaneProps {
   onTitle?: (title: string | null) => void;
   findRequest?: number;
   onReconnect?: () => void;
-  /** Hides the session behind a connecting status until the caller knows the host can run it. */
   concealed?: boolean;
 }
 

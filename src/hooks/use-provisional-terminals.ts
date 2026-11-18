@@ -16,11 +16,6 @@ export interface ProvisionalTerminalActions {
   close: (workspaceId: string) => void;
 }
 
-/**
- * Tracks terminals opened to a host whose platform is not known yet. The
- * default shell starts at once while shell discovery runs beside it, and the
- * tab stays hidden until one of them shows what the host is.
- */
 export function useProvisionalTerminals(actions: ProvisionalTerminalActions) {
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
