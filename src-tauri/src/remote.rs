@@ -1355,7 +1355,10 @@ impl StreamManager {
         output: Channel<Response>,
     ) -> Result<StreamStarted, String> {
         let ssh_path = detect_ssh_path().ok_or_else(ssh_not_found_message)?;
-        let mut arguments = connection_arguments(connection, false);
+        let mut arguments = crate::ssh_mux::inspection_arguments(
+            connection,
+            connection_arguments(connection, false),
+        );
         arguments.push(elevated_command(&command, &elevation));
         let mut child = background_command(ssh_path)
             .args(arguments)
