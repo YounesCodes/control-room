@@ -503,6 +503,48 @@ describe("TerminalPane sessions", () => {
     expect(api.startLocalSession).toHaveBeenCalledTimes(1);
   });
 
+  it("starts a macOS shell from the first fit and syncs the settled grid before queued input", async () => {
+    let finishStart!: (value: { sessionId: string }) => void;
+    api.startLocalSession.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishStart = resolve;
+      }),
+    );
+    let fitsAfterStart = 0;
+    xterm.fit.mockImplementation(() => {
+      const requested = api.startLocalSession.mock.calls.length > 0;
+      if (requested) fitsAfterStart++;
+      xterm.resize?.(requested ? 100 : 106, requested ? 28 : 30);
+    });
+    renderPane(createLocalWorkspace(shell), vi.fn(), { platform: "macos" });
+    await vi.waitFor(() =>
+      expect(api.startLocalSession).toHaveBeenCalledWith(
+        "powershell-7",
+        106,
+        30,
+        expect.anything(),
+      ),
+    );
+    act(() => xterm.onData!("queued input"));
+    await vi.waitFor(() => expect(fitsAfterStart).toBeGreaterThanOrEqual(2));
+    await act(async () => finishStart({ sessionId: "local-session" }));
+    await vi.waitFor(() =>
+      expect(api.resizeSession).toHaveBeenCalledWith("local-session", 100, 28),
+    );
+    await vi.waitFor(() => expect(api.writeSession).toHaveBeenCalled());
+    expect(api.resizeSession.mock.invocationCallOrder[0]).toBeLessThan(
+      api.writeSession.mock.invocationCallOrder[0],
+    );
+    expect(api.startLocalSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes a host session that started while the pane closed during its first fit", async () => {
+    renderPane(createRemoteWorkspace(connection));
+    await vi.waitFor(() => expect(api.startSession).toHaveBeenCalledTimes(1));
+    cleanup();
+    await vi.waitFor(() => expect(api.closeSession).toHaveBeenCalledWith("ssh-session"));
+  });
+
   it("does not start a shell when the pane closes while its first grid is settling", async () => {
     renderPane(createLocalWorkspace(shell));
     cleanup();
