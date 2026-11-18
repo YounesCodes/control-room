@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { mkdirSync } from "node:fs";
 import { $, browser, expect } from "@wdio/globals";
-import { ipc, runtime, terminalContains } from "./helpers";
+import { ipc, managedLinuxWindow, runtime, terminalContains } from "./helpers";
 
 const mac = process.platform === "darwin";
 const windows = process.platform === "win32";
@@ -172,26 +172,6 @@ export async function nativeKey(shortcut: string) {
       ],
       { timeout: 5000 },
     );
-}
-function xprop(...args: string[]) {
-  return execFileSync("xprop", ["-notype", ...args], { encoding: "utf8", timeout: 5000 });
-}
-function managedLinuxWindow(pid: number) {
-  const clients = xprop("-root", "_NET_CLIENT_LIST").match(/0x[0-9a-f]+/gi) ?? [];
-  for (const id of clients) {
-    let properties: string;
-    try {
-      properties = xprop("-id", id, "_NET_WM_PID", "_NET_WM_NAME");
-    } catch {
-      continue;
-    }
-    if (
-      properties.match(/^_NET_WM_PID\D*(\d+)$/m)?.[1] === String(pid) &&
-      /^_NET_WM_NAME[^"]*"Control Room"$/m.test(properties)
-    )
-      return id;
-  }
-  throw new Error(`No managed "Control Room" window belongs to process ${pid}`);
 }
 export async function focusNativeApp() {
   requireMacDesktop();

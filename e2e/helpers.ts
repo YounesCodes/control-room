@@ -1,7 +1,7 @@
 import { $, browser, expect } from "@wdio/globals";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { application, isMac, isLinux, isWindows, localShellLabel } from "./platform";
 import { recordMacApplication } from "./macos-processes";
 import { sanitize } from "../scripts/sanitize-e2e-results.mjs";
@@ -65,6 +65,26 @@ export async function ipc<T>(command: string, args: object = {}): Promise<T> {
 }
 export const runtime = () => ipc<RuntimeStatus>("e2e_runtime_status");
 
+function xprop(...args: string[]) {
+  return execFileSync("xprop", ["-notype", ...args], { encoding: "utf8", timeout: 5000 });
+}
+export function managedLinuxWindow(pid: number) {
+  const clients = xprop("-root", "_NET_CLIENT_LIST").match(/0x[0-9a-f]+/gi) ?? [];
+  for (const id of clients) {
+    let properties: string;
+    try {
+      properties = xprop("-id", id, "_NET_WM_PID", "_NET_WM_NAME");
+    } catch {
+      continue;
+    }
+    if (
+      properties.match(/^_NET_WM_PID\D*(\d+)$/m)?.[1] === String(pid) &&
+      /^_NET_WM_NAME[^"]*"Control Room"$/m.test(properties)
+    )
+      return id;
+  }
+  throw new Error(`No managed "Control Room" window belongs to process ${pid}`);
+}
 export async function restartApp(preserve = true) {
   const previous = await runtime();
   if (isMac) recordMacApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, previous.appPid);
@@ -126,11 +146,36 @@ export async function restartApp(preserve = true) {
     { timeout: 20_000, timeoutMsg: "The previous native application did not exit" },
   );
   await expect($("aria/Saved connections")).toExist();
+  if (isLinux) await waitForSettledLinuxWindow();
   if (await $("[role=dialog]").isExisting()) await $("[role=dialog]").$("button=Cancel").click();
   const current = await runtime();
   if (isMac) recordMacApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, current.appPid);
   else recordApplication(process.env.CONTROL_ROOM_E2E_DATA_DIR!, current.appPid, application);
   expect(current.appPid).not.toBe(previous.appPid);
+}
+
+async function waitForSettledLinuxWindow() {
+  const pid = (await runtime()).appPid;
+  await browser.waitUntil(
+    () => {
+      try {
+        return Boolean(managedLinuxWindow(pid));
+      } catch {
+        return false;
+      }
+    },
+    { timeout: 20_000, timeoutMsg: "The window manager did not manage the app window" },
+  );
+  let previous = "";
+  await browser.waitUntil(
+    async () => {
+      const viewport = await browser.execute(() => `${innerWidth}x${innerHeight}`);
+      const settled = viewport === previous;
+      previous = viewport;
+      return settled;
+    },
+    { timeout: 20_000, interval: 250, timeoutMsg: "The app viewport kept resizing after launch" },
+  );
 }
 
 export async function cleanRuntime() {

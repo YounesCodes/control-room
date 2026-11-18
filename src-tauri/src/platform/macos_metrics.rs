@@ -3,7 +3,7 @@ use super::{HeaderMetric, HeaderMetrics, empty_sample, percent, set_disk_capacit
 pub(crate) fn script(metrics: &[HeaderMetric]) -> String {
     let mut script = String::from("LC_ALL=C; export LC_ALL; ");
     if metrics.contains(&HeaderMetric::Cpu) {
-        script.push_str("/usr/bin/top -F -R -l 2 -s 1 -n 0 | /usr/bin/awk '/CPU usage:/ {idle=$7} END {print \"cpu_idle=\" idle}'; ");
+        script.push_str("/usr/sbin/iostat -C -c 2 -w 1 | /usr/bin/awk '{for (i = 1; i <= NF; i++) if ($i == \"id\") column = i} column && $column ~ /^[0-9.]+$/ {idle = $column} END {print \"cpu_idle=\" idle}'; ");
     }
     if metrics.contains(&HeaderMetric::Ram) {
         script
@@ -118,21 +118,17 @@ mod tests {
     use super::*;
     const SAMPLE: &str = "cpu_idle=72.5%\nmemory_total=8589934592\nMach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free: 10000.\nPages inactive: 20000.\nPages speculative: 1000.\ndisk_total=100000\ndisk_free=60000\nnow=1720000300\nboot=1720000000\n";
     #[test]
-    fn cpu_sampling_skips_expensive_process_memory_inspection() {
+    fn cpu_sampling_reads_kernel_counters_without_walking_processes() {
         let script = script(&[HeaderMetric::Cpu]);
-        let top = script.split("/usr/bin/top ").nth(1).unwrap();
-        let arguments: Vec<_> = top.split('|').next().unwrap().split_whitespace().collect();
-        assert!(
-            arguments.contains(&"-F"),
-            "framework sampling is unnecessary for CPU usage"
-        );
-        assert!(
-            arguments.contains(&"-R"),
-            "process memory maps are unnecessary for CPU usage"
-        );
-        assert!(arguments.windows(2).any(|pair| pair == ["-l", "2"]));
-        assert!(arguments.windows(2).any(|pair| pair == ["-s", "1"]));
-        assert!(arguments.windows(2).any(|pair| pair == ["-n", "0"]));
+        assert!(!script.contains("/usr/bin/top"));
+        let iostat = script.split("/usr/sbin/iostat ").nth(1).unwrap();
+        let arguments: Vec<_> = iostat
+            .split('|')
+            .next()
+            .unwrap()
+            .split_whitespace()
+            .collect();
+        assert_eq!(arguments, ["-C", "-c", "2", "-w", "1"]);
     }
     #[test]
     fn parses_intel_and_apple_silicon_page_sizes_and_requested_readings() {
