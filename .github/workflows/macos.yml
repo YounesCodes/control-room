@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       software: ${{ steps.classify.outputs.software }}
+      macos_bundle: ${{ steps.classify.outputs.macos_bundle }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -63,6 +64,7 @@ jobs:
           workspaces: "./src-tauri -> target"
           key: ${{ matrix.part }}
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
       - run: npm ci
       - if: matrix.part == 'rust'
@@ -132,7 +134,7 @@ jobs:
   bundle:
     name: App and DMG (${{ matrix.target }})
     needs: changes
-    if: *run-macos
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.macos_bundle != 'false') }}
     strategy:
       fail-fast: false
       matrix:
@@ -154,6 +156,7 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: npm ci
       - name: Build ad-hoc signed test bundles
         env:
