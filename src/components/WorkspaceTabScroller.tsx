@@ -2,6 +2,7 @@ import {
   Children,
   cloneElement,
   isValidElement,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -12,6 +13,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
+import { flushSync } from "react-dom";
 import { ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { usePopoverExit } from "../hooks/use-popover-exit";
 
@@ -222,21 +224,24 @@ export function WorkspaceTabScroller({
     (rows[Math.min(index, rows.length - 1)] ?? pickerRef.current)?.focus();
   }, [items.length]);
 
-  useLayoutEffect(() => {
+  const measureStrip = useCallback(() => {
     const region = regionRef.current;
     if (!region) return;
+    setWidth(region.getBoundingClientRect().width);
+    setListWidth(listRef.current?.getBoundingClientRect().width ?? 0);
+  }, []);
+
+  useLayoutEffect(measureStrip);
+
+  useLayoutEffect(() => {
+    const region = regionRef.current;
     const list = listRef.current;
-    const measure = () => {
-      setWidth(region.getBoundingClientRect().width);
-      setListWidth(list?.getBoundingClientRect().width ?? 0);
-    };
-    measure();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
+    if (!region || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => flushSync(measureStrip));
     observer.observe(region);
     if (list) observer.observe(list);
     return () => observer.disconnect();
-  }, [showPager]);
+  }, [showPager, measureStrip]);
 
   useLayoutEffect(() => {
     setStart((current) => {
