@@ -215,11 +215,22 @@ try {
     ),
   );
 
+  const viewportWidth = () => execute("return innerWidth");
   const initial = width();
+  const initialViewport = await viewportWidth();
   await click("Maximize or restore window");
-  await waitFor("maximized window", async () => width() > initial && (await maximized()));
+  await waitFor(
+    "maximized window",
+    async () =>
+      width() > initial && (await maximized()) && (await viewportWidth()) > initialViewport,
+  );
+  await settledPoint("maximized layout", center("button[aria-label='Maximize or restore window']"));
   await click("Maximize or restore window");
-  await waitFor("restored window", async () => width() === initial && !(await maximized()));
+  await waitFor(
+    "restored window",
+    async () =>
+      width() === initial && !(await maximized()) && (await viewportWidth()) === initialViewport,
+  );
 
   const height = geometry().HEIGHT;
   xdo(
@@ -276,12 +287,15 @@ try {
   console.error(error);
   if (session) {
     const page = await execute(
-      "return { visibility: document.visibilityState, focused: document.hasFocus(), active: document.activeElement?.className || document.activeElement?.nodeName };",
+      "return { visibility: document.visibilityState, focused: document.hasFocus(), active: document.activeElement?.className || document.activeElement?.nodeName, viewport: innerWidth + 'x' + innerHeight };",
     ).catch((cause) => "unavailable: " + cause.message);
     console.error("Page state:", page);
   }
   try {
-    console.error("Windows named Control Room:", xdo("search", "--name", "Control Room") || "none");
+    const windows = xdo("search", "--name", "Control Room");
+    console.error("Windows named Control Room:", windows || "none");
+    for (const window of windows.split("\n").filter(Boolean))
+      console.error(window, xdo("getwindowgeometry", "--shell", window).replaceAll("\n", " "));
   } catch {
     console.error("No window is named Control Room");
   }
