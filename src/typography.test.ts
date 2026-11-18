@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { stylesSource } from "./test/stylesheets";
 
-const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const mainSource = readFileSync(new URL("./main.tsx", import.meta.url), "utf8");
 
 describe("typography", () => {

@@ -497,7 +497,7 @@ impl Database {
         let changed = self.connection
             .lock()
             .execute(
-                "INSERT INTO host_capabilities (connection_id, payload, detected_at) SELECT ?1, ?2, ?3 FROM saved_connections WHERE id = ?1 AND destination = ?4 AND username IS ?5 AND port IS ?6 AND identity_file IS ?7 ON CONFLICT(connection_id) DO UPDATE SET payload = excluded.payload, detected_at = excluded.detected_at",
+                "INSERT INTO host_capabilities (connection_id, payload, detected_at) SELECT ?1, ?2, ?3 FROM saved_connections WHERE id = ?1 AND destination = ?4 AND username IS ?5 AND port IS ?6 AND identity_file IS ?7 ON CONFLICT(connection_id) DO UPDATE SET payload = excluded.payload, detected_at = excluded.detected_at, shell_catalog = CASE WHEN json_valid(host_capabilities.payload) AND json_extract(host_capabilities.payload, '$.osId') IS json_extract(excluded.payload, '$.osId') THEN host_capabilities.shell_catalog END",
                 params![capabilities.connection_id, payload, capabilities.detected_at, target.destination, target.username, target.port, target.identity_file],
             )
             .map_err(|error| error.to_string())?;
@@ -507,6 +507,42 @@ impl Database {
             );
         }
         Ok(())
+    }
+
+    /// Stores the remote shell catalog last read from this target, next to its
+    /// capabilities. It is dropped with them when the target or its OS changes.
+    pub fn save_shell_catalog(
+        &self,
+        target: &SavedConnection,
+        catalog: &str,
+    ) -> Result<(), String> {
+        let changed = self
+            .connection
+            .lock()
+            .execute(
+                "UPDATE host_capabilities SET shell_catalog = ?2 WHERE connection_id = ?1 AND EXISTS (SELECT 1 FROM saved_connections WHERE id = ?1 AND destination = ?3 AND username IS ?4 AND port IS ?5 AND identity_file IS ?6)",
+                params![target.id, catalog, target.destination, target.username, target.port, target.identity_file],
+            )
+            .map_err(|error| error.to_string())?;
+        if changed == 0 {
+            return Err(
+                "Saved Connection changed while its remote shells were being read. Retry.".into(),
+            );
+        }
+        Ok(())
+    }
+
+    pub fn get_shell_catalog(&self, id: &str) -> Result<Option<String>, String> {
+        self.connection
+            .lock()
+            .query_row(
+                "SELECT shell_catalog FROM host_capabilities WHERE connection_id = ?1",
+                [id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map(Option::flatten)
+            .map_err(|error| error.to_string())
     }
 
     pub fn get_capabilities(&self, id: &str) -> Result<Option<HostCapabilities>, String> {

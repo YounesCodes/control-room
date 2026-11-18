@@ -58,6 +58,10 @@ pub(super) const MIGRATIONS: &[Migration] = &[
         version: 15,
         apply: brighten_terminal_foreground_from_cccccc,
     },
+    Migration {
+        version: 16,
+        apply: add_remote_shell_catalog,
+    },
 ];
 
 pub(super) const LATEST_SCHEMA_VERSION: i64 = MIGRATIONS[MIGRATIONS.len() - 1].version;
@@ -275,6 +279,22 @@ fn add_sudo_enabled(transaction: &Transaction<'_>) -> Result<(), String> {
                 ADD COLUMN sudo_enabled INTEGER NOT NULL DEFAULT 0;
             "#,
         )
+        .map_err(|error| error.to_string())
+}
+
+fn add_remote_shell_catalog(transaction: &Transaction<'_>) -> Result<(), String> {
+    let (has_table, has_column): (bool, bool) = transaction
+        .query_row(
+            "SELECT EXISTS (SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'host_capabilities'), EXISTS (SELECT 1 FROM pragma_table_info('host_capabilities') WHERE name = 'shell_catalog')",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|error| error.to_string())?;
+    if !has_table || has_column {
+        return Ok(());
+    }
+    transaction
+        .execute_batch("ALTER TABLE host_capabilities ADD COLUMN shell_catalog TEXT;")
         .map_err(|error| error.to_string())
 }
 

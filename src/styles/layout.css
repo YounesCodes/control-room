@@ -1,0 +1,472 @@
+@media (max-height: 720px) {
+  .feature-nav button {
+    min-height: 31px;
+  }
+
+  .workspace-navigation {
+    padding-bottom: 6px;
+  }
+
+  .sidebar-footer {
+    grid-template-columns: minmax(0, 1fr) 16px max-content minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .sidebar-footer .sidebar-primary {
+    height: 34px;
+    min-height: 34px;
+    padding-inline: 7px;
+    font-size: 11px;
+  }
+
+  .host-row {
+    min-height: 41px;
+  }
+}
+
+@media (max-width: 1120px) {
+  .app-shell {
+    --connection-rail-width: 216px;
+    grid-template-columns: var(--connection-rail-width) minmax(0, 1fr);
+  }
+
+  .split-page:not(.resizable-split) {
+    grid-template-columns: minmax(300px, 50%) minmax(240px, 1fr);
+  }
+
+  .history-page,
+  .logs-page {
+    padding: 22px;
+  }
+}
+
+.sidebar {
+  position: relative;
+  container-type: inline-size;
+}
+
+.sidebar-top-heading .layout-reset {
+  width: 32px;
+  height: 32px;
+  margin-left: 5px;
+  pointer-events: auto;
+}
+
+.resize-divider {
+  position: absolute;
+  z-index: 8;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+}
+
+.resize-divider::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+  pointer-events: none;
+  transition: background-color var(--motion-fast) var(--ease);
+}
+
+.resize-divider:hover::after {
+  background: var(--text-muted);
+}
+
+.resize-divider:focus-visible::after,
+.resize-divider.dragging::after {
+  background: var(--accent);
+}
+
+.resize-divider:focus-visible {
+  outline: none;
+}
+
+body:has(.resize-divider.dragging) {
+  cursor: col-resize;
+  user-select: none;
+}
+
+body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
+  cursor: row-resize;
+}
+
+.sidebar-sections {
+  position: relative;
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.sidebar-sections > .host-list {
+  min-height: 0;
+  grid-row: 1;
+  scrollbar-gutter: stable;
+}
+
+.sidebar-sections > .workspace-navigation {
+  grid-row: 3;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.sidebar-sections.with-capabilities::before {
+  content: "";
+  grid-row: 2;
+  border-bottom: 1px solid var(--border-subtle);
+  align-self: center;
+}
+
+.sidebar-sections > .sidebar-sections-divider {
+  left: 0;
+  right: 11px;
+  bottom: auto;
+  width: auto;
+  height: 24px;
+  transform: translateY(-50%);
+  cursor: row-resize;
+}
+
+.sidebar-sections-divider::after {
+  left: 0;
+  right: 0;
+  top: calc(50% - 1px);
+  bottom: auto;
+  width: auto;
+  height: 2px;
+}
+
+.connections-divider {
+  right: -12px;
+  width: 12px;
+}
+
+.connections-divider::after {
+  left: -1px;
+}
+
+.connection-section {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.connection-section-content {
+  position: relative;
+  height: 100%;
+  max-width: 100%;
+  container-type: inline-size;
+}
+
+.connection-section-content > .feature-page {
+  right: 6px;
+}
+
+.connection-section-content > .ports-page {
+  right: 0;
+}
+
+.content-divider {
+  right: 0;
+  width: 6px;
+}
+
+.content-divider::after {
+  left: auto;
+  right: 0;
+  width: 2px;
+}
+
+.resizable-split {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.resizable-split > :first-child {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.resizable-split > .detail-panel {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.resizable-split > .split-divider {
+  width: 12px;
+  right: auto;
+}
+
+.split-divider::after {
+  left: 0;
+}
+
+.resizable-split.stacked {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(240px, 1fr) minmax(240px, 1fr);
+  overflow: auto;
+}
+
+.services-page.stacked {
+  grid-template-rows: minmax(min-content, 1fr) minmax(240px, 1fr);
+}
+
+.services-page.stacked .list-panel {
+  min-height: min-content;
+}
+
+.resizable-split.stacked > .detail-panel {
+  grid-column: 1;
+  grid-row: 2;
+  border-top: 1px solid var(--border);
+}
+
+.list-panel,
+.detail-panel {
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.detail-panel h2,
+.detail-panel header p,
+.page-heading p,
+.capability-value {
+  overflow-wrap: anywhere;
+}
+
+.page-heading > div {
+  min-width: 0;
+}
+
+.page-heading > button {
+  flex-shrink: 0;
+}
+
+@container (max-width: 720px) {
+  .history-page,
+  .logs-page {
+    padding: 20px;
+  }
+
+  .page-heading-title {
+    flex-wrap: wrap;
+  }
+
+  .port-list-controls .search-field {
+    grid-column: 1 / -1;
+  }
+}
+
+@container (max-width: 480px) {
+  .page-heading {
+    flex-wrap: wrap;
+  }
+
+  .systemd-list-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .systemd-list-controls .search-field {
+    grid-column: 1 / -1;
+  }
+
+  .detail-list > div,
+  .definition-grid > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .overview-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .overview-stat + .overview-stat {
+    border-left: 0;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .capability-row {
+    grid-template-columns: 8px minmax(0, 1fr);
+  }
+
+  .capability-value {
+    grid-column: 2;
+  }
+}
+
+.sidebar-top-heading > span:first-child {
+  margin-right: auto;
+}
+
+.row-state {
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-stat-hint {
+  overflow-wrap: anywhere;
+}
+
+@container (max-width: 300px) {
+  .sidebar-footer {
+    grid-template-columns: minmax(0, 1fr) 16px max-content minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 480px) {
+  .toolbar-actions {
+    flex-wrap: wrap;
+  }
+  .history-search-row .search-field {
+    width: 100%;
+  }
+  .history-row-inner .exit-status {
+    justify-content: flex-start;
+  }
+  .history-row-inner .row-actions {
+    grid-area: actions;
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.compact-navigation-toggle,
+.navigation-backdrop {
+  display: none;
+}
+
+.app-shell[data-compact]:not(.terminal-focus-mode):not(.settings-mode) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.app-shell[data-compact] .app-bar,
+.app-shell[data-compact] .workspace-shell {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.app-shell[data-compact] .app-bar {
+  justify-content: space-between;
+}
+
+.app-shell[data-compact] .compact-navigation-toggle {
+  display: flex;
+  flex: 0 0 40px;
+}
+
+.app-shell[data-compact] .sidebar {
+  display: none;
+}
+
+.app-shell[data-compact]:not(.settings-mode):not(.terminal-focus-mode) .sidebar.navigation-open {
+  position: fixed;
+  z-index: 60;
+  inset: 42px auto 0 0;
+  display: flex;
+  width: min(300px, calc(100vw - 56px));
+  box-shadow: var(--shadow-popover);
+}
+
+.app-shell[data-compact] .navigation-backdrop {
+  position: fixed;
+  z-index: 50;
+  inset: 42px 0 0;
+  display: block;
+  background: rgb(0 0 0 / 55%);
+}
+
+.app-shell[data-compact] .connections-divider {
+  display: none;
+}
+
+@media (max-width: 859px) {
+  .history-page,
+  .logs-page,
+  .boot-page {
+    padding: 16px;
+  }
+  .boot-heading-actions,
+  .history-tools,
+  .history-tools-actions,
+  .toolbar-actions {
+    flex-wrap: wrap;
+  }
+  .page-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .log-controls .source-select,
+  .log-view-bar .log-search {
+    min-width: 0;
+    flex: 1 1 200px;
+  }
+}
+
+.window-resize-handles {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.window-resize-handle {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.window-resize-handle[data-edge="North"],
+.window-resize-handle[data-edge="South"] {
+  inset-inline: 6px;
+  height: 4px;
+  cursor: ns-resize;
+}
+
+.window-resize-handle[data-edge="East"],
+.window-resize-handle[data-edge="West"] {
+  inset-block: 6px;
+  width: 4px;
+  cursor: ew-resize;
+}
+
+.window-resize-handle[data-edge$="East"] {
+  right: 0;
+}
+
+.window-resize-handle[data-edge$="West"] {
+  left: 0;
+}
+
+.window-resize-handle[data-edge^="North"] {
+  top: 0;
+}
+
+.window-resize-handle[data-edge^="South"] {
+  bottom: 0;
+}
+
+.window-resize-handle[data-edge^="North"]:not([data-edge="North"]),
+.window-resize-handle[data-edge^="South"]:not([data-edge="South"]) {
+  width: 6px;
+  height: 6px;
+}
+
+.window-resize-handle[data-edge="NorthWest"],
+.window-resize-handle[data-edge="SouthEast"] {
+  cursor: nwse-resize;
+}
+
+.window-resize-handle[data-edge="NorthEast"],
+.window-resize-handle[data-edge="SouthWest"] {
+  cursor: nesw-resize;
+}

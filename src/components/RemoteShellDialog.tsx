@@ -11,6 +11,8 @@ import { HostOsIcon } from "./HostOsIcon";
 import { Modal } from "./Modal";
 import { Bone, Skeleton, boneWidth, wave } from "./PanelState";
 
+const PLATFORM_NAMES: Record<string, string> = { macos: "macOS", windows: "Windows" };
+
 export function shellDescription(id: string): string {
   if (id.startsWith("wsl:")) return "Linux distribution";
   if (id.startsWith("terminal:")) return "Windows Terminal profile";
@@ -95,10 +97,15 @@ export function RemoteShellDialog({
       <div className="remote-shell-body">
         <div className="remote-shell-heading">
           <div className="remote-shell-host">
-            <HostOsIcon osId={catalog?.capabilities?.osId} osName={catalog?.capabilities?.osName} />
+            <HostOsIcon
+              osId={catalog?.capabilities?.osId ?? catalog?.platform}
+              osName={catalog?.capabilities?.osName}
+            />
             <div>
               <strong>
-                {catalog?.capabilities?.osName?.replace(/^Microsoft\s+/i, "") ?? "Remote host"}
+                {catalog?.capabilities?.osName?.replace(/^Microsoft\s+/i, "") ??
+                  PLATFORM_NAMES[catalog?.platform ?? ""] ??
+                  "Remote host"}
               </strong>
               <span>Choose a shell for this session</span>
             </div>

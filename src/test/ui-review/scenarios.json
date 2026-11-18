@@ -203,7 +203,8 @@
         "groups",
         "groups-no-tags",
         "rename",
-        "metrics"
+        "metrics",
+        "mac-shell-picker"
       ],
       "ready": ".app-shell",
       "prepare": {
@@ -307,6 +308,15 @@
           {
             "selector": ".host-metrics-trigger"
           }
+        ],
+        "mac-shell-picker": [
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          },
+          {
+            "selector": ".host-main"
+          }
         ]
       },
       "settled": {
@@ -317,7 +327,8 @@
         "groups-no-tags": ".connection-groups-dialog .connection-tag-create",
         "groups": ".connection-groups-dialog .connection-tag-manage-list:not(:empty)",
         "rename": ".modal.prompt-dialog",
-        "metrics": ".host-metrics-panel"
+        "metrics": ".host-metrics-panel",
+        "mac-shell-picker": "[role='dialog'] .remote-shell-option.selected"
       }
     },
     "terminal": {
