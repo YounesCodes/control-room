@@ -181,6 +181,25 @@ and register a motion trigger and animated target only when that transition can
 run headlessly. The harness lives outside the product entry point; it is not
 included in the packaged app. Vitest browser tests stay independent.
 
+## Installed app launch color
+
+On a disposable desktop with one display, install the package and close Control Room.
+Use Python 3.10 or newer with Tk, MSS 10 and Pillow 12.1 or newer. Pass the
+installed executable and a new output directory to the recorder. On macOS the
+executable is inside the app bundle at `Contents/MacOS/control-room`.
+
+```sh
+python scripts/capture-launch.py /path/to/control-room test-results/launch
+```
+
+The recorder checks that it can see a white window, switches the backdrop to teal,
+then launches Control Room. It samples the center of the display until the dark UI
+appears and at least six seconds have elapsed. A mostly white sample, an early exit,
+or no painted UI within 60 seconds fails the check. Inspect the timestamped frames
+and `settled.png` to confirm the transition and the final window. `samples.json`
+records the timing and fraction of white and dark pixels in each sample. Frames
+between samples can be missed. On Windows, repeat under light and dark app appearance.
+
 ## Linux desktop smoke test
 
 The Ubuntu 24.04 CI job runs Clippy and Rust tests, builds the `.deb` and AppImage, then installs the `.deb` on the runner. WebKitWebDriver and Openbox exercise the installed app in Xvfb with a temporary XDG data directory. The separate hosted SSH job uses the system OpenSSH client and a loopback server to verify a Linux PTY and read-only inspection.
