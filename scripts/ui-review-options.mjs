@@ -1,8 +1,27 @@
 import { readFileSync } from "node:fs";
 
-export const registry = JSON.parse(
-  readFileSync(new URL("../src/test/ui-review/scenarios.json", import.meta.url), "utf8"),
-);
+const read = (name) =>
+  JSON.parse(readFileSync(new URL(`../src/test/ui-review/${name}`, import.meta.url), "utf8"));
+export const registry = read("scenarios.json");
+export const featureMap = read("features.json");
+
+export function formatFeatures({ features }) {
+  const width = Math.max(...features.map(({ name }) => name.length)) + 2;
+  const lines = features.map(
+    ({ name, capture }) =>
+      name.padEnd(width) +
+      (capture
+        ? capture.map(({ scenario, states }) => `${scenario}: ${states.join(", ")}`).join("; ")
+        : "no scenario"),
+  );
+  const gaps = features.filter(({ capture }) => capture === null).map(({ name }) => name);
+  return [
+    "Feature map: src/test/ui-review/features.json",
+    "Capture a state with npm run ui:capture -- --scenario SCENARIO --state STATE",
+    ...lines,
+    `No capture scenario (${gaps.length}): ${gaps.join(", ")}`,
+  ].join("\n");
+}
 
 export function parseOptions(args) {
   const options = { type: args[0], scenario: null, state: "populated", viewport: "all" };
@@ -11,6 +30,7 @@ export function parseOptions(args) {
   for (let index = 1; index < args.length; index++) {
     const key = args[index];
     if (key === "--help" || key === "--list") return { ...options, help: true };
+    if (key === "--features") return { ...options, features: true };
     if (!["--scenario", "--state", "--viewport"].includes(key) || !args[index + 1])
       throw new Error(`Unknown or missing option: ${key}. Use --help.`);
     options[key.slice(2)] = args[++index];
