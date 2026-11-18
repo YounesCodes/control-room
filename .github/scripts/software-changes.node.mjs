@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import process from "node:process";
 import { URL, fileURLToPath } from "node:url";
-import { affectsSoftware, frontendOnly } from "./software-changes.mjs";
+import { affectsMacBundle, affectsSoftware, frontendOnly } from "./software-changes.mjs";
 
 const script = fileURLToPath(new URL("./software-changes.mjs", import.meta.url));
 
@@ -71,6 +71,37 @@ test("Rust, packaging, tooling, and mixed changes keep the full suite", () => {
   }
 });
 
+test("Mac bundle builds follow packaging inputs in mixed PRs", () => {
+  const routine = [
+    "src/App.tsx",
+    "src-tauri/src/lib.rs",
+    "e2e/settings.spec.ts",
+    "docs/package.json",
+    "README.md",
+  ];
+  assert.equal(affectsMacBundle(routine), false);
+  for (const path of [
+    "src-tauri/tauri.macos.conf.json",
+    "src-tauri/icons/icon.icns",
+    "src-tauri/build.rs",
+    "src-tauri/Cargo.lock",
+    "src-tauri/Cargo.toml",
+    "src-tauri/Info.plist",
+    "src-tauri/resources/help.md",
+    "package-lock.json",
+    "package.json",
+    "vite.config.ts",
+    "tsconfig.app.json",
+    ".cargo/config.toml",
+    "scripts/verify-updater-signature.mjs",
+    ".github/workflows/release.yml",
+    ".github/workflows/macos.yml",
+    ".github/scripts/software-changes.mjs",
+  ]) {
+    assert.equal(affectsMacBundle([...routine, path]), true, path);
+  }
+});
+
 test("pushes and other events never skip jobs as frontend-only", () => {
   for (const eventName of ["push", "workflow_dispatch", "merge_group", undefined]) {
     assert.equal(frontendOnly(["src/styles.css"], eventName), false, String(eventName));
@@ -108,21 +139,42 @@ test("the CLI classifies PR and push diffs", () => {
       });
       return readFileSync(output, "utf8");
     };
-    assert.equal(run("pull_request"), "software=true\nfrontend_only=true\n");
-    assert.equal(run("push"), "software=true\nfrontend_only=false\n");
+    assert.equal(run("pull_request"), "software=true\nfrontend_only=true\nmacos_bundle=false\n");
+    assert.equal(run("push"), "software=true\nfrontend_only=false\nmacos_bundle=true\n");
+
+    assert.equal(
+      run("pull_request", "invalid"),
+      "software=true\nfrontend_only=false\nmacos_bundle=true\n",
+    );
 
     git("checkout", "-q", "--detach", base);
     writeFileSync(join(dir, "README.md"), "# Docs\n");
     git("add", "README.md");
     git("commit", "-qm", "docs");
     const docsHead = git("rev-parse", "HEAD");
-    assert.equal(run("pull_request", head, docsHead), "software=false\nfrontend_only=false\n");
+    assert.equal(
+      run("pull_request", head, docsHead),
+      "software=false\nfrontend_only=false\nmacos_bundle=false\n",
+    );
 
     git("checkout", "-q", "--detach", head);
     git("mv", "src/styles.css", "styles.md");
     git("commit", "-qm", "move styles");
     const movedHead = git("rev-parse", "HEAD");
-    assert.equal(run("pull_request", head, movedHead), "software=true\nfrontend_only=true\n");
+    assert.equal(
+      run("pull_request", head, movedHead),
+      "software=true\nfrontend_only=true\nmacos_bundle=false\n",
+    );
+    writeFileSync(join(dir, "package.json"), "{}\n");
+    git("add", "package.json");
+    git("commit", "-qm", "package manifest");
+    const packagingHead = git("rev-parse", "HEAD");
+    git("mv", "package.json", "retired.md");
+    git("commit", "-qm", "retire manifest");
+    assert.equal(
+      run("pull_request", packagingHead, git("rev-parse", "HEAD")),
+      "software=true\nfrontend_only=false\nmacos_bundle=true\n",
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

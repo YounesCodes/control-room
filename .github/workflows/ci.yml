@@ -58,6 +58,7 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Run live SSH tests against this disposable runner
         run: bash scripts/test-hosted-ssh.sh
 
@@ -84,6 +85,7 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: tauri-linux-build
           cache-on-failure: true
       - run: npm ci
@@ -170,6 +172,7 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Install cargo-audit from a prebuilt release
         uses: taiki-e/install-action@v2.90.3
         with:
@@ -204,6 +207,7 @@ jobs:
         with:
           workspaces: "./src-tauri -> target"
           cache-bin: false
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           # Shared with the release workflow's build, so a tag restores the
           # release-profile dependencies this job compiled on main instead of
           # building them again from scratch.
