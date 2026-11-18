@@ -2,8 +2,8 @@
 
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { stylesSource } from "./test/stylesheets";
 
-const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const settingsModelSource = readFileSync(
   new URL("../src-tauri/src/models.rs", import.meta.url),
   "utf8",

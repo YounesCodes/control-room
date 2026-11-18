@@ -1,0 +1,155 @@
+.update-indicator {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.update-indicator-button {
+  position: relative;
+}
+
+.update-indicator-progress {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+  transform: rotate(-90deg);
+}
+
+.update-indicator-progress circle {
+  fill: none;
+  stroke: var(--text-strong);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+}
+
+.update-indicator-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.update-indicator-dot[data-state="ready"] {
+  background: var(--success);
+  animation: ready-ping 2.2s var(--ease) 0.3s 3;
+}
+
+.update-panel {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  width: 420px;
+  max-width: calc(100vw - 208px);
+  max-height: min(460px, calc(100vh - 72px));
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-popover);
+  padding: 14px;
+  animation: popover-in var(--motion-fast) var(--ease);
+}
+
+.update-panel-header,
+.update-panel-empty,
+.update-panel-error,
+.update-panel-actions {
+  flex: none;
+}
+
+.update-panel-header h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.update-panel-header p {
+  margin: 3px 0 0;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.update-panel-notes-title,
+.release-notes-heading {
+  margin: 0 0 5px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.update-panel-empty,
+.update-panel-error {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.update-panel-error.inline-error {
+  margin: 0;
+}
+
+.update-panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.update-panel-notes {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.release-notes {
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.release-notes-list {
+  margin: 0 0 10px;
+  padding-left: 17px;
+}
+
+.release-notes-list li {
+  margin-bottom: 3px;
+}
+
+.release-notes-paragraph {
+  margin: 0 0 10px;
+}
+
+.release-notes > :last-child {
+  margin-bottom: 0;
+}
+
+.whats-new .release-notes {
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.settings-update-error.inline-error {
+  flex: 1 1 260px;
+  margin: 0;
+}
+
+.settings-ssh dd.technical {
+  font-size: 12px;
+}

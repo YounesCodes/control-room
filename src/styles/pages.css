@@ -1,0 +1,314 @@
+.feature-page {
+  overflow: auto;
+  background: var(--app-bg);
+}
+
+.history-page,
+.logs-page {
+  padding: 26px 30px;
+}
+
+.page-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.page-heading h2,
+.detail-panel h2 {
+  margin: 0 0 5px;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.page-heading p,
+.detail-panel header p,
+.modal-copy {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.compact-heading {
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.compact-heading h2 {
+  font-size: 17px;
+}
+
+.definition-grid {
+  display: grid;
+  max-width: 980px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+
+.definition-grid > div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: baseline;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 11px 5px;
+}
+
+.definition-grid > div:nth-child(odd) {
+  margin-right: 34px;
+}
+
+dt {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.overview-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  margin-bottom: 26px;
+  overflow: hidden;
+}
+
+.overview-stat {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 16px 18px;
+}
+
+.overview-stat + .overview-stat {
+  border-left: 1px solid var(--border-subtle);
+}
+
+.overview-stat-label {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.overview-stat-value {
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-stat-hint {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.capability-list {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+  list-style: none;
+}
+
+.capability-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 8px 5px;
+}
+
+.cap-dot {
+  width: 9px;
+  height: 9px;
+  justify-self: center;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.cap-ok {
+  background: var(--success);
+}
+
+.cap-warn {
+  background: var(--warning);
+}
+
+.cap-off {
+  background: transparent;
+  border: 1.5px solid #3a3a3a;
+}
+
+.capability-label {
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.capability-value {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  text-align: right;
+}
+
+.primary-button,
+.secondary-button,
+.danger-button,
+.panel-state button {
+  display: inline-flex;
+  min-height: 33px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 0 13px;
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.primary-button,
+.panel-state button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.primary-button:hover:not(:disabled),
+.panel-state button:hover {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+  color: var(--on-accent);
+}
+
+.primary-button:disabled {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text-faint);
+  opacity: 1;
+}
+
+.secondary-button {
+  background: var(--fill-control);
+  color: var(--text);
+}
+
+.secondary-button:hover:not(:disabled) {
+  border-color: #565656;
+  background: var(--fill-control-hover);
+}
+
+.danger-button {
+  border-color: var(--failure);
+  background: var(--surface-raised);
+  color: var(--failure);
+}
+
+.danger-button:hover:not(:disabled) {
+  background: var(--fill-active);
+}
+
+.danger-text {
+  color: var(--failure);
+}
+
+.icon-button.danger-text:not(:hover, :focus-visible) {
+  color: var(--text-muted);
+}
+
+.split-page {
+  display: grid;
+  grid-template-columns: minmax(380px, 55%) minmax(260px, 1fr);
+  overflow: hidden;
+}
+
+.list-panel,
+.detail-panel {
+  min-height: 0;
+  overflow: auto;
+  padding: 22px 24px;
+}
+
+.list-panel {
+  border-right: 1px solid var(--border);
+}
+
+.detail-panel:focus-visible,
+.arch-detail:focus-visible {
+  outline: none;
+}
+
+.list-panel > .search-field {
+  min-height: 32px;
+  margin-bottom: 12px;
+  padding: 0 10px;
+}
+
+.systemd-list-controls {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) repeat(2, minmax(0, 92px));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.services-page .list-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.services-page .list-panel > :not(.dense-list) {
+  flex-shrink: 0;
+}
+
+.services-page .dense-list {
+  min-height: 104px;
+  flex: 1 1 104px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.services-page .dense-list:focus-visible {
+  outline-offset: -2px;
+}
+
+.windows-service-list-controls {
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 110px);
+}
+
+.port-list-controls .search-field {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.systemd-list-controls .search-field {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.systemd-list-controls select {
+  width: 100%;
+  min-height: 32px;
+  padding-top: 0;
+  padding-bottom: 0;
+  font-size: 11px;
+}
