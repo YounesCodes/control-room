@@ -95,42 +95,58 @@ describe("terminal startup timing", () => {
     }
   });
 
-  it("reports the startup stages of a first and a repeated host connection", async function () {
-    this.timeout(300_000);
-    const host = process.env.CONTROL_ROOM_TEST_HOST;
-    const user = process.env.CONTROL_ROOM_TEST_USER;
-    if (!host || !user) this.skip();
-    const saved = await addConnection(
-      "Timing host",
-      host!,
-      user!,
-      process.env.CONTROL_ROOM_TEST_PORT || "22",
-    );
-    await ipc("set_connection_history_enabled", { connectionId: saved.id, enabled: false });
-    await recordClicks();
-    for (let run = 1; run <= RUNS_PER_TARGET + 1; run++) {
-      await sample(run === 1 ? "ssh:first" : "ssh:repeat", run, async () => {
-        const panes = await $$(".terminal-workspace-pane").length;
-        if (run === 1) await $(".host-main*=Timing host").click();
-        else {
-          await $('button[aria-label="New terminal"]').click();
-          await $(".new-terminal-menu").$("button*=Timing host").click();
-        }
-        const started = Date.now();
-        const choice = $(".modal input[name='remote-shell']:checked");
-        await browser.waitUntil(
-          async () =>
-            (await choice.isExisting()) ||
-            ((await $$(".terminal-workspace-pane").length) > panes &&
-              !(await $(".modal").isExisting())),
-          { timeout: 60_000, timeoutMsg: "The host connection never reached a terminal" },
-        );
-        if (!(await choice.isExisting())) return null;
-        const shellChoiceMs = Date.now() - started;
-        await $(".modal .primary-button").click();
-        return shellChoiceMs;
-      });
-      await terminalCommand("echo TIMING_READY", "TIMING_READY");
-    }
-  });
+  for (const target of startupHosts()) {
+    it(`reports the startup stages of first and repeated connections to ${target.name}`, async function () {
+      this.timeout(300_000);
+      await connectRepeatedly(target);
+    });
+  }
 });
+
+interface StartupHost {
+  name: string;
+  user: string;
+  host: string;
+  port: string;
+}
+
+function startupHosts(): StartupHost[] {
+  return (process.env.CONTROL_ROOM_STARTUP_HOSTS ?? "")
+    .split(",")
+    .filter(Boolean)
+    .map((entry) => {
+      const match = /^([\w-]+)=([^@]+)@([^:]+)(?::(\d+))?$/.exec(entry.trim());
+      if (!match) throw new Error(`Expected name=user@host[:port], got ${entry}`);
+      return { name: match[1], user: match[2], host: match[3], port: match[4] ?? "22" };
+    });
+}
+
+async function connectRepeatedly({ name, user, host, port }: StartupHost) {
+  const saved = await addConnection("Timing host", host, user, port);
+  await ipc("set_connection_history_enabled", { connectionId: saved.id, enabled: false });
+  await recordClicks();
+  for (let run = 1; run <= RUNS_PER_TARGET + 1; run++) {
+    await sample(`ssh:${name}:${run === 1 ? "first" : "repeat"}`, run, async () => {
+      const panes = await $$(".terminal-workspace-pane").length;
+      if (run === 1) await $(".host-main*=Timing host").click();
+      else {
+        await $('button[aria-label="New terminal"]').click();
+        await $(".new-terminal-menu").$("button*=Timing host").click();
+      }
+      const started = Date.now();
+      const choice = $(".modal input[name='remote-shell']:checked");
+      await browser.waitUntil(
+        async () =>
+          (await choice.isExisting()) ||
+          ((await $$(".terminal-workspace-pane").length) > panes &&
+            !(await $(".modal").isExisting())),
+        { timeout: 60_000, timeoutMsg: "The host connection never reached a terminal" },
+      );
+      if (!(await choice.isExisting())) return null;
+      const shellChoiceMs = Date.now() - started;
+      await $(".modal .primary-button").click();
+      return shellChoiceMs;
+    });
+    await terminalCommand("echo TIMING_READY", "TIMING_READY");
+  }
+}
