@@ -1024,6 +1024,10 @@
         {
           "scenario": "loading",
           "states": ["shell-picker"]
+        },
+        {
+          "scenario": "dialogs",
+          "states": ["mac-shell-picker"]
         }
       ],
       "entryPoints": [

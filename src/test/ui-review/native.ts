@@ -19,6 +19,7 @@ const linux = scenario === "settings" && state.startsWith("linux-");
 const loading = scenario === "loading" ? state : null;
 const pending = <T>() => new Promise<T>(() => {});
 const windowsHost = loading === "windows-services" || loading === "shell-picker";
+const firstMacConnection = scenario === "dialogs" && state === "mac-shell-picker";
 if (
   !Object.hasOwn(registry.scenarios, scenario) ||
   !registry.scenarios[scenario as keyof typeof registry.scenarios].states.includes(state)
@@ -48,7 +49,7 @@ const workspaceView = {
   scratchpad: "terminal",
   splits: "terminal",
   tabs: "terminal",
-  dialogs: "terminal",
+  dialogs: firstMacConnection ? undefined : "terminal",
   terminal: "terminal",
   ports: "ports",
   logs: "logs",
@@ -431,12 +432,33 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       break;
     case "get_cached_capabilities":
     case "refresh_capabilities":
+      if (firstMacConnection) {
+        if (command === "refresh_capabilities") return pending();
+        result = null;
+        break;
+      }
       result = windowsHost
         ? { ...capabilities(host.id), osId: "windows", osName: "Windows Server 2022" }
         : capabilities(scenario === "tabs" ? args.connectionId : host.id);
       break;
-    case "list_windows_services":
     case "discover_remote_shells":
+      if (!firstMacConnection) {
+        if (loading) return pending();
+        throw new Error(`Missing UI review native fixture for ${command}`);
+      }
+      result = {
+        platform: "macos",
+        shells: [
+          { id: "macos:zsh", label: "zsh" },
+          { id: "macos:bash", label: "Bash" },
+        ],
+        windowsTerminalAvailable: false,
+        wslError: null,
+        capabilities: null,
+        profileError: null,
+      };
+      break;
+    case "list_windows_services":
     case "list_catalog_fonts":
       if (loading) return pending();
       throw new Error(`Missing UI review native fixture for ${command}`);
