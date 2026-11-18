@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { stylesSource } from "./test/stylesheets";
 
-const stylesSource = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 function code(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8")
     .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -49,7 +49,7 @@ function importedDialogFunctions(): string[] {
 
 function cssRule(selector: string): string {
   const start = stylesSource.indexOf(`\n${selector} {`);
-  if (start < 0) throw new Error(`styles.css has no "${selector}" rule`);
+  if (start < 0) throw new Error(`no stylesheet has a "${selector}" rule`);
   return stylesSource.slice(start, stylesSource.indexOf("}", start));
 }
 
