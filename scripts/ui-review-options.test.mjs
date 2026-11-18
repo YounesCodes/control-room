@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseOptions, registry } from "./ui-review-options.mjs";
+import { featureMap, formatFeatures, parseOptions, registry } from "./ui-review-options.mjs";
 
 describe("UI capture selection", () => {
   it("captures all supported sizes unless one is requested", () => {
@@ -49,5 +49,18 @@ describe("UI capture selection", () => {
     expect(parseOptions(["capture", "--list"]).help).toBe(true);
     expect(parseOptions(["motion", "--help"]).help).toBe(true);
     expect(parseOptions(["motion", "--scenario", "settings"]).type).toBe("motion");
+  });
+
+  it("goes from a feature name to the scenario that captures it", () => {
+    expect(parseOptions(["capture", "--features"]).features).toBe(true);
+    const lines = formatFeatures(featureMap).split("\n");
+    expect(lines).toContainEqual(
+      expect.stringMatching(/^Find in terminal\s+terminal: find, find-matches, find-none$/),
+    );
+    expect(lines).toContainEqual(
+      expect.stringMatching(/^Focus Mode\s+splits: before-focus, focus$/),
+    );
+    expect(lines).toContainEqual(expect.stringMatching(/^Panel layout\s+no scenario$/));
+    expect(lines.at(-1)).toMatch(/^No capture scenario \(\d+\): .*Panel layout/);
   });
 });

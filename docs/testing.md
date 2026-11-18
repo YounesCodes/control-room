@@ -73,6 +73,19 @@ Chromium session, then close both. Run commands serially; a lock prevents overla
 captures. A session has a two-minute budget. Exit codes are 0 for success, 1 for a
 capture failure, and 2 for invalid arguments. Use `--help` for available selections.
 
+`src/test/ui-review/features.json` maps each main-window feature to its name in the UI
+and docs, its entry points (toolbar, sidebar, tab strip, Settings, menu, command palette
+item, or shortcut, by accessible role and name), its docs page, and the capture
+scenarios and states that show it. `npm run ui:capture -- --features` prints it and
+lists features with no capture scenario (`"capture": null`). Those are the open
+visual coverage gaps. `npm test` checks that every referenced scenario, state, docs
+page, heading, and shortcut exists, and that every capture state belongs to a feature.
+`npm run test:browser` mounts the real App on the capture fixtures and resolves every
+entry point, so renaming a control or palette item without updating the map fails. An
+entry point with `platforms` resolves only on those browser platforms; the window
+buttons, for example, exist only on Windows and Linux. Add
+a feature to the map when you add a scenario or a main-window control.
+
 Normal 1440×900, narrow 960×640, and compact 520×480 viewports run by default.
 Use `--viewport normal`, `--viewport narrow`, or `--viewport compact` for one size.
 Compact covers the smaller window target from PR #188, even before that change
@@ -94,7 +107,11 @@ structured access succeeds in `connection-test` and fails in
 `connection-test-error`, groups and tags with existing
 entries in `groups` and without tags in `groups-no-tags`, Rename workspace in
 `rename`, and the host readings panel, with an unreported GPU, in `metrics`.
-Ports `warnings` fails every Ports read as an unreachable host does. Loading
+Ports `warnings` fails every Ports read as an unreachable host does. Splits
+restores a three-pane terminal group outside Focus Mode in `before-focus`, enters
+Focus Mode on a single terminal in `focus`, and enters it on a side-by-side group
+in `two-pane` and on a side-by-side plus stacked group in `three-pane`. At compact,
+`three-pane` is wider than the window and scrolls within the terminal area. Loading
 holds one first read open so its skeleton stays on screen: the Systemd unit
 inspector in `systemd-inspector`, `windows-services`, the remote shell picker
 in `shell-picker`, `history`, Logs source discovery in `logs`, the Docker graph
@@ -107,6 +124,8 @@ environment files are loaded. Every scenario renders the real `App`, including
 its titlebar, rail, workspace tabs, and content constraints. Settings uses the
 app's own full-window Settings layout. Manifests record measured shell and
 pane bounds; captures fail if the fixture bypasses the expected shell geometry.
+Captures wait until every visible terminal fits inside its pane, so a split or
+Focus Mode capture shows the terminal after its resize.
 
 The CLI prints a JSON line identifying each manifest under the ignored directory
 `test-results/ui-review/<scenario>/<state>/<viewport>/<capture|motion>/`.
@@ -115,7 +134,10 @@ PNG paths, and verification limits. A failed capture writes its error there;
 `test-results/ui-review/session.json` also records startup failures and links the
 latest session's manifests.
 Still captures finish animations before saving. Motion triggers the scenario's real
-transition: the Settings category reveal or the Scratchpad note switch. It saves
+transition: the Settings category reveal, the Scratchpad note switch, or Focus
+Mode entry with `--scenario splits --state before-focus`. Focus Mode samples the
+departing sidebar; the workspace resize and pane tabs fade stay at their first
+frame in those PNGs. It saves
 before/start/midpoint/after PNGs with timeline
 positions and computed poses, failing if no changing transition is found. The
 animation is paused at each sample for reproducibility. These frames prove visible

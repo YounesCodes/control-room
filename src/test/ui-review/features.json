@@ -1,0 +1,1152 @@
+{
+  "fixture": {
+    "scenario": "dialogs",
+    "state": "metrics"
+  },
+  "features": [
+    {
+      "name": "Command palette",
+      "docs": "reference/keyboard-shortcuts.md",
+      "capture": null,
+      "entryPoints": [
+        {
+          "kind": "shortcut",
+          "keys": "Ctrl+Shift+P"
+        }
+      ]
+    },
+    {
+      "name": "Settings",
+      "docs": "reference/settings.mdx",
+      "capture": [
+        {
+          "scenario": "settings",
+          "states": ["populated", "save-failed"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "toolbar",
+          "role": "button",
+          "name": "Open Settings"
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Open settings"
+        }
+      ]
+    },
+    {
+      "name": "Settings > General & Monitoring",
+      "docs": "reference/settings.mdx#host-metrics",
+      "capture": [
+        {
+          "scenario": "settings",
+          "states": ["populated", "monitoring"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "settings",
+          "role": "button",
+          "name": "General & Monitoring",
+          "within": {
+            "role": "navigation",
+            "name": "Settings categories"
+          },
+          "open": [
+            {
+              "role": "button",
+              "name": "Open Settings"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Settings > Terminal",
+      "docs": "reference/settings.mdx#terminal",
+      "capture": null,
+      "entryPoints": [
+        {
+          "kind": "settings",
+          "role": "button",
+          "name": "Terminal",
+          "within": {
+            "role": "navigation",
+            "name": "Settings categories"
+          },
+          "open": [
+            {
+              "role": "button",
+              "name": "Open Settings"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Settings > Terminal > Appearance",
+      "docs": "reference/settings.mdx#terminal",
+      "capture": [
+        {
+          "scenario": "settings",
+          "states": ["linux-font"]
+        },
+        {
+          "scenario": "loading",
+          "states": ["font-suggestions"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "settings",
+          "role": "tab",
+          "name": "Appearance",
+          "within": {
+            "role": "tablist",
+            "name": "Terminal settings"
+          },
+          "open": [
+            {
+              "role": "button",
+              "name": "Open Settings"
+            },
+            {
+              "role": "button",
+              "name": "Terminal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Settings > Terminal > Tabs & naming",
+      "docs": "reference/settings.mdx#terminal",
+      "capture": null,
+      "entryPoints": [
+        {
+          "kind": "settings",
+          "role": "tab",
+          "name": "Tabs & naming",
+          "within": {
+            "role": "tablist",
+            "name": "Terminal settings"
+          },
+          "open": [
+            {
+              "role": "button",
+              "name": "Open Settings"
+            },
+            {
+              "role": "button",
+              "name": "Terminal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Settings > Terminal > Local shells",
+      "docs": "reference/settings.mdx#local-terminal",
+      "capture": null,
+      "entryPoints": [
+        {
+          "kind": "settings",
+          "role": "tab",
+          "name": "Local shells",
+          "within": {
+            "role": "tablist",
+            "name": "Terminal settings"
+          },
+          "open": [
+            {
+              "role": "button",
+              "name": "Open Settings"
+            },
+            {
+              "role": "button",
+              "name": "Terminal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Settings > Logs & History",
+      "docs": "reference/settings.mdx#logs--history",
+      "capture": [
+        {
+          "scenario": "settings",
+          "states": ["logs"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "settings",
+          "role": "button",
+          "name": "Logs & History",
+          "within": {
+            "role": "navigation",
+            "name": "Settings categories"
+          },
+          "open": [
+            {
+              "role": "button",
+              "name": "Open Settings"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Settings > Connections & Permissions",
+      "docs": "reference/settings.mdx#elevated-reads",
+      "capture": null,
+      "entryPoints": [
+        {
+          "kind": "settings",
+          "role": "button",
+          "name": "Connections & Permissions",
+          "within": {
+            "role": "navigation",
+            "name": "Settings categories"
+          },
+          "open": [
+            {
+              "role": "button",
+              "name": "Open Settings"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Settings > App & Diagnostics",
+      "docs": "reference/settings.mdx#ssh-environment",
+      "capture": [
+        {
+          "scenario": "settings",
+          "states": ["diagnostics"]
+        },
+        {
+          "scenario": "loading",
+          "states": ["ssh-diagnostics"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "settings",
+          "role": "button",
+          "name": "App & Diagnostics",
+          "within": {
+            "role": "navigation",
+            "name": "Settings categories"
+          },
+          "open": [
+            {
+              "role": "button",
+              "name": "Open Settings"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Control Room updates",
+      "docs": "start-here/installation.mdx#updates",
+      "capture": [
+        {
+          "scenario": "settings",
+          "states": ["update-failed", "linux-package"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Check for Control Room updates"
+        },
+        {
+          "kind": "settings",
+          "role": "button",
+          "name": "Check for updates",
+          "open": [
+            {
+              "role": "button",
+              "name": "Open Settings"
+            },
+            {
+              "role": "button",
+              "name": "App & Diagnostics"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Host metrics",
+      "docs": "reference/settings.mdx#host-metrics",
+      "capture": [
+        {
+          "scenario": "dialogs",
+          "states": ["metrics"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "settings",
+          "role": "checkbox",
+          "name": "Show host metrics in header",
+          "open": [
+            {
+              "role": "button",
+              "name": "Open Settings"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Documentation",
+      "docs": "index.mdx",
+      "capture": null,
+      "entryPoints": [
+        {
+          "kind": "toolbar",
+          "role": "button",
+          "name": "Open documentation"
+        }
+      ]
+    },
+    {
+      "name": "Window controls",
+      "docs": null,
+      "capture": null,
+      "entryPoints": [
+        {
+          "kind": "toolbar",
+          "role": "button",
+          "name": "Minimize window",
+          "within": {
+            "role": "group",
+            "name": "Window actions"
+          },
+          "platforms": ["windows", "linux"]
+        },
+        {
+          "kind": "toolbar",
+          "role": "button",
+          "name": "Maximize or restore window",
+          "within": {
+            "role": "group",
+            "name": "Window actions"
+          },
+          "platforms": ["windows", "linux"]
+        },
+        {
+          "kind": "toolbar",
+          "role": "button",
+          "name": "Close window",
+          "within": {
+            "role": "group",
+            "name": "Window actions"
+          },
+          "platforms": ["windows", "linux"]
+        }
+      ]
+    },
+    {
+      "name": "Compact navigation",
+      "docs": "workspaces.mdx",
+      "capture": [
+        {
+          "scenario": "pages",
+          "states": ["container-terminal"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "toolbar",
+          "role": "button",
+          "name": "Open navigation",
+          "viewport": "compact"
+        }
+      ]
+    },
+    {
+      "name": "Focus Mode",
+      "docs": "terminal.mdx#splits-and-focus-mode",
+      "capture": [
+        {
+          "scenario": "splits",
+          "states": ["before-focus", "focus"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "toolbar",
+          "role": "button",
+          "name": "Focus terminal",
+          "within": {
+            "role": "group",
+            "name": "Window actions"
+          }
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Focus terminal"
+        },
+        {
+          "kind": "toolbar",
+          "role": "button",
+          "name": "Exit terminal focus",
+          "within": {
+            "role": "group",
+            "name": "Window actions"
+          },
+          "open": [
+            {
+              "role": "button",
+              "name": "Focus terminal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Workspace tabs",
+      "docs": "workspaces.mdx",
+      "capture": [
+        {
+          "scenario": "terminal",
+          "states": ["running-command"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "tabs",
+          "role": "button",
+          "name": "Close Example host Workspace",
+          "within": {
+            "role": "navigation",
+            "name": "Open Workspaces"
+          }
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Close workspace"
+        },
+        {
+          "kind": "shortcut",
+          "keys": "Ctrl+Shift+W"
+        },
+        {
+          "kind": "shortcut",
+          "keys": "Ctrl+Shift+Left/Right"
+        }
+      ]
+    },
+    {
+      "name": "Rename workspace",
+      "docs": "workspaces.mdx",
+      "capture": [
+        {
+          "scenario": "dialogs",
+          "states": ["rename"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "tabs",
+          "role": "button",
+          "name": "Rename Example host Workspace",
+          "within": {
+            "role": "navigation",
+            "name": "Open Workspaces"
+          }
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Rename workspace"
+        }
+      ]
+    },
+    {
+      "name": "New terminal",
+      "docs": "local-terminals.md",
+      "capture": null,
+      "entryPoints": [
+        {
+          "kind": "tabs",
+          "role": "button",
+          "name": "New terminal",
+          "within": {
+            "role": "navigation",
+            "name": "Open Workspaces"
+          }
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "New terminal"
+        }
+      ]
+    },
+    {
+      "name": "Local terminals",
+      "docs": "local-terminals.md",
+      "capture": null,
+      "entryPoints": [
+        {
+          "kind": "menu",
+          "role": "button",
+          "name": "Local terminals: PowerShell 7",
+          "within": {
+            "role": "dialog",
+            "name": "New terminal"
+          },
+          "open": [
+            {
+              "role": "button",
+              "name": "New terminal"
+            }
+          ]
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "PowerShell 7"
+        }
+      ]
+    },
+    {
+      "name": "Terminal splits",
+      "docs": "terminal.mdx#splits-and-focus-mode",
+      "capture": [
+        {
+          "scenario": "splits",
+          "states": ["two-pane", "three-pane"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Split terminal"
+        },
+        {
+          "kind": "menu",
+          "role": "button",
+          "name": "Split right, side by side",
+          "within": {
+            "role": "group",
+            "name": "Open as"
+          },
+          "open": [
+            {
+              "role": "button",
+              "name": "Focus terminal"
+            },
+            {
+              "role": "button",
+              "name": "New terminal"
+            }
+          ]
+        },
+        {
+          "kind": "menu",
+          "role": "button",
+          "name": "Split down, top and bottom",
+          "within": {
+            "role": "group",
+            "name": "Open as"
+          },
+          "open": [
+            {
+              "role": "button",
+              "name": "Focus terminal"
+            },
+            {
+              "role": "button",
+              "name": "New terminal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Terminal groups",
+      "docs": "terminal.mdx#splits-and-focus-mode",
+      "capture": [
+        {
+          "scenario": "splits",
+          "states": ["two-pane", "three-pane"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "tabs",
+          "role": "button",
+          "name": "Rename group Group 1",
+          "open": [
+            {
+              "role": "button",
+              "name": "Focus terminal"
+            },
+            {
+              "role": "button",
+              "name": "New terminal"
+            },
+            {
+              "role": "button",
+              "name": "Split right, side by side"
+            },
+            {
+              "role": "button",
+              "name": "New from Saved Connections: Example host"
+            }
+          ]
+        },
+        {
+          "kind": "tabs",
+          "role": "button",
+          "name": "Ungroup Group 1; terminals stay open",
+          "open": [
+            {
+              "role": "button",
+              "name": "Focus terminal"
+            },
+            {
+              "role": "button",
+              "name": "New terminal"
+            },
+            {
+              "role": "button",
+              "name": "Split right, side by side"
+            },
+            {
+              "role": "button",
+              "name": "New from Saved Connections: Example host"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Find in terminal",
+      "docs": "terminal.mdx",
+      "capture": [
+        {
+          "scenario": "terminal",
+          "states": ["find", "find-matches", "find-none"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "tabs",
+          "role": "button",
+          "name": "Find in terminal",
+          "within": {
+            "role": "group",
+            "name": "Terminal actions"
+          }
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Find in terminal"
+        },
+        {
+          "kind": "shortcut",
+          "keys": "Ctrl+Shift+F"
+        }
+      ]
+    },
+    {
+      "name": "Copy and paste",
+      "docs": "terminal.mdx#reconnect-and-copy",
+      "capture": [
+        {
+          "scenario": "terminal",
+          "states": ["notice-error"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "tabs",
+          "role": "button",
+          "name": "Copy terminal selection",
+          "within": {
+            "role": "group",
+            "name": "Terminal actions"
+          }
+        },
+        {
+          "kind": "tabs",
+          "role": "button",
+          "name": "Paste into terminal",
+          "within": {
+            "role": "group",
+            "name": "Terminal actions"
+          }
+        },
+        {
+          "kind": "shortcut",
+          "keys": "Ctrl+Shift+C"
+        },
+        {
+          "kind": "shortcut",
+          "keys": "Ctrl+Shift+V"
+        }
+      ]
+    },
+    {
+      "name": "Reconnect",
+      "docs": "terminal.mdx#reconnect-and-copy",
+      "capture": [
+        {
+          "scenario": "terminal",
+          "states": ["notice-ended"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Reconnect terminal"
+        },
+        {
+          "kind": "shortcut",
+          "keys": "Ctrl+Shift+R"
+        },
+        {
+          "kind": "page",
+          "role": "button",
+          "name": "Reconnect",
+          "fixture": {
+            "scenario": "terminal",
+            "state": "notice-ended"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Scratchpad",
+      "docs": "tools/scratchpad.mdx",
+      "capture": [
+        {
+          "scenario": "scratchpad",
+          "states": ["populated", "global", "save-error"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "tabs",
+          "role": "button",
+          "name": "Scratchpad",
+          "within": {
+            "role": "group",
+            "name": "Terminal actions"
+          }
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Scratchpad"
+        }
+      ]
+    },
+    {
+      "name": "Terminal",
+      "docs": "terminal.mdx",
+      "capture": [
+        {
+          "scenario": "terminal",
+          "states": ["running-command"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "sidebar",
+          "role": "button",
+          "name": "Terminal",
+          "within": {
+            "role": "navigation",
+            "name": "Workspace features"
+          }
+        },
+        {
+          "kind": "shortcut",
+          "keys": "Ctrl+Shift+T"
+        }
+      ]
+    },
+    {
+      "name": "Docker",
+      "docs": "inspection/docker.mdx",
+      "capture": [
+        {
+          "scenario": "pages",
+          "states": ["docker"]
+        },
+        {
+          "scenario": "loading",
+          "states": ["docker", "docker-inspector"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "sidebar",
+          "role": "button",
+          "name": "Docker",
+          "within": {
+            "role": "navigation",
+            "name": "Workspace features"
+          }
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Docker"
+        }
+      ]
+    },
+    {
+      "name": "Container terminals",
+      "docs": "inspection/docker.mdx",
+      "capture": [
+        {
+          "scenario": "pages",
+          "states": ["container-terminal"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "page",
+          "role": "button",
+          "name": "Open terminal",
+          "fixture": {
+            "scenario": "pages",
+            "state": "docker"
+          },
+          "open": [
+            {
+              "role": "button",
+              "name": "worker example-worker running · example"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Systemd",
+      "docs": "inspection/services.mdx",
+      "capture": [
+        {
+          "scenario": "systemd",
+          "states": ["populated", "empty", "loading", "error", "stale", "overflow"]
+        },
+        {
+          "scenario": "loading",
+          "states": ["systemd-inspector"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "sidebar",
+          "role": "button",
+          "name": "Systemd",
+          "within": {
+            "role": "navigation",
+            "name": "Workspace features"
+          }
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Systemd"
+        }
+      ]
+    },
+    {
+      "name": "Windows services",
+      "docs": "inspection/services.mdx#windows-services",
+      "capture": [
+        {
+          "scenario": "loading",
+          "states": ["windows-services"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "sidebar",
+          "role": "button",
+          "name": "Services",
+          "within": {
+            "role": "navigation",
+            "name": "Workspace features"
+          },
+          "fixture": {
+            "scenario": "loading",
+            "state": "windows-services"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Logs",
+      "docs": "inspection/logs.mdx",
+      "capture": [
+        {
+          "scenario": "logs",
+          "states": ["stopped", "populated", "errors", "search", "restricted"]
+        },
+        {
+          "scenario": "pages",
+          "states": ["logs"]
+        },
+        {
+          "scenario": "loading",
+          "states": ["logs"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "sidebar",
+          "role": "button",
+          "name": "Logs",
+          "within": {
+            "role": "navigation",
+            "name": "Workspace features"
+          }
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Logs"
+        },
+        {
+          "kind": "shortcut",
+          "keys": "Ctrl+F"
+        }
+      ]
+    },
+    {
+      "name": "Ports",
+      "docs": "inspection/ports.mdx",
+      "capture": [
+        {
+          "scenario": "ports",
+          "states": ["warnings"]
+        },
+        {
+          "scenario": "loading",
+          "states": ["ports", "ports-discovering"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "sidebar",
+          "role": "button",
+          "name": "Ports",
+          "within": {
+            "role": "navigation",
+            "name": "Workspace features"
+          }
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Ports"
+        }
+      ]
+    },
+    {
+      "name": "History",
+      "docs": "tools/history.mdx",
+      "capture": [
+        {
+          "scenario": "pages",
+          "states": ["history", "history-restart"]
+        },
+        {
+          "scenario": "loading",
+          "states": ["history"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "sidebar",
+          "role": "button",
+          "name": "History",
+          "within": {
+            "role": "navigation",
+            "name": "Workspace features"
+          }
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "History"
+        }
+      ]
+    },
+    {
+      "name": "Saved connections",
+      "docs": "connections.mdx",
+      "capture": [
+        {
+          "scenario": "dialogs",
+          "states": ["groups"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "sidebar",
+          "role": "textbox",
+          "name": "Filter connections by name, group, or tag"
+        }
+      ]
+    },
+    {
+      "name": "Remote shell picker",
+      "docs": "connections.mdx#windows-10-and-11-hosts",
+      "capture": [
+        {
+          "scenario": "loading",
+          "states": ["shell-picker"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "menu",
+          "role": "button",
+          "name": "Saved Connections: Example host",
+          "within": {
+            "role": "dialog",
+            "name": "New terminal"
+          },
+          "fixture": {
+            "scenario": "loading",
+            "state": "shell-picker"
+          },
+          "open": [
+            {
+              "role": "button",
+              "name": "New terminal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Add connection",
+      "docs": "connections.mdx",
+      "capture": [
+        {
+          "scenario": "dialogs",
+          "states": ["connection", "connection-error"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "sidebar",
+          "role": "button",
+          "name": "Add connection"
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Add connection"
+        }
+      ]
+    },
+    {
+      "name": "Edit connection",
+      "docs": "connections.mdx",
+      "capture": [
+        {
+          "scenario": "dialogs",
+          "states": ["connection-test", "connection-test-error"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "menu",
+          "role": "menuitem",
+          "name": "Edit connection",
+          "open": [
+            {
+              "role": "button",
+              "name": "Open actions for Example host",
+              "key": "Enter"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Delete connection",
+      "docs": "connections.mdx#organize-and-remove-hosts",
+      "capture": null,
+      "entryPoints": [
+        {
+          "kind": "menu",
+          "role": "menuitem",
+          "name": "Delete connection",
+          "open": [
+            {
+              "role": "button",
+              "name": "Open actions for Example host",
+              "key": "Enter"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Groups and tags",
+      "docs": "connections.mdx#organize-and-remove-hosts",
+      "capture": [
+        {
+          "scenario": "dialogs",
+          "states": ["groups", "groups-no-tags"]
+        }
+      ],
+      "entryPoints": [
+        {
+          "kind": "sidebar",
+          "role": "button",
+          "name": "Manage groups and tags"
+        },
+        {
+          "kind": "palette",
+          "role": "option",
+          "name": "Manage groups and tags"
+        }
+      ]
+    },
+    {
+      "name": "Panel layout",
+      "docs": "workspaces.mdx",
+      "capture": null,
+      "entryPoints": [
+        {
+          "kind": "sidebar",
+          "role": "button",
+          "name": "Reset layout"
+        },
+        {
+          "kind": "sidebar",
+          "role": "separator",
+          "name": "Resize Connections panel"
+        }
+      ]
+    }
+  ]
+}

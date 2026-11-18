@@ -587,6 +587,41 @@
         "font-suggestions": ".font-suggestions.skeleton",
         "ssh-diagnostics": "#settings-ssh .skeleton"
       }
+    },
+    "splits": {
+      "states": ["before-focus", "focus", "two-pane", "three-pane"],
+      "ready": ".app-shell",
+      "prepare": {
+        "focus": [
+          {
+            "role": "button",
+            "name": "Focus terminal"
+          }
+        ],
+        "two-pane": [
+          {
+            "role": "button",
+            "name": "Focus terminal"
+          }
+        ],
+        "three-pane": [
+          {
+            "role": "button",
+            "name": "Focus terminal"
+          }
+        ]
+      },
+      "settled": {
+        "before-focus": ".terminal-pane.terminal-visible .xterm-rows",
+        "focus": ".app-shell.terminal-focus-mode .terminal-pane.terminal-visible",
+        "two-pane": ".app-shell.terminal-focus-mode .terminal-layout-divider",
+        "three-pane": ".app-shell.terminal-focus-mode .terminal-layout-divider >> nth=1"
+      },
+      "motion": {
+        "description": "Focus Mode entry with a three-pane group, sidebar departing",
+        "target": ".focus-departing-sidebar",
+        "button": "Focus terminal"
+      }
     }
   }
 }
