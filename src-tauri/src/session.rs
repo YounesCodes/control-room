@@ -60,6 +60,13 @@ struct RemoteSessionState {
 }
 
 impl SessionMode {
+    fn connection_id(&self) -> Option<&str> {
+        match self {
+            Self::Ssh(remote) => Some(&remote.connection_id),
+            Self::Local { .. } => None,
+        }
+    }
+
     fn ssh(connection_id: &str) -> Self {
         Self::Ssh(RemoteSessionState {
             connection_id: connection_id.to_string(),
@@ -466,7 +473,20 @@ impl SessionManager {
             ) {
                 *wait_managed.failure.lock() = Some(error);
             }
-            sessions.lock().remove(&wait_session_id);
+            let remaining = {
+                let mut sessions = sessions.lock();
+                sessions.remove(&wait_session_id);
+                sessions
+                    .values()
+                    .filter_map(|session| session.mode.connection_id())
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>()
+            };
+            if let Some(connection_id) = wait_managed.mode.connection_id()
+                && !remaining.iter().any(|id| id == connection_id)
+            {
+                crate::ssh_mux::stop_connection(connection_id);
+            }
             match result {
                 Ok(status) => {
                     let stop_requested = wait_managed.stop_requested.load(Ordering::Acquire);

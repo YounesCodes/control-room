@@ -292,6 +292,10 @@
         {
           "scenario": "dialogs",
           "states": ["metrics"]
+        },
+        {
+          "scenario": "metrics",
+          "states": ["live", "reading", "stale", "unavailable", "short-history"]
         }
       ],
       "entryPoints": [
@@ -1003,6 +1007,10 @@
         {
           "scenario": "dialogs",
           "states": ["groups"]
+        },
+        {
+          "scenario": "sidebar",
+          "states": ["short", "long", "menu-open"]
         }
       ],
       "entryPoints": [
@@ -1019,7 +1027,7 @@
       "capture": [
         {
           "scenario": "loading",
-          "states": ["shell-picker"]
+          "states": ["shell-picker", "new-host-terminal"]
         },
         {
           "scenario": "dialogs",

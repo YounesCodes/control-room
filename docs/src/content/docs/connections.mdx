@@ -5,7 +5,7 @@ description: Save SSH hosts and choose how to connect.
 
 import connectionScreenshot from "../../assets/screenshots/connection-editor.png";
 
-A connection saves the SSH address and username for a Linux, Windows, or macOS host. Select it in the sidebar to open a terminal.
+A connection saves the SSH address and username for a Linux, Windows, or macOS host. Select it in the sidebar to open a terminal. The first time, the terminal starts while Control Room detects the host's platform. A Linux shell appears as soon as either finishes. Windows and Mac hosts then show the shell picker, and the shell you pick replaces that first terminal.
 
 Select **Add connection** in the sidebar. To change one, open its menu and choose **Edit connection**.
 
@@ -19,6 +19,8 @@ Select **Add connection** in the sidebar. To change one, open its menu and choos
 Enter a display name, SSH destination, and username. **Port** (1–65535) and **Private key** are optional; leave them empty to use your SSH defaults. The key stays in its existing location and is never copied into Control Room. Control Room uses your system OpenSSH client and your normal SSH configuration.
 
 **Test structured access** checks whether the inspection views can connect without an SSH password prompt. It does not save the connection. The terminal can still use an interactive password login if that test fails.
+
+On Linux and macOS, the inspection views reuse one SSH connection per target and keep it open for a minute after their last call. Terminals always open their own connection. For inspection calls, this replaces any `ControlMaster`, `ControlPath` or `ControlPersist` setting in your SSH config. Windows opens a new connection for each call.
 
 Changing a connection's destination, username, port, or key clears its cached host facts and inspection results. Open terminals keep their existing sessions until you reconnect. A remote shell selected for the previous target is cleared.
 

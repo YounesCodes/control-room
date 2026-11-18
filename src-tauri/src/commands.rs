@@ -56,14 +56,16 @@ pub fn update_connection(
     id: String,
     input: SavedConnectionInput,
 ) -> Result<SavedConnection, String> {
-    database.update_connection(&id, input)
+    let updated = database.update_connection(&id, input)?;
+    crate::ssh_mux::stop_connection(&id);
+    Ok(updated)
 }
 
 fn validated_test_connection(input: SavedConnectionInput) -> Result<SavedConnection, String> {
     validate_connection_input(&input)?;
     let now = Utc::now().to_rfc3339();
     Ok(SavedConnection {
-        id: "connection-test".into(),
+        id: crate::ssh_mux::CONNECTION_TEST_ID.into(),
         display_name: input.display_name.trim().into(),
         destination: input.destination.trim().into(),
         username: normalize_optional(input.username),
@@ -85,13 +87,15 @@ pub fn test_connection(
     input: SavedConnectionInput,
 ) -> Result<HostCapabilities, String> {
     let connection = validated_test_connection(input)?;
-    let _permit = limiter.acquire("connection-test")?;
+    let _permit = limiter.acquire(crate::ssh_mux::CONNECTION_TEST_ID)?;
     remote::discover_capabilities(&connection)
 }
 
 #[tauri::command]
 pub fn delete_connection(database: State<'_, Database>, id: String) -> Result<(), String> {
-    database.delete_connection(&id)
+    database.delete_connection(&id)?;
+    crate::ssh_mux::stop_connection(&id);
+    Ok(())
 }
 
 #[tauri::command]

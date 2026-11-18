@@ -62,6 +62,28 @@ describe("remote shell selection", () => {
     expect(screen.getByRole("status").textContent).toBe("Refreshing available shells…");
     expect(screen.getByRole("radio", { name: "Windows PowerShell" })).toBeTruthy();
   });
+  it("shows a discovery that is already running instead of starting another", async () => {
+    const onSelect = vi.fn();
+    render(
+      <RemoteShellDialog
+        connection={connection}
+        discovery={Promise.resolve({
+          platform: "windows",
+          shells,
+          windowsTerminalAvailable: false,
+          wslError: null,
+          capabilities: null,
+          profileError: null,
+        })}
+        onClose={vi.fn()}
+        onSelect={onSelect}
+      />,
+    );
+    await screen.findByRole("radio", { name: "Windows PowerShell" });
+    expect(discoverRemoteShells).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Refresh available shells" }));
+    await waitFor(() => expect(discoverRemoteShells).toHaveBeenCalledWith(connection.id, true));
+  });
   it("opens Linux without offering Windows shells", async () => {
     discoverRemoteShells.mockResolvedValue({ platform: "linux", shells: [] });
     const onSelect = vi.fn();

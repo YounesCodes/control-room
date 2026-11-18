@@ -590,6 +590,85 @@ describe("App Workspace behavior", () => {
     ).toBeTruthy();
   });
 
+  it("closes two Workspaces whose sessions finish closing in the same tick", async () => {
+    const user = userEvent.setup();
+    const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    const second = connection("22222222-2222-4222-8222-222222222222", "Host B");
+    const third = connection("33333333-3333-4333-8333-333333333333", "Host C");
+    api.listConnections.mockResolvedValue([first, second, third]);
+    api.workspaceState.mockResolvedValue(restoredState([first.id, second.id, third.id]));
+    const closes: Array<() => void> = [];
+    api.closeSession.mockImplementation(
+      () => new Promise<void>((resolve) => closes.push(() => resolve())),
+    );
+
+    render(<App />);
+    expect(await screen.findByTestId("terminal-workspace-0")).toBeTruthy();
+    await user.click(ptyButton("workspace-0", "start"));
+    await user.click(ptyButton("workspace-1", "start"));
+
+    await user.click(screen.getByRole("button", { name: "Close Host A Workspace" }));
+    await user.click(screen.getByRole("button", { name: "Disconnect & close" }));
+    await user.click(screen.getByRole("button", { name: "Close Host B Workspace" }));
+    await user.click(screen.getByRole("button", { name: "Disconnect & close" }));
+    await waitFor(() => expect(closes).toHaveLength(2));
+
+    await act(async () => {
+      for (const resolve of closes) resolve();
+    });
+
+    await waitFor(() => expect(screen.queryByTestId("terminal-workspace-1")).toBeNull());
+    expect(stripOrder(), "a finished close was undone by the other close").toEqual(["Host C"]);
+  });
+
+  it("applies a Workspace close and a connection deletion that finish in the same tick", async () => {
+    const user = userEvent.setup();
+    const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    const second = connection("22222222-2222-4222-8222-222222222222", "Host B");
+    const third = connection("33333333-3333-4333-8333-333333333333", "Host C");
+    api.listConnections.mockResolvedValue([first, second, third]);
+    api.workspaceState.mockResolvedValue(restoredState([first.id, second.id, third.id]));
+    const closes: Array<() => void> = [];
+    api.closeSession.mockImplementation(
+      () => new Promise<void>((resolve) => closes.push(() => resolve())),
+    );
+
+    render(<App />);
+    expect(await screen.findByTestId("terminal-workspace-0")).toBeTruthy();
+    await user.click(ptyButton("workspace-0", "start"));
+    await user.click(ptyButton("workspace-1", "start"));
+
+    await user.click(screen.getByRole("button", { name: "Close Host A Workspace" }));
+    await user.click(screen.getByRole("button", { name: "Disconnect & close" }));
+    await user.click(screen.getByLabelText("Open actions for Host B"));
+    await user.click(screen.getByRole("menuitem", { name: /Delete connection/i }));
+    await user.click(screen.getByRole("button", { name: /Delete connection/i }));
+    await waitFor(() => expect(closes).toHaveLength(2));
+
+    await act(async () => {
+      for (const resolve of closes) resolve();
+    });
+
+    await waitFor(() => expect(screen.queryByTestId("terminal-workspace-1")).toBeNull());
+    expect(stripOrder(), "a finished close was undone by the deletion").toEqual(["Host C"]);
+  });
+
+  it("leaves Focus Mode when its last Workspace closes", async () => {
+    const user = userEvent.setup();
+    const saved = connection("11111111-1111-4111-8111-111111111111", "Host A");
+    api.listConnections.mockResolvedValue([saved]);
+    api.workspaceState.mockResolvedValue(restoredState([saved.id]));
+    const { container } = render(<App />);
+    expect(await screen.findByTestId("terminal-workspace-0")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Focus terminal" }));
+    expect(container.querySelector(".terminal-focus-mode")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Close Host A Workspace" }));
+
+    await waitFor(() => expect(screen.queryByTestId("terminal-workspace-0")).toBeNull());
+    expect(container.querySelector(".terminal-focus-mode")).toBeNull();
+  });
+
   it("closes a Workspace without deleting connection or global Scratchpad notes", async () => {
     const user = userEvent.setup();
     const saved = connection("11111111-1111-4111-8111-111111111111", "Host A");
