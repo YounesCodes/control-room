@@ -118,6 +118,20 @@ describe("contracts shared with the native app and docs site", () => {
     }
   });
 
+  it("paints opaque native windows in the app background before the page loads", () => {
+    const appBackground = stylesSource.match(/--app-bg:\s*(#[0-9a-f]{6});/i)?.[1];
+    const startupWindow = (config: string) => JSON.parse(code(config)).app.windows[0];
+    expect(appBackground).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(startupWindow("../src-tauri/tauri.conf.json").backgroundColor).toBe(appBackground);
+    expect(startupWindow("../src-tauri/tauri.macos.conf.json").backgroundColor).toBe(appBackground);
+    expect(startupWindow("../src-tauri/tauri.linux.conf.json")).toMatchObject({
+      transparent: true,
+    });
+    expect(startupWindow("../src-tauri/tauri.linux.conf.json")).not.toHaveProperty(
+      "backgroundColor",
+    );
+  });
+
   it("grants a native permission for every dialog the frontend opens", () => {
     const imported = importedDialogFunctions();
     expect(imported.length).toBeGreaterThan(0);
