@@ -1460,9 +1460,9 @@ export function App() {
   const provisionalTerminals = useProvisionalTerminals({
     capabilities: rememberCapabilities,
     choose(workspaceId, discovery) {
-      const workspace = workspaceStateRef.current.workspaces.find(
-        (item) => item.id === workspaceId,
-      );
+      const workspace = workspaceSession
+        .current()
+        .workspaces.find((item) => item.id === workspaceId);
       if (!workspace || !isRemoteWorkspace(workspace)) return;
       const connection =
         connectionsRef.current.find((item) => item.id === workspace.connectionId) ??
@@ -1487,9 +1487,9 @@ export function App() {
     if (provisionalId) {
       setRemoteShellRequest(null);
       const step = provisionalTerminals.choice(provisionalId, shell ? "shell" : "default");
-      const workspace = workspaceStateRef.current.workspaces.find(
-        (item) => item.id === provisionalId,
-      );
+      const workspace = workspaceSession
+        .current()
+        .workspaces.find((item) => item.id === provisionalId);
       if (step?.kind === "keep" && workspace && isRemoteWorkspace(workspace)) {
         updateRemoteWorkspace(provisionalId, {
           remoteShell: shell ?? undefined,
