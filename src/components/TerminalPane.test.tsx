@@ -545,6 +545,36 @@ describe("TerminalPane sessions", () => {
     await vi.waitFor(() => expect(api.closeSession).toHaveBeenCalledWith("ssh-session"));
   });
 
+  it.each([
+    ["a Windows host shell waits for", "powershell", 100, 28],
+    ["a macOS host shell starts before", "macos:zsh", 106, 30],
+  ])("%s the settled grid", async (_, shellId, cols, rows) => {
+    let framed = false;
+    const frames = vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      window.setTimeout(() => {
+        framed = true;
+        callback(0);
+      }, 0);
+      return 1;
+    });
+    xterm.fit.mockImplementation(() => xterm.resize?.(framed ? 100 : 106, framed ? 28 : 30));
+    try {
+      renderPane(createRemoteWorkspace(connection, { id: shellId, label: "Shell" }));
+      await vi.waitFor(() => expect(api.startSession).toHaveBeenCalledTimes(1));
+      expect(api.startSession).toHaveBeenCalledWith(
+        connection.id,
+        cols,
+        rows,
+        expect.anything(),
+        shellId,
+        null,
+      );
+    } finally {
+      cleanup();
+      frames.mockRestore();
+    }
+  });
+
   it("does not start a shell when the pane closes while its first grid is settling", async () => {
     renderPane(createLocalWorkspace(shell));
     cleanup();

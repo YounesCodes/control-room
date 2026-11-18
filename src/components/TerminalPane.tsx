@@ -614,7 +614,10 @@ export function TerminalPane({
       );
       return request;
     };
-    const startsBeforeGridSettles = workspace.kind !== "local" || platformRef.current !== "windows";
+    const drawsThroughConPty =
+      workspace.kind === "local"
+        ? platformRef.current === "windows"
+        : !!workspace.remoteShell && !workspace.remoteShell.id.startsWith("macos:");
     const started = (async () => {
       startupPhase("draining");
       const fontLoaded = document.fonts
@@ -629,7 +632,7 @@ export function TerminalPane({
       if (disposed || generation !== sessionGenerationRef.current) return null;
       startupTiming.mark("fontLoaded");
       let early: ReturnType<typeof startBackend> | null = null;
-      if (startsBeforeGridSettles) {
+      if (!drawsThroughConPty) {
         fitRef.current?.fit();
         early = startBackend();
       }
