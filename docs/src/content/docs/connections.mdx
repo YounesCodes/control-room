@@ -26,7 +26,7 @@ Changing a connection's destination, username, port, or key clears its cached ho
 
 Enable the Windows OpenSSH Server and save the host as a normal SSH connection. Shell detection needs an accepted host key and key or agent authentication that works without a prompt.
 
-When you open a new terminal for a Windows host, choose a shell from the grouped list. It offers Windows PowerShell, Command Prompt, PowerShell 7 and Git Bash when found, other supported shells on the account's PATH, and each available WSL distribution. Select **Connect** to open that shell inside Control Room. **Refresh available shells** checks for changes. Recent detection is reused for up to a minute to avoid repeating it before launch.
+When you open a new terminal for a Windows host, choose a shell from the grouped list. It offers Windows PowerShell, Command Prompt, PowerShell 7 and Git Bash when found, other supported shells on the account's PATH, and each available WSL distribution. Select **Connect** to open that shell inside Control Room. Control Room saves the list with the host's details, so after the first detection the picker opens with the saved list at once and checks for changes in the background. **Refresh available shells** checks right away.
 
 Installed Windows Terminal profiles that launch a supported shell also appear in the picker. The profile's command and arguments run over SSH. Its graphical window, colors, and other desktop settings remain in Windows Terminal.
 

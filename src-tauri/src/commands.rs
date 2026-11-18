@@ -225,6 +225,9 @@ pub fn start_session(
     } else {
         None
     };
+    if windows && let Some(stored) = database.get_shell_catalog(&connection_id)? {
+        windows_ssh::restore(&connection, &stored);
+    }
     let remote_command = match remote_shell_id {
         Some(id) if id.starts_with("macos:") => {
             if !crate::macos_remote::is_host(&connection)? {
@@ -245,6 +248,7 @@ pub fn start_session(
 
 #[tauri::command(async)]
 pub fn discover_remote_shells(
+    app: AppHandle,
     database: State<'_, Database>,
     limiter: State<'_, RemoteOperationLimiter>,
     connection_id: String,
@@ -252,11 +256,53 @@ pub fn discover_remote_shells(
 ) -> Result<RemoteShellCatalog, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
-    let catalog = windows_ssh::discover(&connection, refresh.unwrap_or(false))?;
-    if let Some(capabilities) = &catalog.capabilities {
+    let saved_os_id = database
+        .get_capabilities(&connection_id)?
+        .and_then(|capabilities| capabilities.os_id);
+    let stored = database.get_shell_catalog(&connection_id)?;
+    let discovery = windows_ssh::discover(
+        &connection,
+        refresh.unwrap_or(false),
+        saved_os_id.as_deref(),
+        stored.as_deref(),
+    )?;
+    if let Some(host) = &discovery.discovered {
+        save_windows_host(&database, &connection, host)?;
+    } else if !discovery.from_storage
+        && let Some(capabilities) = &discovery.catalog.capabilities
+    {
         database.save_capabilities(&connection, capabilities)?;
     }
-    Ok(catalog)
+    if discovery.from_storage {
+        refresh_windows_shells_in_background(app, connection);
+    }
+    Ok(discovery.catalog)
+}
+
+fn save_windows_host(
+    database: &Database,
+    connection: &SavedConnection,
+    host: &windows_ssh::WindowsHost,
+) -> Result<(), String> {
+    database.save_capabilities(connection, &host.capabilities)?;
+    database.save_shell_catalog(connection, &windows_ssh::stored_form(host))
+}
+
+fn refresh_windows_shells_in_background(app: AppHandle, target: SavedConnection) {
+    let Some(claim) = windows_ssh::BackgroundRefresh::claim(&target) else {
+        return;
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        use tauri::Manager;
+        let _claim = claim;
+        let limiter = app.state::<RemoteOperationLimiter>();
+        let Ok(_permit) = limiter.acquire(&target.id) else {
+            return;
+        };
+        if let Ok(host) = windows_ssh::discover_windows(&target) {
+            let _ = save_windows_host(&app.state::<Database>(), &target, &host);
+        }
+    });
 }
 
 /// The local shells this machine actually has, plus whether administrator
