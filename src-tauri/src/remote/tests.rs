@@ -31,7 +31,6 @@ fn reads_cpu_busy_share_from_the_two_proc_stat_samples() {
 #[test]
 #[cfg(windows)]
 fn cpu_probe_does_not_double_count_guests_or_truncate_large_counters() {
-    let bash = crate::local_shell::resolve_installed("git-bash").unwrap();
     let command = resource_command().replace("/proc/stat", "\"$fixture\"");
     let script = format!(
         r#"fixture=$(mktemp)
@@ -40,8 +39,8 @@ printf 'cpu 4294967296 10 20 4294967296 10 20 30 40 100 20\n' > "$fixture"
 {command}
 "#
     );
-    let mut process = background_command(bash.program());
-    process.args(["--noprofile", "--norc", "-c", &script]);
+    let mut process = operation::posix_shell();
+    process.args(["-c", &script]);
     let output = operation::run_local_script(process, "cpu_fixture")
         .unwrap()
         .success_text()

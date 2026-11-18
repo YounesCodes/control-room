@@ -28,20 +28,22 @@ fn sending_input_to_a_process_that_never_reads_it_is_bounded() {
 }
 
 #[test]
-#[cfg(windows)]
 fn process_input_and_output_pipes_are_drained_concurrently() {
-    let mut command = background_command("powershell.exe");
-    command.args(["-NoLogo", "-NoProfile", "-Command", "[Console]::Write('x' * 131072); $inputText=[Console]::In.ReadToEnd(); [Console]::Write($inputText.Length)"]);
+    let mut command = posix_shell();
+    command.args([
+        "-c",
+        "head -c 131072 /dev/zero | tr '\\0' x; wc -c | tr -d ' '",
+    ]);
     let output = run_process(
         command,
         "pipe_drain_test",
         Some(&vec![b'y'; 131072]),
-        Duration::from_secs(10),
+        COMMAND_TIMEOUT,
     )
     .unwrap();
     assert_eq!(output.exit_code, 0);
     assert!(output.stdout.starts_with(&vec![b'x'; 131072]));
-    assert!(output.stdout.ends_with(b"131073"));
+    assert_eq!(&output.stdout[131072..], b"131073\n");
 }
 
 #[test]

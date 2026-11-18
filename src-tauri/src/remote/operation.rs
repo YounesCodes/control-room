@@ -460,6 +460,19 @@ pub(super) fn classify_failure(code: i32, stderr: &[u8]) -> String {
     }
 }
 
+#[cfg(test)]
+pub(super) fn posix_shell() -> std::process::Command {
+    #[cfg(windows)]
+    {
+        let bash = crate::local_shell::resolve_installed("git-bash").unwrap();
+        let mut command = background_command(bash.program());
+        command.args(["--noprofile", "--norc"]);
+        command
+    }
+    #[cfg(not(windows))]
+    background_command("sh")
+}
+
 #[cfg(all(test, windows))]
 pub(super) fn run_local_script(
     command: std::process::Command,

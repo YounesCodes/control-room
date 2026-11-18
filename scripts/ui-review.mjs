@@ -69,8 +69,9 @@ async function motion(page, definition, directory) {
       return animation;
     };
   });
-  const select = page.getByRole("combobox", { name: definition.select, exact: true });
-  if (await select.isVisible()) await select.selectOption(definition.option);
+  const select =
+    definition.select && page.getByRole("combobox", { name: definition.select, exact: true });
+  if (select && (await select.isVisible())) await select.selectOption(definition.option);
   else await page.getByRole("button", { name: definition.button, exact: true }).click();
   await page.waitForFunction(() => window.__reviewAnimations.length > 0);
   const samples = [];
@@ -222,6 +223,15 @@ ${JSON.stringify(registry, null, 2)}`);
         if (definition.settled?.[options.state])
           await page.locator(definition.settled[options.state]).waitFor();
         await page.evaluate(() => document.fonts.ready);
+        await page.waitForFunction(() =>
+          [...document.querySelectorAll(".terminal-pane.terminal-visible")].every((pane) => {
+            const screen = pane.querySelector(".xterm-screen")?.getBoundingClientRect();
+            const bounds = pane.getBoundingClientRect();
+            return (
+              !screen || (screen.right <= bounds.right + 1 && screen.bottom <= bounds.bottom + 1)
+            );
+          }),
+        );
         await page.mouse.move(0, 0);
         manifest.layout = await page.evaluate(() => {
           const box = (selector) => {
@@ -231,6 +241,9 @@ ${JSON.stringify(registry, null, 2)}`);
           return {
             shell: box(".app-shell"),
             compactNavigation: document.querySelector(".app-shell").hasAttribute("data-compact"),
+            focusMode: document
+              .querySelector(".app-shell")
+              .classList.contains("terminal-focus-mode"),
             header: box(".app-bar"),
             sidebar: box(".sidebar"),
             tabs: box(".session-tabs"),
@@ -242,13 +255,19 @@ ${JSON.stringify(registry, null, 2)}`);
         const {
           shell,
           compactNavigation,
+          focusMode,
           header,
           sidebar,
           tabs,
           content,
           settings: settingsBounds,
         } = manifest.layout;
-        if (!shell || !header || header.height <= 0 || Math.abs(shell.width - viewport.width) > 1)
+        if (
+          !shell ||
+          !header ||
+          (header.height <= 0 && !focusMode) ||
+          Math.abs(shell.width - viewport.width) > 1
+        )
           throw new Error(
             "Capture must render the App shell at the requested viewport without scaling",
           );
