@@ -58,6 +58,11 @@ export function TabLabel({ label }: { label: string }) {
   );
 }
 
+function focusMenuRow(row: HTMLElement) {
+  row.focus({ preventScroll: true });
+  row.scrollIntoView({ block: "nearest" });
+}
+
 function hiddenSummary(direction: "left" | "right", hidden: number, attention: boolean) {
   if (!hidden) return undefined;
   return `${hidden} hidden to the ${direction}${attention ? ", needs attention" : ""}`;
@@ -86,6 +91,7 @@ const MAX_TAB_WIDTH = 196;
 const OVERFLOW_BUTTON_WIDTH = 28;
 const PAGER_BUTTON_WIDTH = 34;
 const OVERFLOW_CONTROLS_WIDTH = OVERFLOW_BUTTON_WIDTH + PAGER_BUTTON_WIDTH * 2;
+const MEASURE_TOLERANCE_PX = 0.5;
 const DRAG_START_PX = 4;
 const DRAG_EDGE_PX = 28;
 const DRAG_STEP_MS = 350;
@@ -221,14 +227,18 @@ export function WorkspaceTabScroller({
     if (index === null || !menuRef.current) return;
     refocusMenuIndexRef.current = null;
     const rows = [...menuRef.current.querySelectorAll<HTMLElement>('[role="menuitem"]')];
-    (rows[Math.min(index, rows.length - 1)] ?? pickerRef.current)?.focus();
+    const row = rows[Math.min(index, rows.length - 1)];
+    if (row) focusMenuRow(row);
+    else pickerRef.current?.focus();
   }, [items.length]);
 
   const measureStrip = useCallback(() => {
     const region = regionRef.current;
     if (!region) return;
-    setWidth(region.getBoundingClientRect().width);
-    setListWidth(listRef.current?.getBoundingClientRect().width ?? 0);
+    const settle = (next: number) => (current: number) =>
+      Math.abs(current - next) < MEASURE_TOLERANCE_PX ? current : next;
+    setWidth(settle(region.getBoundingClientRect().width));
+    setListWidth(settle(listRef.current?.getBoundingClientRect().width ?? 0));
   }, []);
 
   useLayoutEffect(measureStrip);
@@ -283,9 +293,10 @@ export function WorkspaceTabScroller({
       top: useAbove ? Math.max(8, anchor.top - height - gap) : anchor.bottom + gap,
       maxHeight,
     });
-    menuRef.current.querySelector<HTMLElement>('[role="menuitem"][aria-current="page"]')?.focus();
-    if (!menuRef.current.contains(document.activeElement))
-      menuRef.current.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    const row =
+      menuRef.current.querySelector<HTMLElement>('[role="menuitem"][aria-current="page"]') ??
+      menuRef.current.querySelector<HTMLElement>('[role="menuitem"]');
+    if (row) focusMenuRow(row);
   }, [menuOpen]);
 
   function selectFromMenu(item: WorkspaceTabOption, index: number) {
@@ -321,7 +332,7 @@ export function WorkspaceTabScroller({
     if (inFilter) {
       if (event.key === "ArrowDown") {
         event.preventDefault();
-        rows[0]?.focus();
+        if (rows[0]) focusMenuRow(rows[0]);
       } else if (event.key === "Enter") {
         event.preventDefault();
         const first = sections[0]?.rows[0];
@@ -359,7 +370,7 @@ export function WorkspaceTabScroller({
         : event.key === "End"
           ? rows.length - 1
           : (current + (event.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length;
-    rows[next]?.focus();
+    if (rows[next]) focusMenuRow(rows[next]);
   }
 
   function move(direction: -1 | 1) {

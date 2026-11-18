@@ -415,7 +415,17 @@ const terminals: MenuTerminal[] = [
 ];
 
 describe("WorkspaceTabScroller overflow", () => {
+  const nativeScrollIntoView = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "scrollIntoView",
+  );
+  const scrollIntoView = vi.fn();
   beforeEach(() => {
+    scrollIntoView.mockClear();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       callback(0);
       return 1;
@@ -432,6 +442,9 @@ describe("WorkspaceTabScroller overflow", () => {
     cleanup();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    if (nativeScrollIntoView)
+      Object.defineProperty(HTMLElement.prototype, "scrollIntoView", nativeScrollIntoView);
+    else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollIntoView;
   });
 
   function openMenu(container: HTMLElement) {
@@ -507,8 +520,11 @@ describe("WorkspaceTabScroller overflow", () => {
     expect(document.activeElement).toBe(items[5]);
     fireEvent.keyDown(items[5], { key: "Home" });
     expect(document.activeElement).toBe(items[0]);
+    scrollIntoView.mockClear();
     fireEvent.keyDown(items[0], { key: "End" });
     expect(document.activeElement).toBe(items[5]);
+    expect(scrollIntoView.mock.contexts).toEqual([items[5]]);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
     fireEvent.keyDown(items[5], { key: "Escape" });
     expect(picker(container).getAttribute("aria-expanded")).toBe("false");
     expect(document.activeElement).toBe(picker(container));

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
-import { useState, type ReactNode } from "react";
+import { Profiler, useState, type ReactNode } from "react";
 import axe from "axe-core";
 import { runAxe } from "../test/axe";
 import { Plus } from "lucide-react";
@@ -493,6 +493,29 @@ describe("critical UI in Chromium", () => {
     }
   });
 
+  it("stops re-rendering the tab strip once a resize has settled", async () => {
+    let commits = 0;
+    const frames = (count: number) =>
+      new Promise<void>((resolve) => {
+        const step = (left: number) =>
+          left === 0 ? resolve() : requestAnimationFrame(() => step(left - 1));
+        step(count);
+      });
+    mount(
+      <Profiler id="strip" onRender={() => commits++}>
+        <TabOverflowFixture />
+      </Profiler>,
+    );
+    await page.getByRole("button", { name: "Add terminal" }).click();
+    for (const step of ["Resize tabs", "Resize tabs", "Select first terminal"]) {
+      await page.getByRole("button", { name: step }).click();
+      await frames(4);
+      const settled = commits;
+      await frames(12);
+      expect(commits).toBe(settled);
+    }
+  });
+
   it("keeps New terminal reachable and reveals tabs when the strip overflows", async () => {
     mount(<TabOverflowFixture />);
     await expect
@@ -600,10 +623,16 @@ describe("critical UI in Chromium", () => {
     await picker.click();
     await userEvent.keyboard("{End}");
     await expect.poll(() => getComputedStyle(menu.element()).opacity).toBe("1");
-    const bounds = menu.element().getBoundingClientRect();
+    const popover = menu.element().closest<HTMLElement>(".session-tab-overflow-menu")!;
+    const bounds = popover.getBoundingClientRect();
     expect(bounds.left).toBeGreaterThanOrEqual(8);
     expect(bounds.right).toBeLessThanOrEqual(792);
     expect(bounds.bottom).toBeLessThanOrEqual(632);
+    const last = menu.getByRole("menuitem", { name: /^Terminal 20 / });
+    await expect.element(last).toHaveFocus();
+    const lastBounds = last.element().getBoundingClientRect();
+    expect(lastBounds.top).toBeGreaterThanOrEqual(bounds.top);
+    expect(lastBounds.bottom).toBeLessThanOrEqual(bounds.bottom + 1);
     const violations = await runAxe(menu.element(), {
       runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"] },
     });
