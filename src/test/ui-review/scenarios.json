@@ -512,6 +512,7 @@
         "systemd-inspector",
         "windows-services",
         "shell-picker",
+        "new-host-terminal",
         "history",
         "logs",
         "docker",
@@ -583,6 +584,15 @@
             "selector": "#settings-ssh",
             "scroll": true
           }
+        ],
+        "new-host-terminal": [
+          {
+            "selector": ".compact-navigation-toggle",
+            "optional": true
+          },
+          {
+            "selector": ".host-main"
+          }
         ]
       },
       "settled": {
@@ -596,7 +606,8 @@
         "ports": ".arch-viewport .skeleton",
         "ports-discovering": ".arch-loading-status",
         "font-suggestions": ".font-suggestions.skeleton",
-        "ssh-diagnostics": "#settings-ssh .skeleton"
+        "ssh-diagnostics": "#settings-ssh .skeleton",
+        "new-host-terminal": ".terminal-concealed .terminal-connecting"
       }
     },
     "splits": {

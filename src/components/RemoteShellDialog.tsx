@@ -29,11 +29,13 @@ export function RemoteShellDialog({
   onClose,
   onSelect,
   onCapabilities,
+  discovery,
 }: {
   connection: SavedConnection;
   onClose: () => void;
   onSelect: (shell: RemoteShellProfile | null) => void;
   onCapabilities?: (capabilities: HostCapabilities) => void;
+  discovery?: Promise<RemoteShellCatalog>;
 }) {
   const [catalog, setCatalog] = useState<RemoteShellCatalog | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -44,12 +46,16 @@ export function RemoteShellDialog({
   const onCapabilitiesRef = useRef(onCapabilities);
   onSelectRef.current = onSelect;
   onCapabilitiesRef.current = onCapabilities;
+  const discoveryRef = useRef(discovery);
   useEffect(() => {
     let current = true;
     setError(null);
     setLoading(true);
-    void api
-      .discoverRemoteShells(connection.id, attempt > 0)
+    void (
+      attempt === 0 && discoveryRef.current
+        ? discoveryRef.current
+        : api.discoverRemoteShells(connection.id, attempt > 0)
+    )
       .then((result) => {
         if (!current) return;
         if (result.capabilities) onCapabilitiesRef.current?.(result.capabilities);

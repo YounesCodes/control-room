@@ -1019,7 +1019,7 @@
       "capture": [
         {
           "scenario": "loading",
-          "states": ["shell-picker"]
+          "states": ["shell-picker", "new-host-terminal"]
         },
         {
           "scenario": "dialogs",

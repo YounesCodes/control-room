@@ -743,6 +743,42 @@ describe("TerminalPane sessions", () => {
     expect(api.startSession).not.toHaveBeenCalled();
   });
 
+  it("hides a concealed session behind a connecting status until it is revealed", async () => {
+    const workspace = {
+      ...createRemoteWorkspace(connection),
+      state: "error" as const,
+      reason: "SSH session ended.",
+    };
+    const pane = (concealed: boolean, reconnectToken = 0) => (
+      <TerminalPane
+        platform="windows"
+        workspace={{ ...workspace, reconnectToken }}
+        settings={settings}
+        visible
+        active
+        concealed={concealed}
+        onActivate={() => undefined}
+        onSession={() => undefined}
+        onState={() => undefined}
+      />
+    );
+    const { rerender } = render(pane(true));
+    await vi.waitFor(() => expect(api.startSession).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("status").textContent).toBe("Connecting…");
+    expect(screen.queryByText("SSH session ended.")).toBeNull();
+    expect(document.querySelector(".terminal-pane")?.classList).toContain("terminal-concealed");
+
+    rerender(pane(true, 1));
+    await vi.waitFor(() => expect(api.startSession).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("status").textContent).toBe("Connecting…");
+
+    xterm.focus.mockClear();
+    rerender(pane(false, 1));
+    expect(screen.queryByText("Connecting…")).toBeNull();
+    expect(screen.getByText("SSH session ended.")).toBeTruthy();
+    expect(xterm.focus).toHaveBeenCalled();
+  });
+
   it("keeps session errors visible without a redundant status row", () => {
     const running = (state: ConnectionState) => ({ ...createLocalWorkspace(shell), state });
 
