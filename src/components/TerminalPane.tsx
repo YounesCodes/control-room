@@ -596,11 +596,13 @@ export function TerminalPane({
       startupPhase("draining");
       await new Promise<void>((resolve) => terminal.write("", resolve));
       if (disposed || generation !== sessionGenerationRef.current) return null;
+      startupTiming.mark("drained");
       terminal.reset();
       startupPhase("font");
       await document.fonts
         ?.load(`${settings.terminalFontSize}px ${settings.terminalFontFamily}`, "MW")
         .catch(() => undefined);
+      startupTiming.mark("fontLoaded");
       let measuredCols: number | undefined;
       let measuredRows: number | undefined;
       let smallestCols = Number.POSITIVE_INFINITY;
