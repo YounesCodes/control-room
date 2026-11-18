@@ -10,6 +10,20 @@ if [[ -f "$mirrors" ]]; then
   grep -q '^https://archive\.ubuntu\.com/ubuntu/' "$mirrors"
 fi
 
-apt_options=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
-sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get "${apt_options[@]}" update
-sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get "${apt_options[@]}" install -y --no-install-recommends "$@"
+apt() {
+  sudo DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l timeout "$1" apt-get     -o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 "${@:2}"
+}
+
+# APT keeps finished downloads, so each bounded attempt resumes where the last stopped.
+download_attempts=3
+for attempt in $(seq "$download_attempts"); do
+  if apt 60 update && apt 180 install -y --no-install-recommends --download-only "$@"; then
+    break
+  fi
+  if [[ $attempt == "$download_attempts" ]]; then
+    echo "APT downloads did not finish after $download_attempts bounded attempts" >&2
+    exit 1
+  fi
+  echo "APT download attempt $attempt stalled or failed; retrying" >&2
+done
+apt 300 install -y --no-install-recommends "$@"
