@@ -324,7 +324,61 @@ fn literal(value: &str) -> Result<String, String> {
     Ok(format!("'{}'", value.replace('\'', "''")))
 }
 
-fn launch(shell: &ResolvedShell) -> Result<String, String> {
+const CONNECTED_MARKER: &str = "\u{1b}]633;ControlRoom;connected\u{7}";
+const MISSING_SHELL: &str = "The selected shell is no longer installed";
+const SSH_COMMAND_LIMIT: usize = 7500;
+
+fn default_shell_is_cmd(default_shell: Option<&str>) -> bool {
+    default_shell
+        .and_then(|path| path.rsplit(['\\', '/']).next())
+        .is_some_and(|name| name.eq_ignore_ascii_case("cmd.exe"))
+}
+
+fn cmd_quoted(value: &str) -> Option<String> {
+    if value.is_empty()
+        || value.len() > 2048
+        || value
+            .chars()
+            .any(|character| character.is_control() || matches!(character, '"' | '%' | '!'))
+    {
+        return None;
+    }
+    let trailing_backslashes = value.len() - value.trim_end_matches('\\').len();
+    Some(format!("\"{value}{}\"", "\\".repeat(trailing_backslashes)))
+}
+
+fn cmd_argument(value: &str) -> Option<String> {
+    let plain = !value.is_empty()
+        && value.len() <= 2048
+        && value.chars().all(|character| {
+            character.is_ascii_alphanumeric()
+                || matches!(character, '-' | '_' | '.' | '/' | ':' | '\\' | '+' | '@')
+        });
+    if plain {
+        Some(value.into())
+    } else {
+        cmd_quoted(value)
+    }
+}
+
+fn cmd_launch(shell: &ResolvedShell) -> Option<String> {
+    let executable = cmd_quoted(&shell.executable)?;
+    let mut program = vec![executable.clone()];
+    for argument in &shell.arguments {
+        program.push(cmd_argument(argument)?);
+    }
+    let git_environment = if shell.id == "git-bash" {
+        "set \"MSYSTEM=MINGW64\" & "
+    } else {
+        ""
+    };
+    Some(format!(
+        "if exist {executable} (<nul set /p \"={CONNECTED_MARKER}\" & {git_environment}{}) else (>&2 echo {MISSING_SHELL}& exit 1)",
+        program.join(" ")
+    ))
+}
+
+fn powershell_launch(shell: &ResolvedShell) -> Result<String, String> {
     let executable = literal(&shell.executable)?;
     let arguments = shell
         .arguments
@@ -337,10 +391,20 @@ fn launch(shell: &ResolvedShell) -> Result<String, String> {
     } else {
         ""
     };
-    let command = powershell_command(&format!(
-        "$ErrorActionPreference='Stop'; {git_environment}$exe={executable}; if (!(Test-Path -LiteralPath $exe -PathType Leaf)) {{ throw 'The selected shell is no longer installed' }}; $arguments=@({arguments}); [Console]::Write([char]27 + ']633;ControlRoom;connected' + [char]7); & $exe @arguments; exit $LASTEXITCODE"
-    ));
-    if command.len() > 7500 {
+    Ok(powershell_command(&format!(
+        "$ErrorActionPreference='Stop'; {git_environment}$exe={executable}; if (!(Test-Path -LiteralPath $exe -PathType Leaf)) {{ throw '{MISSING_SHELL}' }}; $arguments=@({arguments}); [Console]::Write([char]27 + ']633;ControlRoom;connected' + [char]7); & $exe @arguments; exit $LASTEXITCODE"
+    )))
+}
+
+fn launch(shell: &ResolvedShell, default_shell: Option<&str>) -> Result<String, String> {
+    let direct = default_shell_is_cmd(default_shell)
+        .then(|| cmd_launch(shell))
+        .flatten();
+    let command = match direct {
+        Some(command) => command,
+        None => powershell_launch(shell)?,
+    };
+    if command.len() > SSH_COMMAND_LIMIT {
         return Err(
             "The selected shell command exceeds the Windows SSH command length limit".into(),
         );
@@ -360,7 +424,7 @@ pub fn selected_command(connection: &SavedConnection, shell_id: &str) -> Result<
         .ok_or_else(|| {
             "The selected remote shell is no longer available. Choose a shell again.".to_string()
         })?;
-    launch(shell)
+    launch(shell, host.capabilities.default_shell.as_deref())
 }
 
 pub fn default_command(connection: &SavedConnection) -> Result<String, String> {
@@ -374,7 +438,7 @@ pub fn default_command(connection: &SavedConnection) -> Result<String, String> {
         .find(|shell| Some(&shell.executable) == host.capabilities.default_shell.as_ref())
         .or_else(|| host.shells.first())
         .ok_or_else(|| "No remote Windows shells were detected".to_string())?;
-    launch(shell)
+    launch(shell, host.capabilities.default_shell.as_deref())
 }
 
 #[cfg(test)]
@@ -604,30 +668,149 @@ mod tests {
             literal("Ubuntu's $(touch x); & whoami").unwrap(),
             "'Ubuntu''s $(touch x); & whoami'"
         );
-        let command = launch(&ResolvedShell {
-            id: "wsl:x".into(),
-            label: "WSL".into(),
-            executable: r"C:\Windows\System32\wsl.exe".into(),
-            arguments: vec![
-                "--distribution".into(),
-                "Ubuntu's $(touch x); & whoami".into(),
-            ],
-        })
-        .unwrap();
+        let hostile = shell(
+            "wsl:x",
+            r"C:\Windows\System32\wsl.exe",
+            &["--distribution", "Ubuntu's $(touch x); & whoami"],
+        );
+        let command = launch(&hostile, Some(POWERSHELL)).unwrap();
         assert!(!command.contains("touch"));
         assert!(!command.contains('&'));
+        assert!(
+            launch(&hostile, Some(CMD))
+                .unwrap()
+                .contains(r#"--distribution "Ubuntu's $(touch x); & whoami")"#)
+        );
         assert!(literal("line\ncommand").is_err());
         assert!(literal("").is_err());
     }
 
     #[test]
     fn oversized_profile_commands_fail_before_starting_ssh() {
-        let shell = ResolvedShell {
-            id: "terminal:large".into(),
-            label: "Large".into(),
-            executable: r"C:\shell.exe".into(),
-            arguments: vec!["a".repeat(2000); 4],
-        };
-        assert!(launch(&shell).unwrap_err().contains("length limit"));
+        let large = vec!["a".repeat(2000); 4];
+        let arguments: Vec<_> = large.iter().map(String::as_str).collect();
+        for default_shell in [Some(POWERSHELL), Some(CMD)] {
+            assert!(
+                launch(
+                    &shell("terminal:large", r"C:\shell.exe", &arguments),
+                    default_shell
+                )
+                .unwrap_err()
+                .contains("length limit")
+            );
+        }
+    }
+
+    const CMD: &str = r"C:\Windows\System32\cmd.exe";
+    const POWERSHELL: &str = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe";
+
+    fn shell(id: &str, executable: &str, arguments: &[&str]) -> ResolvedShell {
+        ResolvedShell {
+            id: id.into(),
+            label: id.into(),
+            executable: executable.into(),
+            arguments: arguments
+                .iter()
+                .map(|argument| (*argument).into())
+                .collect(),
+        }
+    }
+
+    fn direct(executable: &str, program: &str) -> String {
+        format!(
+            "if exist \"{executable}\" (<nul set /p \"=\u{1b}]633;ControlRoom;connected\u{7}\" & {program}) else (>&2 echo The selected shell is no longer installed& exit 1)"
+        )
+    }
+
+    #[test]
+    fn cmd_default_shell_starts_each_detected_shell_without_a_wrapper() {
+        let pwsh = r"C:\Program Files\PowerShell\7\pwsh.exe";
+        let bash = r"C:\Program Files\Git\bin\bash.exe";
+        let wsl = r"C:\Windows\System32\wsl.exe";
+        let cases = [
+            (
+                shell("powershell", POWERSHELL, &["-NoLogo"]),
+                direct(POWERSHELL, &format!("\"{POWERSHELL}\" -NoLogo")),
+            ),
+            (
+                shell("powershell-7", pwsh, &["-NoLogo"]),
+                direct(pwsh, &format!("\"{pwsh}\" -NoLogo")),
+            ),
+            (
+                shell("cmd", CMD, &["/Q"]),
+                direct(CMD, &format!("\"{CMD}\" /Q")),
+            ),
+            (
+                shell("git-bash", bash, &["--login", "-i"]),
+                direct(
+                    bash,
+                    &format!("set \"MSYSTEM=MINGW64\" & \"{bash}\" --login -i"),
+                ),
+            ),
+            (
+                shell("wsl:Ubuntu 24.04", wsl, &["--distribution", "Ubuntu 24.04"]),
+                direct(wsl, &format!("\"{wsl}\" --distribution \"Ubuntu 24.04\"")),
+            ),
+            (
+                shell("ssh-default", CMD, &[]),
+                direct(CMD, &format!("\"{CMD}\"")),
+            ),
+        ];
+        for (resolved, expected) in cases {
+            assert_eq!(launch(&resolved, Some(CMD)).unwrap(), expected);
+            assert_eq!(
+                launch(&resolved, Some("C:/WINDOWS/system32/CMD.EXE")).unwrap(),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn cmd_arguments_are_quoted_for_the_target_program() {
+        assert_eq!(
+            launch(
+                &shell(
+                    "terminal:x",
+                    r"C:\Tools\x.exe",
+                    &[r"C:\My Dir\", "a&b|c", "(x)"]
+                ),
+                Some(CMD),
+            )
+            .unwrap(),
+            direct(
+                r"C:\Tools\x.exe",
+                r#""C:\Tools\x.exe" "C:\My Dir\\" "a&b|c" "(x)""#,
+            )
+        );
+    }
+
+    #[test]
+    fn values_cmd_cannot_quote_keep_the_powershell_wrapper() {
+        for (executable, arguments) in [
+            (r"C:\100%\shell.exe", vec![]),
+            (r"C:\Tools\x.exe", vec!["%PATH%"]),
+            (r"C:\Tools\x.exe", vec!["say \"hi\""]),
+            (r"C:\Tools\x.exe", vec!["wow!"]),
+        ] {
+            let command = launch(&shell("terminal:x", executable, &arguments), Some(CMD)).unwrap();
+            assert!(command.starts_with("powershell.exe -NoLogo -NoProfile -EncodedCommand "));
+        }
+    }
+
+    #[test]
+    fn non_cmd_default_shells_keep_the_powershell_wrapper() {
+        let resolved = shell("powershell", POWERSHELL, &["-NoLogo"]);
+        for default_shell in [
+            None,
+            Some(POWERSHELL),
+            Some(r"C:\Program Files\PowerShell\7\pwsh.exe"),
+            Some(r"C:\Program Files\Git\bin\bash.exe"),
+            Some(r"C:\Tools\notcmd.exe"),
+        ] {
+            assert_eq!(
+                launch(&resolved, default_shell).unwrap(),
+                powershell_launch(&resolved).unwrap()
+            );
+        }
     }
 }
