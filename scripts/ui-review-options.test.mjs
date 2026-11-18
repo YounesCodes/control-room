@@ -57,7 +57,10 @@ describe("UI capture selection", () => {
     expect(lines).toContainEqual(
       expect.stringMatching(/^Find in terminal\s+terminal: find, find-matches, find-none$/),
     );
-    expect(lines).toContainEqual(expect.stringMatching(/^Focus Mode\s+no scenario$/));
-    expect(lines.at(-1)).toMatch(/^No capture scenario \(\d+\): .*Terminal splits/);
+    expect(lines).toContainEqual(
+      expect.stringMatching(/^Focus Mode\s+splits: before-focus, focus$/),
+    );
+    expect(lines).toContainEqual(expect.stringMatching(/^Panel layout\s+no scenario$/));
+    expect(lines.at(-1)).toMatch(/^No capture scenario \(\d+\): .*Panel layout/);
   });
 });
