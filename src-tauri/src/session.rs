@@ -26,6 +26,9 @@ use crate::{
 #[cfg(target_os = "linux")]
 #[path = "session_linux.rs"]
 mod linux;
+#[cfg(windows)]
+#[path = "session_windows.rs"]
+mod windows;
 
 struct ManagedSession {
     master: Mutex<Option<Box<dyn MasterPty + Send>>>,
@@ -292,7 +295,17 @@ impl SessionManager {
                 return Err(format!("PTY input could not be opened: {error}"));
             }
         };
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(windows)]
+        let killer: Box<dyn ChildKiller + Send + Sync> = match windows::Killer::new(child.as_ref())
+        {
+            Ok(killer) => Box::new(killer),
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!("PTY process could not be tracked: {error}"));
+            }
+        };
+        #[cfg(not(any(target_os = "linux", windows)))]
         let killer = child.clone_killer();
         let session_id = Uuid::new_v4().to_string();
         let managed = Arc::new(ManagedSession {
@@ -498,14 +511,7 @@ fn interactive_shell_command(history_enabled: bool) -> &'static str {
     }
 }
 
-// portable-pty's Windows child killer inverts its result: success comes back as Err(GetLastError()).
 fn map_pty_kill_result(result: std::io::Result<()>) -> Result<(), String> {
-    #[cfg(windows)]
-    {
-        let _ = result;
-        Ok(())
-    }
-    #[cfg(not(windows))]
     result.map_err(|error| format!("Could not close the terminal process: {error}"))
 }
 
