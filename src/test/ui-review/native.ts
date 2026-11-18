@@ -46,6 +46,7 @@ if (state === "overflow") {
 const workspaceView = {
   systemd: "services",
   scratchpad: "terminal",
+  splits: "terminal",
   dialogs: "terminal",
   terminal: "terminal",
   ports: "ports",
@@ -162,6 +163,19 @@ const containerTerminals =
         historyPaused: false,
       }))
     : [];
+const splitPanes =
+  scenario === "splits" && state !== "focus"
+    ? ["worker", "logs", "db"].slice(0, state === "two-pane" ? 2 : 3)
+    : [];
+const splitTerminals = splitPanes.slice(1).map((label) => ({
+  id: `example-${label}`,
+  connectionId: host.id,
+  localShellId: null,
+  label,
+  view: "terminal" as const,
+  historyPaused: false,
+}));
+const leaf = (workspaceId: string) => ({ kind: "leaf" as const, workspaceId });
 const workspace: PersistedWorkspaceState = {
   panelSizes: {},
   workspaces: workspaceView
@@ -170,17 +184,55 @@ const workspace: PersistedWorkspaceState = {
           id: "example-workspace",
           connectionId: host.id,
           localShellId: null,
-          label: null,
+          label: splitPanes[0] ?? null,
           view: workspaceView,
           historyPaused: false,
         },
         ...containerTerminals,
+        ...splitTerminals,
       ]
     : [],
   activeWorkspaceId: containerTerminals[0]?.id ?? (workspaceView ? "example-workspace" : null),
-  terminalGroups: [],
+  terminalGroups: splitPanes.length
+    ? [
+        {
+          id: "example-group",
+          name: "Group 1",
+          layout: {
+            kind: "split",
+            direction: "vertical",
+            first: leaf("example-workspace"),
+            second:
+              splitPanes.length > 2
+                ? {
+                    kind: "split",
+                    direction: "horizontal",
+                    first: leaf("example-logs"),
+                    second: leaf("example-db"),
+                  }
+                : leaf("example-logs"),
+          },
+        },
+      ]
+    : [],
   terminalLayout: null,
 };
+const splitOutputs = [
+  [
+    "example$ journalctl -u worker.service -f",
+    "Nov 01 09:59:41 example worker[1234]: warning: retrying job 41",
+    "Nov 01 10:00:00 example worker[1234]: Idle, waiting for jobs",
+    "^C",
+    "example$ ",
+  ],
+  [
+    "example$ tail -n 2 /var/log/nginx/access.log",
+    '10.0.0.7 - - "GET /health HTTP/1.1" 200 2',
+    "example$ ",
+  ],
+  ["example$ psql -c 'select count(*) from jobs'", " count", "-------", "  4812", "example$ "],
+];
+let sessionStarts = 0;
 const listeners = new Map<string, Set<(event: { payload: any }) => void>>();
 let serviceReads = 0;
 
@@ -344,9 +396,12 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       if (loading) return pending();
       throw new Error(`Missing UI review native fixture for ${command}`);
     case "start_session": {
+      const start = sessionStarts++;
       const sessionId = args.containerId
         ? `example-container-${args.containerId.slice(0, 12)}`
-        : "example-session";
+        : start
+          ? `example-session-${start + 1}`
+          : "example-session";
       result = { sessionId, connectionId: host.id };
       setTimeout(() => {
         listeners.get("session-state-changed")?.forEach((callback) =>
@@ -368,19 +423,21 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
                 "\x1b]633;E;htop -d 5\x07\x1b]133;C\x07  PID USER      PRI  NI  VIRT   RES S CPU% MEM%",
                 " 1234 example    20   0  412M 38.2M S  2.1  0.9 worker",
               ].join("\r\n")
-            : scenario === "terminal"
-              ? [
-                  "example$ journalctl -u worker.service -n 6 --no-pager",
-                  "Nov 01 09:58:02 example worker[1234]: Starting worker.service",
-                  "Nov 01 09:58:03 example worker[1234]: Connected to queue example",
-                  "Nov 01 09:59:41 example worker[1234]: warning: retrying job 41",
-                  "Nov 01 09:59:44 example worker[1234]: job 41 finished",
-                  "Nov 01 10:00:00 example worker[1234]: Idle, waiting for jobs",
-                  "example$ ",
-                ].join("\r\n")
-              : args.containerId
-                ? `root@${args.containerId.slice(0, 12)}:/# `
-                : "example$ ";
+            : scenario === "splits"
+              ? splitOutputs[start % splitOutputs.length].join("\r\n")
+              : scenario === "terminal"
+                ? [
+                    "example$ journalctl -u worker.service -n 6 --no-pager",
+                    "Nov 01 09:58:02 example worker[1234]: Starting worker.service",
+                    "Nov 01 09:58:03 example worker[1234]: Connected to queue example",
+                    "Nov 01 09:59:41 example worker[1234]: warning: retrying job 41",
+                    "Nov 01 09:59:44 example worker[1234]: job 41 finished",
+                    "Nov 01 10:00:00 example worker[1234]: Idle, waiting for jobs",
+                    "example$ ",
+                  ].join("\r\n")
+                : args.containerId
+                  ? `root@${args.containerId.slice(0, 12)}:/# `
+                  : "example$ ";
         args.output.onmessage(new TextEncoder().encode(output).buffer);
       }, 0);
       break;
