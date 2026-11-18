@@ -538,7 +538,7 @@ describe("TerminalPane sessions", () => {
     expect(api.startSession).toHaveBeenCalledTimes(1);
   });
 
-  it.each(["macos", "linux"] as const)(
+  it.each(["macos", "windows"] as const)(
     "starts a local %s shell at the settled grid so it never resizes after its first prompt",
     async (platform) => {
       let framed = false;
