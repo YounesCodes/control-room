@@ -229,13 +229,25 @@ export async function captureFailure(title: string) {
   );
 }
 
+export async function openConnectionDialog() {
+  await $(".sidebar-primary").click();
+  await browser.waitUntil(
+    () =>
+      browser.execute(() => {
+        const dialog = document.querySelector(".connection-dialog");
+        return dialog !== null && dialog.getAnimations().length === 0;
+      }),
+    { timeoutMsg: "The connection dialog did not finish its entry animation" },
+  );
+}
+
 export async function addConnection(
   name: string,
   destination = "127.0.0.1",
   username = "tester",
   port = "1",
 ) {
-  await $(".sidebar-primary").click();
+  await openConnectionDialog();
   await $("input[aria-label='Display name']").setValue(name);
   await $("input[aria-label='SSH destination']").setValue(destination);
   await $("input[aria-label='Username']").setValue(username);

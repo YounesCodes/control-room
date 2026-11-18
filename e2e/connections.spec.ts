@@ -1,11 +1,11 @@
 import "./isolation";
 import { $, expect } from "@wdio/globals";
-import { addConnection, connectionMenu, ipc, restartApp } from "./helpers";
+import { addConnection, connectionMenu, ipc, openConnectionDialog, restartApp } from "./helpers";
 import type { ConnectionGroup, SavedConnection } from "../src/types";
 
 describe("Saved Connections through real SQLite", () => {
   it("validates required fields and cancels without writing a connection", async () => {
-    await $(".sidebar-primary").click();
+    await openConnectionDialog();
     await $(".modal-actions button[type=submit]").click();
     await expect($(".inline-error")).toBeDisplayed();
     expect(await ipc("list_connections")).toEqual([]);
