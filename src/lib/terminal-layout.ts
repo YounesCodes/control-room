@@ -58,8 +58,8 @@ export function terminalPaneOuterEdges(
   ];
 }
 
-export const MIN_TERMINAL_PANE_WIDTH = 280;
-export const MIN_TERMINAL_PANE_HEIGHT = 180;
+const MIN_TERMINAL_PANE_WIDTH = 280;
+const MIN_TERMINAL_PANE_HEIGHT = 180;
 
 export type TerminalDropZone = "center" | "left" | "right" | "top" | "bottom";
 
@@ -213,7 +213,7 @@ export function getTerminalLayoutIds(layout: TerminalLayout): string[] {
   return [...getTerminalLayoutIds(layout.first), ...getTerminalLayoutIds(layout.second)];
 }
 
-export function terminalLayoutContains(layout: TerminalLayout, workspaceId: string): boolean {
+function terminalLayoutContains(layout: TerminalLayout, workspaceId: string): boolean {
   if (layout.kind === "leaf") return layout.workspaceId === workspaceId;
   return (
     terminalLayoutContains(layout.first, workspaceId) ||

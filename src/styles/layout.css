@@ -246,8 +246,7 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 
 .detail-panel h2,
 .detail-panel header p,
-.page-heading p,
-.capability-value {
+.page-heading p {
   overflow-wrap: anywhere;
 }
 
@@ -292,23 +291,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
     grid-template-columns: minmax(0, 1fr);
     gap: 4px;
   }
-
-  .overview-stats {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .overview-stat + .overview-stat {
-    border-left: 0;
-    border-top: 1px solid var(--border-subtle);
-  }
-
-  .capability-row {
-    grid-template-columns: 8px minmax(0, 1fr);
-  }
-
-  .capability-value {
-    grid-column: 2;
-  }
 }
 
 .sidebar-top-heading > span:first-child {
@@ -320,10 +302,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.overview-stat-hint {
-  overflow-wrap: anywhere;
 }
 
 @container (max-width: 300px) {
@@ -400,13 +378,10 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
 
 @media (max-width: 859px) {
   .history-page,
-  .logs-page,
-  .boot-page {
+  .logs-page {
     padding: 16px;
   }
-  .boot-heading-actions,
   .history-tools,
-  .history-tools-actions,
   .toolbar-actions {
     flex-wrap: wrap;
   }

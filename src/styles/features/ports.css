@@ -203,12 +203,6 @@
   white-space: nowrap;
 }
 
-.firewall-warning {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .link-button {
   padding: 0;
   border: 0;
@@ -642,10 +636,6 @@
   outline: none;
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-.arch-chip-meta.faint {
-  color: var(--text-faint);
 }
 
 .port-binding-list {

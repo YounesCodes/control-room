@@ -8,7 +8,7 @@ export interface SystemdUnitFilters {
   scope?: SystemdExplorerState["scope"];
 }
 
-export function isFocusedSystemdUnit(unit: SystemdUnit) {
+function isFocusedSystemdUnit(unit: SystemdUnit) {
   if (unit.activeState === "failed") return true;
   if (!["service", "timer", "socket", "path"].includes(unit.unitType)) return false;
   return !/^(?:systemd-(?:ask-password|backlight|binfmt|fsck|hibernate|hybrid-sleep|journal-flush|journal-catalog-update|modules-load|random-seed|remount-fs|rfkill|sleep|suspend|sysctl|sysusers|tmpfiles|udevd|udev|update-utmp|user-sessions|vconsole-setup)[.@-]|dbus[.@-]|(?:serial-)?getty@|user(?:-runtime-dir)?@|modprobe@)/.test(

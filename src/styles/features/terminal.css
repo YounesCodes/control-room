@@ -1096,11 +1096,6 @@
   transform: rotate(45deg);
 }
 
-.status-disconnected,
-.status-unknown {
-  background: #737370;
-}
-
 .toolbar-actions,
 .modal-actions,
 .history-menu,

@@ -21,7 +21,7 @@ export interface PortOverviewItem {
   relatedTo?: string;
 }
 
-export function matchesPortScope(address: string, exposure: Exposure | "all") {
+function matchesPortScope(address: string, exposure: Exposure | "all") {
   return (
     exposure === "all" ||
     (exposure === "non-loopback"

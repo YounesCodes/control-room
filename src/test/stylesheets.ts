@@ -24,7 +24,7 @@ export type ParsedStylesheet = {
 
 const conditionalGroupRules = new Set(["media", "container", "supports", "layer"]);
 
-export function stylesheetImports(source: string): string[] {
+function stylesheetImports(source: string): string[] {
   return parseStylesheet("", source).imports;
 }
 
@@ -32,7 +32,7 @@ export function stylesheetPaths(): string[] {
   return stylesheetImports(readFileSync(stylesEntry, "utf8"));
 }
 
-export function readStylesheet(relativePath: string): string {
+function readStylesheet(relativePath: string): string {
   return readFileSync(new URL(relativePath, stylesEntry), "utf8");
 }
 

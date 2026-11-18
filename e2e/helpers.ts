@@ -16,7 +16,7 @@ export interface RuntimeStatus {
 let directory: string;
 let macApplication: ChildProcess | undefined;
 
-export async function stopMacApplication() {
+async function stopMacApplication() {
   if (!macApplication || macApplication.exitCode !== null) return;
   const child = macApplication;
   const stopped = new Promise<void>((resolve) => child.once("exit", () => resolve()));
