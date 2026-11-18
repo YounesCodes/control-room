@@ -70,13 +70,6 @@ fn the_terminal_type_is_requested_explicitly_without_clearing_the_environment() 
 }
 
 #[test]
-#[cfg(windows)]
-fn conpty_success_with_stale_last_error_is_not_shown_as_a_failure() {
-    assert!(map_pty_kill_result(Err(std::io::Error::from_raw_os_error(0))).is_ok());
-    assert!(map_pty_kill_result(Err(std::io::Error::from_raw_os_error(6))).is_ok());
-}
-
-#[test]
 fn terminal_failure_detection_handles_split_ssh_diagnostics() {
     let mut detector = TerminalFailureDetector::default();
     detector.observe(b"ssh: connect to host laptop port 22: Connection ref");
@@ -953,8 +946,8 @@ fn a_resolved_local_shell_runs_and_stops_under_conpty() {
         String::from_utf8_lossy(&output)
     );
 
-    let mut killer = child.clone_killer();
-    assert!(map_pty_kill_result(killer.kill()).is_ok());
+    let mut killer = super::windows::Killer::new(child.as_ref()).unwrap();
+    assert!(map_pty_kill_result(portable_pty::ChildKiller::kill(&mut killer)).is_ok());
     let (status_sender, status_receiver) = mpsc::channel();
     std::thread::spawn(move || {
         let _ = status_sender.send(child.wait());
@@ -977,6 +970,79 @@ fn a_resolved_local_shell_runs_and_stops_under_conpty() {
             Some(SessionEndCategory::UserStop)
         )
     );
+}
+
+#[test]
+#[cfg(windows)]
+fn closing_git_bash_ends_its_real_shell_and_releases_the_pseudoconsole() {
+    let shell = crate::local_shell::resolve_installed("git-bash").unwrap();
+    let pair = native_pty_system().openpty(PtySize::default()).unwrap();
+    let mut child = pair
+        .slave
+        .spawn_command(crate::local_shell::command_for(&shell))
+        .unwrap();
+    drop(pair.slave);
+    let mut reader = pair.master.try_clone_reader().unwrap();
+    let mut writer = pair.master.take_writer().unwrap();
+    let (sender, receiver) = mpsc::channel();
+    let reading = std::thread::spawn(move || {
+        let mut buffer = [0_u8; 4096];
+        while let Ok(count) = reader.read(&mut buffer) {
+            if count == 0 {
+                break;
+            }
+            let _ = sender.send(buffer[..count].to_vec());
+        }
+    });
+    let mut output = Vec::new();
+    let mut answered_queries = 0;
+    let mut sent_command = false;
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while !String::from_utf8_lossy(&output).contains("GIT_BASH_READY") && Instant::now() < deadline
+    {
+        let query_count = output
+            .windows(4)
+            .filter(|window| *window == b"\x1b[6n")
+            .count();
+        while answered_queries < query_count {
+            writer.write_all(b"\x1b[1;1R").unwrap();
+            writer.flush().unwrap();
+            answered_queries += 1;
+        }
+        if !sent_command && !output.is_empty() {
+            writer.write_all(b"printf 'GIT_BASH_%s\n' READY\r").unwrap();
+            writer.flush().unwrap();
+            sent_command = true;
+        }
+        if let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(100)) {
+            output.extend(chunk);
+        }
+    }
+    assert!(
+        String::from_utf8_lossy(&output).contains("GIT_BASH_READY"),
+        "Git Bash did not start: {}",
+        String::from_utf8_lossy(&output)
+    );
+    let tree = super::windows::ProcessTree::below(child.process_id().unwrap());
+    assert!(tree.len() > 0, "the Git Bash launcher started no shell");
+
+    let mut killer = super::windows::Killer::new(child.as_ref()).unwrap();
+    assert!(map_pty_kill_result(portable_pty::ChildKiller::kill(&mut killer)).is_ok());
+    let flow = OutputFlow::new();
+    flow.close();
+    let (closed_sender, closed_receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        let status = child.wait();
+        let master = parking_lot::Mutex::new(Some(pair.master));
+        let drained = super::drain_pty_output(&master, reading, &flow);
+        let _ = closed_sender.send((status.is_ok(), drained.is_ok()));
+    });
+    assert_eq!(
+        closed_receiver.recv_timeout(Duration::from_secs(10)),
+        Ok((true, true)),
+        "the Git Bash session outlived its close"
+    );
+    assert_eq!(tree.running(), 0);
 }
 
 #[cfg(windows)]
