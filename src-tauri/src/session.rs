@@ -27,6 +27,10 @@ use crate::{
 #[cfg(target_os = "linux")]
 #[path = "session_linux.rs"]
 mod linux;
+
+#[cfg(target_os = "macos")]
+#[path = "session_macos.rs"]
+mod macos;
 #[cfg(windows)]
 #[path = "session_windows.rs"]
 mod windows;
@@ -296,6 +300,10 @@ impl SessionManager {
             .map_err(|error| format!("PTY initialization failed: {error}"))?;
         let opened_at = Instant::now();
 
+        #[cfg(target_os = "macos")]
+        let mut child = macos::spawn(pair.master.as_ref(), &command)
+            .map_err(|error| mode.spawn_error(error))?;
+        #[cfg(not(target_os = "macos"))]
         let mut child = pair
             .slave
             .spawn_command(command)
