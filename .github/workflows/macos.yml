@@ -31,49 +31,64 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: node .github/scripts/software-changes.mjs --check
 
-  # Separate jobs keep both required check names when GitHub skips them.
-  native-arm64:
-    name: Native tests (arm64)
+  # The required check names belong to the summary jobs below. Each part runs
+  # in parallel so the slower Intel runner no longer adds the parts together.
+  native-parts-arm64:
+    name: Native ${{ matrix.part }} (arm64)
     needs: changes
     if: &run-macos ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.result != 'success' || needs.changes.outputs.software != 'false') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [rust, webkit, e2e]
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 45
     env:
       EXPECTED_ARCH: arm64
     steps: &native-steps
       - uses: actions/checkout@v7
+      - name: Verify native runner architecture
+        run: test "$(uname -m)" = "$EXPECTED_ARCH"
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
+        if: matrix.part != 'webkit'
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2.9.3
+        if: matrix.part != 'webkit'
         with:
           workspaces: "./src-tauri -> target"
+          key: ${{ matrix.part }}
           cache-bin: false
           cache-on-failure: true
-      - name: Verify native runner architecture
-        run: test "$(uname -m)" = "$EXPECTED_ARCH"
       - run: npm ci
-      - run: npm run check:version
-      - run: npm run check:rust
-      - run: npx playwright install webkit
+      - if: matrix.part == 'rust'
+        run: npm run check:version
+      - if: matrix.part == 'rust'
+        run: npm run check:rust
+      - if: matrix.part == 'rust'
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features desktop-e2e --lib e2e::tests
+      - if: matrix.part == 'webkit'
+        run: npx playwright install webkit
       - name: Check the UI in WebKit
+        if: matrix.part == 'webkit'
         env:
           CONTROL_ROOM_TEST_BROWSER: webkit
         # Hosted Mac runners stall at random; retry a failed test once here only.
         run: npm run test:browser -- --retry 1
-      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features desktop-e2e --lib e2e::tests
-      - run: npm run test:desktop:build
+      - if: matrix.part == 'e2e'
+        run: npm run test:desktop:build
       - name: Run desktop E2E
+        if: matrix.part == 'e2e'
         env:
           CONTROL_ROOM_E2E_SPEC_RETRIES: "1"
         run: npm run test:desktop
       - name: Sanitize failure diagnostics
         id: sanitize
-        if: failure()
+        if: failure() && matrix.part == 'e2e'
         run: node scripts/sanitize-e2e-results.mjs
       - uses: actions/upload-artifact@v7
         if: failure() && steps.sanitize.outcome == 'success'
@@ -82,15 +97,37 @@ jobs:
           path: test-results/desktop-sanitized/
           if-no-files-found: ignore
 
-  native-x86-64:
-    name: Native tests (x86_64)
+  native-parts-x86-64:
+    name: Native ${{ matrix.part }} (x86_64)
     needs: changes
     if: *run-macos
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [rust, webkit, e2e]
     runs-on: macos-15-intel
-    timeout-minutes: 60
+    timeout-minutes: 45
     env:
       EXPECTED_ARCH: x86_64
     steps: *native-steps
+
+  native-arm64:
+    name: Native tests (arm64)
+    needs: [changes, native-parts-arm64]
+    if: *run-macos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every arm64 part
+        run: test "${{ needs.native-parts-arm64.result }}" = success
+
+  native-x86-64:
+    name: Native tests (x86_64)
+    needs: [changes, native-parts-x86-64]
+    if: *run-macos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every x86_64 part
+        run: test "${{ needs.native-parts-x86-64.result }}" = success
 
   bundle:
     name: App and DMG (${{ matrix.target }})
