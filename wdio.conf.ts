@@ -27,6 +27,7 @@ const dataDirectory =
   process.env.CONTROL_ROOM_E2E_DATA_DIR || mkdtempSync(join(tmpdir(), "control-room-e2e-"));
 process.env.CONTROL_ROOM_E2E_DATA_DIR = dataDirectory;
 process.env.CONTROL_ROOM_E2E_RUNNER_PID ||= String(process.pid);
+const shard = process.env.CONTROL_ROOM_E2E_SHARD?.match(/^(\d+)\/(\d+)$/);
 const tauriCapabilities: TauriCapabilities = {
   browserName: "tauri",
   "tauri:options": { application },
@@ -54,6 +55,7 @@ export const config: WebdriverIO.Config = {
           "./e2e/updater-lifecycle-cleanup.spec.ts",
         ]),
   ],
+  ...(shard ? { shard: { current: Number(shard[1]), total: Number(shard[2]) } } : {}),
   maxInstances: 1,
   outputDir: resolve("test-results/desktop/driver"),
   services: [
