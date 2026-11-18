@@ -78,8 +78,40 @@ printf 'running_service_count=%s\n' "$(launchctl print system 2>/dev/null | awk 
 pub(crate) fn capabilities_command() -> String {
     command(CAPABILITIES)
 }
+const SHELL_IDS: [&str; 3] = ["macos:zsh", "macos:bash", "macos:fish"];
+
+fn catalog(
+    ids: &[&str],
+    capabilities: Option<HostCapabilities>,
+) -> crate::windows_ssh::RemoteShellCatalog {
+    crate::windows_ssh::RemoteShellCatalog {
+        platform: "macos".into(),
+        shells: SHELL_IDS
+            .iter()
+            .filter(|id| ids.contains(id))
+            .map(|id| crate::windows_ssh::RemoteShellProfile {
+                id: (*id).into(),
+                label: if *id == "macos:bash" {
+                    "Bash"
+                } else {
+                    id.trim_start_matches("macos:")
+                }
+                .into(),
+            })
+            .collect(),
+        windows_terminal_available: false,
+        wsl_error: None,
+        profile_error: None,
+        capabilities,
+    }
+}
+
+/// Lists the shells a Mac offers in one round trip. Host details are left to
+/// the capability refresh that runs once the terminal connects, so the list
+/// carries only the `capabilities` the caller already had.
 pub(crate) fn shells(
     c: &SavedConnection,
+    capabilities: Option<HostCapabilities>,
 ) -> Result<crate::windows_ssh::RemoteShellCatalog, String> {
     let text = read(
         c,
@@ -87,28 +119,34 @@ pub(crate) fn shells(
         r#"for shell in zsh bash fish; do case "$shell" in zsh) test -x /bin/zsh && echo macos:zsh;; bash) test -x /bin/bash && echo macos:bash;; fish) if test -x /opt/homebrew/bin/fish || test -x /usr/local/bin/fish; then echo macos:fish; fi;; esac; done"#,
         &Elevation::None,
     )?;
-    let shells = text
-        .lines()
-        .filter(|v| ["macos:zsh", "macos:bash", "macos:fish"].contains(v))
-        .map(|id| crate::windows_ssh::RemoteShellProfile {
-            id: id.into(),
-            label: if id == "macos:bash" {
-                "Bash"
-            } else {
-                id.trim_start_matches("macos:")
-            }
-            .into(),
-        })
-        .collect();
-    Ok(crate::windows_ssh::RemoteShellCatalog {
-        platform: "macos".into(),
-        shells,
-        windows_terminal_available: false,
-        wsl_error: None,
-        profile_error: None,
-        capabilities: crate::remote::discover_capabilities(c).ok(),
-    })
+    Ok(catalog(&text.lines().collect::<Vec<_>>(), capabilities))
 }
+
+pub(crate) fn stored_form(catalog: &crate::windows_ssh::RemoteShellCatalog) -> String {
+    serde_json::to_string(
+        &catalog
+            .shells
+            .iter()
+            .map(|shell| shell.id.as_str())
+            .collect::<Vec<_>>(),
+    )
+    .expect("shell ids serialize")
+}
+
+/// Reads a saved Mac shell list back. Anything other than a list of known
+/// shell ids is ignored, so the caller asks the host again.
+pub(crate) fn restore(
+    stored: &str,
+    capabilities: Option<HostCapabilities>,
+) -> Option<crate::windows_ssh::RemoteShellCatalog> {
+    let ids: Vec<String> = serde_json::from_str(stored).ok()?;
+    let ids: Vec<&str> = ids.iter().map(String::as_str).collect();
+    if ids.is_empty() || ids.iter().any(|id| !SHELL_IDS.contains(id)) {
+        return None;
+    }
+    Some(catalog(&ids, capabilities))
+}
+
 pub(crate) fn shell_command(id: &str, history: bool) -> Result<String, String> {
     let shell = match id {
         "macos:zsh" => "/bin/zsh -l",
@@ -682,6 +720,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_saved_mac_shell_list_round_trips_in_canonical_order() {
+        let listed = catalog(&["macos:fish", "macos:zsh", "macos:bash"], None);
+        let stored = stored_form(&listed);
+        assert_eq!(stored, r#"["macos:zsh","macos:bash","macos:fish"]"#);
+        let restored = restore(&stored, None).unwrap();
+        assert_eq!(restored.shells, listed.shells);
+        assert_eq!(restored.shells[1].label, "Bash");
+    }
+
+    #[test]
+    fn a_saved_mac_shell_list_with_anything_unknown_is_not_trusted() {
+        for stored in [
+            "not json",
+            "[]",
+            r#"["macos:zsh","/bin/sh -c rm"]"#,
+            r#"{"shells":["macos:zsh"]}"#,
+        ] {
+            assert!(restore(stored, None).is_none(), "{stored}");
+        }
+    }
+
+    #[test]
     #[ignore = "requires CONTROL_ROOM_TEST_MAC_HOST and pinned, noninteractive SSH access"]
     fn live_macos_native_collectors_and_docker_context() {
         let c: SavedConnection = serde_json::from_value(serde_json::json!({
@@ -694,7 +754,7 @@ mod tests {
         assert_eq!(caps.os_id.as_deref(), Some("macos"));
         assert!(caps.launchd_available && caps.unified_log_available);
         assert!(!caps.systemd_available && !caps.journald_available);
-        let catalog = shells(&c).unwrap();
+        let catalog = shells(&c, None).unwrap();
         assert_eq!(catalog.platform, "macos");
         assert!(catalog.shells.iter().any(|s| s.id == "macos:zsh"));
         let m = metrics(

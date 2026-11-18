@@ -205,9 +205,10 @@ pub fn start_session(
     if !database.get_settings()?.global_history_enabled {
         connection.history_enabled = false;
     }
-    let windows = database
+    let saved_os_id = database
         .get_capabilities(&connection_id)?
-        .is_some_and(|caps| caps.os_id.as_deref() == Some("windows"));
+        .and_then(|caps| caps.os_id);
+    let windows = saved_os_id.as_deref() == Some("windows");
     if let Some(container_id) = container_id {
         if remote_shell_id.is_some() {
             return Err("A container terminal cannot also choose a remote shell".into());
@@ -227,6 +228,9 @@ pub fn start_session(
     };
     if windows && let Some(stored) = database.get_shell_catalog(&connection_id)? {
         windows_ssh::restore(&connection, &stored);
+    }
+    if saved_os_id.as_deref() == Some("macos") {
+        crate::macos_remote::remember(&connection, true);
     }
     let remote_command = match remote_shell_id {
         Some(id) if id.starts_with("macos:") => {
@@ -256,39 +260,40 @@ pub fn discover_remote_shells(
 ) -> Result<RemoteShellCatalog, String> {
     let _permit = limiter.acquire(&connection_id)?;
     let connection = database.get_connection(&connection_id)?;
-    let saved_os_id = database
-        .get_capabilities(&connection_id)?
-        .and_then(|capabilities| capabilities.os_id);
+    let saved = database.get_capabilities(&connection_id)?;
     let stored = database.get_shell_catalog(&connection_id)?;
     let discovery = windows_ssh::discover(
         &connection,
         refresh.unwrap_or(false),
-        saved_os_id.as_deref(),
+        saved.as_ref(),
         stored.as_deref(),
     )?;
-    if let Some(host) = &discovery.discovered {
-        save_windows_host(&database, &connection, host)?;
-    } else if !discovery.from_storage
-        && let Some(capabilities) = &discovery.catalog.capabilities
-    {
-        database.save_capabilities(&connection, capabilities)?;
-    }
+    save_discovery(&database, &connection, &discovery)?;
     if discovery.from_storage {
-        refresh_windows_shells_in_background(app, connection);
+        refresh_shells_in_background(app, connection, saved);
     }
     Ok(discovery.catalog)
 }
 
-fn save_windows_host(
+fn save_discovery(
     database: &Database,
     connection: &SavedConnection,
-    host: &windows_ssh::WindowsHost,
+    discovery: &windows_ssh::Discovery,
 ) -> Result<(), String> {
-    database.save_capabilities(connection, &host.capabilities)?;
-    database.save_shell_catalog(connection, &windows_ssh::stored_form(host))
+    if let Some(capabilities) = &discovery.fresh_capabilities {
+        database.save_capabilities(connection, capabilities)?;
+    }
+    if let Some(stored) = &discovery.stored_form {
+        database.save_shell_catalog(connection, stored)?;
+    }
+    Ok(())
 }
 
-fn refresh_windows_shells_in_background(app: AppHandle, target: SavedConnection) {
+fn refresh_shells_in_background(
+    app: AppHandle,
+    target: SavedConnection,
+    saved: Option<HostCapabilities>,
+) {
     let Some(claim) = windows_ssh::BackgroundRefresh::claim(&target) else {
         return;
     };
@@ -299,8 +304,8 @@ fn refresh_windows_shells_in_background(app: AppHandle, target: SavedConnection)
         let Ok(_permit) = limiter.acquire(&target.id) else {
             return;
         };
-        if let Ok(host) = windows_ssh::discover_windows(&target) {
-            let _ = save_windows_host(&app.state::<Database>(), &target, &host);
+        if let Ok(discovery) = windows_ssh::discover(&target, true, saved.as_ref(), None) {
+            let _ = save_discovery(&app.state::<Database>(), &target, &discovery);
         }
     });
 }

@@ -178,8 +178,10 @@ pub fn restore(connection: &SavedConnection, stored: &str) -> Option<WindowsHost
 
 pub struct Discovery {
     pub catalog: RemoteShellCatalog,
-    /// A Windows host that was just read from the remote machine and should be saved.
-    pub discovered: Option<WindowsHost>,
+    /// Capabilities that were just read from the host and should be saved.
+    pub fresh_capabilities: Option<HostCapabilities>,
+    /// The catalog in the form it is saved in, when it was just read from the host.
+    pub stored_form: Option<String>,
     /// The catalog came from storage and should be refreshed in the background.
     pub from_storage: bool,
 }
@@ -188,38 +190,65 @@ impl Discovery {
     fn known(catalog: RemoteShellCatalog) -> Self {
         Self {
             catalog,
-            discovered: None,
+            fresh_capabilities: None,
+            stored_form: None,
             from_storage: false,
         }
     }
 
-    fn discovered(host: WindowsHost) -> Self {
+    fn from_storage(catalog: RemoteShellCatalog) -> Self {
         Self {
-            catalog: catalog(host.clone()),
-            discovered: Some(host),
-            from_storage: false,
+            from_storage: true,
+            ..Self::known(catalog)
+        }
+    }
+
+    fn windows(host: WindowsHost) -> Self {
+        Self {
+            fresh_capabilities: Some(host.capabilities.clone()),
+            stored_form: Some(stored_form(&host)),
+            ..Self::known(catalog(host))
+        }
+    }
+
+    fn macos(catalog: RemoteShellCatalog) -> Self {
+        Self {
+            stored_form: Some(crate::macos_remote::stored_form(&catalog)),
+            ..Self::known(catalog)
         }
     }
 }
 
+/// Finds the shells a host offers. Saved capabilities that already name the
+/// platform skip the `uname` probe, and a saved catalog is returned without
+/// contacting the host at all unless `refresh` asks for a fresh read.
 pub fn discover(
     connection: &SavedConnection,
     refresh: bool,
-    saved_os_id: Option<&str>,
+    saved: Option<&HostCapabilities>,
     stored: Option<&str>,
 ) -> Result<Discovery, String> {
     if !refresh && let Some(host) = cached_host(connection) {
         return Ok(Discovery::known(catalog(host)));
     }
-    if saved_os_id == Some("windows") {
-        if !refresh && let Some(host) = stored.and_then(|stored| restore(connection, stored)) {
-            return Ok(Discovery {
-                catalog: catalog(host),
-                discovered: None,
-                from_storage: true,
-            });
+    match saved.and_then(|capabilities| capabilities.os_id.as_deref()) {
+        Some("windows") => {
+            if !refresh && let Some(host) = stored.and_then(|stored| restore(connection, stored)) {
+                return Ok(Discovery::from_storage(catalog(host)));
+            }
+            return discover_windows(connection).map(Discovery::windows);
         }
-        return discover_windows(connection).map(Discovery::discovered);
+        Some("macos") => {
+            crate::macos_remote::remember(connection, true);
+            if !refresh
+                && let Some(catalog) =
+                    stored.and_then(|stored| crate::macos_remote::restore(stored, saved.cloned()))
+            {
+                return Ok(Discovery::from_storage(catalog));
+            }
+            return crate::macos_remote::shells(connection, saved.cloned()).map(Discovery::macos);
+        }
+        _ => {}
     }
     if let Ok(output) =
         RemoteCommandExecutor::execute(connection, "detect_host_platform", "uname -s; uname -r")
@@ -232,7 +261,7 @@ pub fn discover(
     {
         if text.lines().next().unwrap_or("").trim() == "Darwin" {
             crate::macos_remote::remember(connection, true);
-            return crate::macos_remote::shells(connection).map(Discovery::known);
+            return crate::macos_remote::shells(connection, None).map(Discovery::known);
         }
         return Ok(Discovery::known(RemoteShellCatalog {
             platform: "linux".into(),
@@ -243,7 +272,7 @@ pub fn discover(
             profile_error: None,
         }));
     }
-    discover_windows(connection).map(Discovery::discovered)
+    discover_windows(connection).map(Discovery::windows)
 }
 
 static BACKGROUND_REFRESHES: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -389,10 +418,15 @@ mod tests {
         let connection = unreachable("stored-catalog");
         let stored = stored_form(&saved_host("Command Prompt"));
         let started = Instant::now();
-        let discovery = discover(&connection, false, Some("windows"), Some(&stored)).unwrap();
+        let saved = HostCapabilities {
+            os_id: Some("windows".into()),
+            ..HostCapabilities::default()
+        };
+        let discovery = discover(&connection, false, Some(&saved), Some(&stored)).unwrap();
         assert!(started.elapsed() < Duration::from_millis(250));
         assert!(discovery.from_storage);
-        assert!(discovery.discovered.is_none());
+        assert!(discovery.stored_form.is_none());
+        assert!(discovery.fresh_capabilities.is_none());
         assert_eq!(discovery.catalog.platform, "windows");
         assert!(discovery.catalog.windows_terminal_available);
         assert_eq!(
@@ -444,6 +478,39 @@ mod tests {
         let restored = restore(&connection, &stored_form(&saved_host("Saved"))).unwrap();
         assert_eq!(restored.shells[0].label, "Fresh");
         shell_cache().lock().remove(&connection_key(&connection));
+    }
+
+    #[test]
+    fn a_saved_mac_catalog_is_shown_without_any_remote_call() {
+        let connection = unreachable("stored-mac-catalog");
+        let saved = HostCapabilities {
+            connection_id: "stored-mac-catalog".into(),
+            os_id: Some("macos".into()),
+            os_name: Some("macOS".into()),
+            ..HostCapabilities::default()
+        };
+        let stored = r#"["macos:zsh","macos:fish"]"#;
+        let started = Instant::now();
+        let discovery = discover(&connection, false, Some(&saved), Some(stored)).unwrap();
+        assert!(crate::macos_remote::is_host(&connection).unwrap());
+        assert!(started.elapsed() < Duration::from_millis(250));
+        assert!(discovery.from_storage);
+        assert!(discovery.stored_form.is_none());
+        assert!(discovery.fresh_capabilities.is_none());
+        assert_eq!(discovery.catalog.platform, "macos");
+        assert_eq!(
+            discovery
+                .catalog
+                .shells
+                .iter()
+                .map(|shell| (shell.id.as_str(), shell.label.as_str()))
+                .collect::<Vec<_>>(),
+            [("macos:zsh", "zsh"), ("macos:fish", "fish")]
+        );
+        assert_eq!(
+            discovery.catalog.capabilities.unwrap().os_name.as_deref(),
+            Some("macOS")
+        );
     }
 
     #[test]
