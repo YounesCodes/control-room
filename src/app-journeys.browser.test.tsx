@@ -2564,6 +2564,74 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
   });
 
+  it("asks before pasting History lines that the shell would run", async () => {
+    overrides.set("get_history", () => [
+      {
+        id: "history-a",
+        connectionId: "host-a",
+        sessionId: "old-session",
+        command: "echo one\necho two\n",
+        cwd: "/",
+        startedAt: "2026-09-01T00:00:00Z",
+        finishedAt: null,
+        exitCode: 0,
+        shell: "bash",
+      },
+    ]);
+    const writes = () =>
+      native.invoke.mock.calls.filter(([command]) => command === "write_session");
+    await mount();
+    await navigate("History");
+    await userEvent.hover(page.getByText(/echo one/));
+    await page.getByRole("button", { name: "Paste into terminal" }).click();
+    const dialog = page.getByRole("dialog", { name: "Run pasted lines?" });
+    await expect.element(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect.element(dialog).not.toBeInTheDocument();
+    expect(writes()).toHaveLength(0);
+
+    await userEvent.hover(page.getByText(/echo one/));
+    await page.getByRole("button", { name: "Paste into terminal" }).click();
+    await page.getByRole("button", { name: "Paste and run" }).click();
+    await vi.waitFor(() => expect(writes()).toHaveLength(1));
+    expect(new TextDecoder().decode(new Uint8Array(writes()[0][1].data))).toBe(
+      "echo one\recho two",
+    );
+  });
+
+  it("pastes History lines without asking when the shell holds them for Enter", async () => {
+    overrides.set("get_history", () => [
+      {
+        id: "history-a",
+        connectionId: "host-a",
+        sessionId: "old-session",
+        command: "echo one\necho two",
+        cwd: "/",
+        startedAt: "2026-09-01T00:00:00Z",
+        finishedAt: null,
+        exitCode: 0,
+        shell: "bash",
+      },
+    ]);
+    await mount();
+    await vi.waitFor(() =>
+      expect(native.invoke.mock.calls.some(([command]) => command === "start_session")).toBe(true),
+    );
+    const started = native.invoke.mock.calls.find(([command]) => command === "start_session")![1];
+    started.output.onmessage(new TextEncoder().encode("\x1b[?2004h").buffer);
+    await navigate("History");
+    await userEvent.hover(page.getByText(/echo one/));
+    await page.getByRole("button", { name: "Paste into terminal" }).click();
+    await vi.waitFor(() =>
+      expect(native.invoke.mock.calls.some(([command]) => command === "write_session")).toBe(true),
+    );
+    const data = native.invoke.mock.calls.find(([command]) => command === "write_session")![1].data;
+    expect(new TextDecoder().decode(new Uint8Array(data))).toBe(
+      "\x1b[200~echo one\recho two\x1b[201~",
+    );
+    expect(page.getByRole("dialog", { name: "Run pasted lines?" }).query()).toBeNull();
+  });
+
   it("restarts the open terminal after enabling Enhanced History", async () => {
     overrides.set("get_history_integration_status", () => "not-installed");
     overrides.set("install_history_integration", ({ connectionId }) => ({
