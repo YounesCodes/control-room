@@ -293,6 +293,7 @@ function renderPane(
     findRequest?: number;
     platform?: "windows" | "macos";
     onReconnect?: () => void;
+    onSession?: (sessionId: string | null) => void;
   } = {},
 ) {
   render(
@@ -374,18 +375,16 @@ describe("TerminalPane sessions", () => {
   it.each(["local", "remote"])(
     "resizes a running %s PTY when xterm's grid changes",
     async (kind) => {
+      const sessionId = `${kind === "local" ? "local" : "ssh"}-session`;
+      const onSession = vi.fn();
       renderPane(
         kind === "local" ? createLocalWorkspace(shell) : createRemoteWorkspace(connection),
+        vi.fn(),
+        { onSession },
       );
-      await vi.waitFor(() =>
-        expect(kind === "local" ? api.startLocalSession : api.startSession).toHaveBeenCalled(),
-      );
+      await vi.waitFor(() => expect(onSession).toHaveBeenCalledWith(sessionId));
       act(() => xterm.resize!(80, 24));
-      expect(api.resizeSession).toHaveBeenCalledWith(
-        `${kind === "local" ? "local" : "ssh"}-session`,
-        80,
-        24,
-      );
+      expect(api.resizeSession).toHaveBeenCalledWith(sessionId, 80, 24);
       cleanup();
       expect(xterm.resize).toBeNull();
     },

@@ -1,6 +1,6 @@
 import "./isolation";
 import { $, expect } from "@wdio/globals";
-import { terminalContains } from "./helpers";
+import { openConnectionDialog, terminalContains } from "./helpers";
 import {
   focusNativeApp,
   nativeKey,
@@ -16,7 +16,7 @@ describe("Italian native keyboard layout", () => {
       : "enters accented text and composes dead keys in a text field",
     async () => {
       await openNativeShell();
-      await $(".sidebar-primary").click();
+      await openConnectionDialog();
       await $("input[aria-label='Display name']").click();
       await focusNativeApp();
       await withItalianLayout(async () => {
