@@ -201,6 +201,14 @@ async function mount() {
       .toBeVisible();
   else await expect.poll(() => element.querySelector(".sidebar")?.hasAttribute("inert")).toBe(true);
 }
+function restingBox(element: Element) {
+  const box = element.getBoundingClientRect();
+  const { offsetWidth, offsetHeight } = element as HTMLElement;
+  return {
+    bottom: box.top + box.height / 2 + offsetHeight / 2,
+    right: box.left + box.width / 2 + offsetWidth / 2,
+  };
+}
 async function navigate(name: string) {
   const compact = window.innerWidth < 860;
   await expect
@@ -1050,24 +1058,32 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .getByRole("button", { name: "Scratchpad", exact: true });
     for (const focus of [false, true]) {
       if (focus) await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+      const pressed = trigger.element() as HTMLElement;
+      pressed.style.transition = "none";
+      pressed.style.transform = "scale(0.93)";
       await trigger.click();
       const popup = page.getByRole("dialog", { name: "Scratchpad" });
       await expect.element(popup).toBeVisible();
+      pressed.style.removeProperty("transform");
+      pressed.style.removeProperty("transition");
       await expect.element(popup.getByRole("textbox")).toHaveFocus();
+      await Promise.all(
+        popup
+          .element()
+          .getAnimations()
+          .map((animation) => animation.finished),
+      );
       await expect
         .poll(() => popup.element().getBoundingClientRect().top)
-        .toBeCloseTo(trigger.element().getBoundingClientRect().bottom + 6, 0);
+        .toBeCloseTo(restingBox(trigger.element()).bottom + 6, 0);
       expect(popup.element().getBoundingClientRect().right).toBeCloseTo(
-        Math.min(trigger.element().getBoundingClientRect().right, window.innerWidth - 12),
+        Math.min(restingBox(trigger.element()).right, window.innerWidth - 12),
         0,
       );
       await page.viewport(1040, 680);
       await expect
         .poll(() => popup.element().getBoundingClientRect().right)
-        .toBeCloseTo(
-          Math.min(trigger.element().getBoundingClientRect().right, window.innerWidth - 12),
-          0,
-        );
+        .toBeCloseTo(Math.min(restingBox(trigger.element()).right, window.innerWidth - 12), 0);
       const node = popup.element();
       await userEvent.keyboard("{Escape}");
       await expect.element(trigger).toHaveFocus();
