@@ -35,6 +35,8 @@ export interface TerminalPaneHandle {
   focus: () => void;
   copySelection: () => void;
   pasteClipboard: () => void;
+  pasteText: (text: string) => void;
+  bracketedPasteActive: () => boolean;
   toggleSearch: () => void;
 }
 
@@ -175,6 +177,8 @@ export function TerminalPane({
     focus: () => terminalRef.current?.focus(),
     copySelection,
     pasteClipboard,
+    pasteText: (text) => terminalRef.current?.paste(text),
+    bracketedPasteActive: () => terminalRef.current?.modes.bracketedPasteMode ?? false,
     toggleSearch: () => (searchOpen ? closeSearch() : openSearch()),
   }));
 
