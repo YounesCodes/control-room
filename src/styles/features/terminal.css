@@ -163,8 +163,8 @@
 
 .session-tab-menu-button[data-attention]::after {
   position: absolute;
-  top: 8px;
-  left: 18px;
+  top: 9px;
+  left: 21px;
   width: 6px;
   height: 6px;
   border-radius: 50%;

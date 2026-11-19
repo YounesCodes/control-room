@@ -14,7 +14,7 @@ import {
   type ReactNode,
 } from "react";
 import { flushSync } from "react-dom";
-import { ChevronLeft, ChevronRight, SquareStack, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, GalleryVerticalEnd, X } from "lucide-react";
 import { usePopoverExit } from "../hooks/use-popover-exit";
 
 export type WorkspaceTabKind = "local" | "remote" | "group";
@@ -729,7 +729,7 @@ export function WorkspaceTabScroller({
           data-attention={hiddenAttention || undefined}
           onClick={() => setMenuOpen((current) => !current)}
         >
-          <SquareStack size={14} aria-hidden="true" />
+          <GalleryVerticalEnd size={14} aria-hidden="true" />
           <span className="session-tab-menu-count" data-count={count} aria-hidden="true" />
         </button>
       )}
