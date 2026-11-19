@@ -2756,6 +2756,101 @@ export function App() {
               onReorder={moveTabTo}
               reorderModifier={clientPlatform === "macos" ? "meta" : "control"}
               onDragOut={splitAvailable ? tabDragOut : undefined}
+              menuAlwaysShown
+              trailing={
+                <span className="session-new-terminal-anchor" data-new-terminal-menu>
+                  <button
+                    ref={newTerminalButtonRef}
+                    className={
+                      workspaces.length
+                        ? "session-new-terminal"
+                        : "session-new-terminal session-new-terminal-empty"
+                    }
+                    type="button"
+                    onClick={() => openNewTerminalMenu()}
+                    disabled={!canOpenNewTerminal && !splitAvailable}
+                    aria-haspopup="dialog"
+                    aria-label="New terminal"
+                    aria-expanded={newTerminalMenuOpen}
+                    title={splitAvailable ? "New terminal or split" : "New terminal"}
+                  >
+                    <Plus size={16} />
+                    {!workspaces.length && <span>New terminal</span>}
+                  </button>
+                  {newTerminalMenuPresent && (
+                    <TerminalTargetMenu
+                      label="New terminal"
+                      className="new-terminal-menu"
+                      groups={splitting ? splitTargetGroups : newTerminalGroups}
+                      style={newTerminalMenuAt ?? undefined}
+                      closing={newTerminalMenuClosing}
+                      footer={
+                        !splitting &&
+                        administratorGroupOffered &&
+                        !administratorLocalShells.length && (
+                          <details className="terminal-administrator-setup">
+                            <summary>
+                              <ShieldAlert size={14} />
+                              Run as administrator
+                              <ChevronDown size={12} />
+                            </summary>
+                            <p>{administratorTerminalNote(administratorTerminalStatus)}</p>
+                          </details>
+                        )
+                      }
+                      onClose={() => {
+                        setNewTerminalMenuOpen(false);
+                        newTerminalButtonRef.current?.focus();
+                      }}
+                    >
+                      {splitAvailable && (
+                        <div className="terminal-open-modes" role="group" aria-label="Open as">
+                          {(
+                            [
+                              ["tab", null, "New tab", "New tab"],
+                              ["vertical", "vertical", "Split right", "Split right, side by side"],
+                              [
+                                "horizontal",
+                                "horizontal",
+                                "Split down",
+                                "Split down, top and bottom",
+                              ],
+                            ] as const
+                          ).map(([preview, direction, label, name]) => {
+                            const active = direction
+                              ? splitting && splitDirection === direction
+                              : !splitting;
+                            return (
+                              <button
+                                key={preview}
+                                className={active ? "active" : ""}
+                                type="button"
+                                disabled={direction !== null && !canSplitTerminal}
+                                onClick={() => {
+                                  setNewTerminalMode(direction ? "split" : "tab");
+                                  if (direction) setSplitDirection(direction);
+                                }}
+                                aria-pressed={active}
+                                aria-label={name}
+                              >
+                                <span
+                                  className={`terminal-open-preview ${preview}`}
+                                  aria-hidden="true"
+                                >
+                                  <i />
+                                  <i />
+                                  {preview === "tab" && <i />}
+                                </span>
+                                <span>{label}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </TerminalTargetMenu>
+                  )}
+                </span>
+              }
             >
               {terminalFocusMode
                 ? (() => {
@@ -2846,91 +2941,6 @@ export function App() {
                   })()
                 : workspaces.map((workspace) => renderWorkspaceTab(workspace))}
             </WorkspaceTabScroller>
-            <span className="session-new-terminal-anchor" data-new-terminal-menu>
-              <button
-                ref={newTerminalButtonRef}
-                className={
-                  workspaces.length
-                    ? "session-new-terminal"
-                    : "session-new-terminal session-new-terminal-empty"
-                }
-                type="button"
-                onClick={() => openNewTerminalMenu()}
-                disabled={!canOpenNewTerminal && !splitAvailable}
-                aria-haspopup="dialog"
-                aria-label="New terminal"
-                aria-expanded={newTerminalMenuOpen}
-                title={splitAvailable ? "New terminal or split" : "New terminal"}
-              >
-                <Plus size={16} />
-                {!workspaces.length && <span>New terminal</span>}
-                <ChevronDown size={12} />
-              </button>
-              {newTerminalMenuPresent && (
-                <TerminalTargetMenu
-                  label="New terminal"
-                  className="new-terminal-menu"
-                  groups={splitting ? splitTargetGroups : newTerminalGroups}
-                  style={newTerminalMenuAt ?? undefined}
-                  closing={newTerminalMenuClosing}
-                  footer={
-                    !splitting &&
-                    administratorGroupOffered &&
-                    !administratorLocalShells.length && (
-                      <details className="terminal-administrator-setup">
-                        <summary>
-                          <ShieldAlert size={14} />
-                          Run as administrator
-                          <ChevronDown size={12} />
-                        </summary>
-                        <p>{administratorTerminalNote(administratorTerminalStatus)}</p>
-                      </details>
-                    )
-                  }
-                  onClose={() => {
-                    setNewTerminalMenuOpen(false);
-                    newTerminalButtonRef.current?.focus();
-                  }}
-                >
-                  {splitAvailable && (
-                    <div className="terminal-open-modes" role="group" aria-label="Open as">
-                      {(
-                        [
-                          ["tab", null, "New tab", "New tab"],
-                          ["vertical", "vertical", "Split right", "Split right, side by side"],
-                          ["horizontal", "horizontal", "Split down", "Split down, top and bottom"],
-                        ] as const
-                      ).map(([preview, direction, label, name]) => {
-                        const active = direction
-                          ? splitting && splitDirection === direction
-                          : !splitting;
-                        return (
-                          <button
-                            key={preview}
-                            className={active ? "active" : ""}
-                            type="button"
-                            disabled={direction !== null && !canSplitTerminal}
-                            onClick={() => {
-                              setNewTerminalMode(direction ? "split" : "tab");
-                              if (direction) setSplitDirection(direction);
-                            }}
-                            aria-pressed={active}
-                            aria-label={name}
-                          >
-                            <span className={`terminal-open-preview ${preview}`} aria-hidden="true">
-                              <i />
-                              <i />
-                              {preview === "tab" && <i />}
-                            </span>
-                            <span>{label}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </TerminalTargetMenu>
-              )}
-            </span>
             {terminalFocusMode && (
               <div
                 className="session-window-drag-region"

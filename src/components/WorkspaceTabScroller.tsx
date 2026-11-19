@@ -14,7 +14,7 @@ import {
   type ReactNode,
 } from "react";
 import { flushSync } from "react-dom";
-import { ChevronDown, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, SquareStack, X } from "lucide-react";
 import { usePopoverExit } from "../hooks/use-popover-exit";
 
 export type WorkspaceTabKind = "local" | "remote" | "group";
@@ -63,9 +63,9 @@ function focusMenuRow(row: HTMLElement) {
   row.scrollIntoView({ block: "nearest" });
 }
 
-function hiddenSummary(direction: "left" | "right", hidden: number, attention: boolean) {
-  if (!hidden) return undefined;
-  return `${hidden} hidden to the ${direction}${attention ? ", needs attention" : ""}`;
+function menuButtonTitle(label: string, hidden: number, attention: boolean) {
+  if (!hidden) return label;
+  return `${label}: ${hidden} not in the tab row${attention ? ", one needs attention" : ""}`;
 }
 
 interface WorkspaceTabScrollerProps {
@@ -74,6 +74,8 @@ interface WorkspaceTabScrollerProps {
   activeTabId: string | null;
   arrangementKey: string;
   menuLabel?: string;
+  menuAlwaysShown?: boolean;
+  trailing?: ReactNode;
   onReorder?: (id: string, targetIndex: number) => void;
   reorderModifier?: "control" | "meta";
   onDragOut?: TabDragOut;
@@ -88,9 +90,6 @@ export interface TabDragOut {
 
 const MIN_TAB_WIDTH = 136;
 const MAX_TAB_WIDTH = 196;
-const OVERFLOW_BUTTON_WIDTH = 28;
-const PAGER_BUTTON_WIDTH = 34;
-const OVERFLOW_CONTROLS_WIDTH = OVERFLOW_BUTTON_WIDTH + PAGER_BUTTON_WIDTH * 2;
 const MEASURE_TOLERANCE_PX = 0.5;
 const DRAG_START_PX = 4;
 const DRAG_EDGE_PX = 28;
@@ -138,34 +137,39 @@ export function WorkspaceTabScroller({
   activeTabId,
   arrangementKey,
   menuLabel = "All terminals",
+  menuAlwaysShown = false,
+  trailing,
   onReorder,
   reorderModifier = "control",
   onDragOut,
 }: WorkspaceTabScrollerProps) {
   const dragOutRef = useRef(onDragOut);
   dragOutRef.current = onDragOut;
-  const regionRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const trailingRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
   const [listWidth, setListWidth] = useState(0);
+  const [trailingWidth, setTrailingWidth] = useState(0);
   const [start, setStart] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const { present: menuPresent, closing: menuClosing } = usePopoverExit(menuOpen);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, maxHeight: 0 });
   const tabs = Children.toArray(children);
   const count = tabs.length;
-  const overflow = width > 0 && count * MIN_TAB_WIDTH > width;
-  const showPager = overflow && width >= MIN_TAB_WIDTH + OVERFLOW_CONTROLS_WIDTH;
-  const controlsWidth = showPager ? OVERFLOW_CONTROLS_WIDTH : overflow ? OVERFLOW_BUTTON_WIDTH : 0;
-  const available = overflow && listWidth > 0 ? listWidth : Math.max(0, width - controlsWidth);
-  const pageSize = width > 0 ? Math.min(count, Math.floor(available / MIN_TAB_WIDTH)) : count;
-  const tabWidth =
-    width > 0 ? Math.min(MAX_TAB_WIDTH, available / Math.max(1, pageSize)) : MAX_TAB_WIDTH;
-  const lastStart = pageSize > 0 ? count - pageSize : 0;
+  const available = Math.max(0, listWidth - trailingWidth);
+  const measured = available > 0;
+  const overflow = measured && count * MIN_TAB_WIDTH > available;
+  const pageSize = measured
+    ? Math.min(count, Math.max(1, Math.floor(available / MIN_TAB_WIDTH)))
+    : count;
+  const tabWidth = measured
+    ? Math.min(MAX_TAB_WIDTH, available / Math.max(1, pageSize))
+    : MAX_TAB_WIDTH;
+  const lastStart = Math.max(0, count - pageSize);
   const visibleStart = overflow ? Math.min(start, lastStart) : 0;
+  const menuButtonShown = count > 0 && (menuAlwaysShown || overflow || menuOpen);
   const activeIndex = items.findIndex((item) => item.active);
   const pendingDragRef = useRef<PendingDrag | null>(null);
   const activeDragRef = useRef<ActiveDrag | null>(null);
@@ -186,8 +190,9 @@ export function WorkspaceTabScroller({
   const refocusMenuIndexRef = useRef<number | null>(null);
   const focusFilterRef = useRef(false);
   const hiddenRight = Math.max(0, count - visibleStart - pageSize);
-  const attentionLeft = items.slice(0, visibleStart).some((item) => item.attention);
-  const attentionRight = items.slice(visibleStart + pageSize).some((item) => item.attention);
+  const hiddenAttention = items
+    .filter((_, index) => index < visibleStart || index >= visibleStart + pageSize)
+    .some((item) => item.attention);
   const query = filter.trim().toLowerCase();
   const matches = items
     .map((item, index) => ({ item, index }))
@@ -210,10 +215,15 @@ export function WorkspaceTabScroller({
     setMenuOpen(false);
   }, [arrangementKey]);
 
-  useEffect(() => setMenuOpen(false), [overflow]);
+  useEffect(() => {
+    if (count === 0) setMenuOpen(false);
+  }, [count]);
 
   useEffect(() => {
-    if (!menuOpen) setFilter("");
+    if (menuOpen) return;
+    setFilter("");
+    keepMenuOnRearrangeRef.current = false;
+    refocusMenuIndexRef.current = null;
   }, [menuOpen]);
 
   useLayoutEffect(() => {
@@ -232,26 +242,27 @@ export function WorkspaceTabScroller({
     else pickerRef.current?.focus();
   }, [items.length]);
 
+  const hasTrailing = trailing !== undefined;
   const measureStrip = useCallback(() => {
-    const region = regionRef.current;
-    if (!region) return;
+    const list = listRef.current;
+    if (!list) return;
     const settle = (next: number) => (current: number) =>
       Math.abs(current - next) < MEASURE_TOLERANCE_PX ? current : next;
-    setWidth(settle(region.getBoundingClientRect().width));
-    setListWidth(settle(listRef.current?.getBoundingClientRect().width ?? 0));
+    setListWidth(settle(list.getBoundingClientRect().width));
+    setTrailingWidth(settle(trailingRef.current?.getBoundingClientRect().width ?? 0));
   }, []);
 
   useLayoutEffect(measureStrip);
 
   useLayoutEffect(() => {
-    const region = regionRef.current;
     const list = listRef.current;
-    if (!region || typeof ResizeObserver === "undefined") return;
+    const trailingElement = trailingRef.current;
+    if (!list || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => flushSync(measureStrip));
-    observer.observe(region);
-    if (list) observer.observe(list);
+    observer.observe(list);
+    if (trailingElement) observer.observe(trailingElement);
     return () => observer.disconnect();
-  }, [showPager, measureStrip]);
+  }, [hasTrailing, measureStrip]);
 
   useLayoutEffect(() => {
     setStart((current) => {
@@ -266,8 +277,10 @@ export function WorkspaceTabScroller({
   useEffect(() => {
     if (!menuOpen) return;
     const closeOutside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !regionRef.current?.contains(event.target))
-        setMenuOpen(false);
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (menuRef.current?.contains(target) || pickerRef.current?.contains(target)) return;
+      setMenuOpen(false);
     };
     const closeOnResize = () => setMenuOpen(false);
     document.addEventListener("pointerdown", closeOutside);
@@ -289,7 +302,7 @@ export function WorkspaceTabScroller({
     const maxHeight = Math.min(480, Math.max(0, useAbove ? above : below));
     const height = Math.min(menuRef.current.scrollHeight, maxHeight);
     setMenuPosition({
-      left: Math.max(8, Math.min(anchor.right - menuWidth, window.innerWidth - menuWidth - 8)),
+      left: Math.max(8, Math.min(anchor.left, window.innerWidth - menuWidth - 8)),
       top: useAbove ? Math.max(8, anchor.top - height - gap) : anchor.bottom + gap,
       maxHeight,
     });
@@ -371,10 +384,6 @@ export function WorkspaceTabScroller({
           ? rows.length - 1
           : (current + (event.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length;
     if (rows[next]) focusMenuRow(rows[next]);
-  }
-
-  function move(direction: -1 | 1) {
-    setStart((current) => Math.max(0, Math.min(lastStart, current + direction * pageSize)));
   }
 
   function closeMenu() {
@@ -661,6 +670,7 @@ export function WorkspaceTabScroller({
     let accumulated = 0;
     let resetTimer: ReturnType<typeof setTimeout> | undefined;
     const wheel = (event: WheelEvent) => {
+      if (event.target instanceof Node && trailingRef.current?.contains(event.target)) return;
       const raw = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
       const delta =
         raw * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? list.clientWidth : 1);
@@ -702,23 +712,34 @@ export function WorkspaceTabScroller({
       ]
         .filter(Boolean)
         .join(" ")}
-      ref={regionRef}
     >
-      {showPager && (
+      {menuButtonShown && (
         <button
-          className="session-tab-scroll-button session-tab-pager"
+          ref={pickerRef}
+          className="session-tab-menu-button"
           type="button"
-          disabled={visibleStart === 0}
-          onClick={() => move(-1)}
-          aria-label="Scroll terminals left"
-          title={hiddenSummary("left", visibleStart, attentionLeft)}
-          data-attention={attentionLeft || undefined}
+          aria-label={menuLabel}
+          title={
+            menuOpen
+              ? undefined
+              : menuButtonTitle(menuLabel, visibleStart + hiddenRight, hiddenAttention)
+          }
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          data-attention={hiddenAttention || undefined}
+          onClick={() => setMenuOpen((current) => !current)}
         >
-          <ChevronLeft size={15} aria-hidden="true" />
-          {visibleStart > 0 && <span className="session-tab-hidden-count">{visibleStart}</span>}
+          <SquareStack size={14} aria-hidden="true" />
+          <span className="session-tab-menu-count" data-count={count} aria-hidden="true" />
         </button>
       )}
-      <div className="session-tab-list" ref={listRef} data-tauri-drag-region>
+      <div
+        className="session-tab-list"
+        ref={listRef}
+        data-tauri-drag-region
+        data-more-left={visibleStart > 0 || undefined}
+        data-more-right={hiddenRight > 0 || undefined}
+      >
         <div
           className="session-tab-content"
           ref={contentRef}
@@ -729,7 +750,12 @@ export function WorkspaceTabScroller({
           onPointerCancel={onReorder ? finishDrag : undefined}
           onLostPointerCapture={onReorder ? finishDrag : undefined}
           onKeyDown={onReorder ? reorderWithKeyboard : undefined}
-          style={{ "--session-tab-width": `${tabWidth}px` } as React.CSSProperties}
+          style={
+            {
+              "--session-tab-width": `${tabWidth}px`,
+              width: measured ? renderedTabs.length * tabWidth : undefined,
+            } as CSSProperties
+          }
         >
           {renderedTabs.map((tab, index) => {
             const slotIndex = dragSliceStart + index;
@@ -770,36 +796,13 @@ export function WorkspaceTabScroller({
             });
           })}
         </div>
+        {trailing !== undefined && (
+          <div className="session-tab-trailing" ref={trailingRef}>
+            {trailing}
+          </div>
+        )}
       </div>
-      {showPager && (
-        <button
-          className="session-tab-scroll-button session-tab-pager"
-          type="button"
-          disabled={visibleStart === lastStart}
-          onClick={() => move(1)}
-          aria-label="Scroll terminals right"
-          title={hiddenSummary("right", hiddenRight, attentionRight)}
-          data-attention={attentionRight || undefined}
-        >
-          {hiddenRight > 0 && <span className="session-tab-hidden-count">{hiddenRight}</span>}
-          <ChevronRight size={15} aria-hidden="true" />
-        </button>
-      )}
-      {overflow && (
-        <button
-          ref={pickerRef}
-          className="session-tab-scroll-button session-tab-picker"
-          type="button"
-          aria-label={menuLabel}
-          title={`${menuLabel} (${count})`}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen((current) => !current)}
-        >
-          <ChevronDown size={15} />
-        </button>
-      )}
-      {overflow && menuPresent && (
+      {menuButtonShown && menuPresent && (
         <div
           ref={menuRef}
           className="session-tab-overflow-menu"

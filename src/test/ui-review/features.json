@@ -430,7 +430,7 @@
         },
         {
           "scenario": "tabs",
-          "states": ["overflow", "overflow-menu"]
+          "states": ["overflow", "overflow-menu", "focus-menu"]
         }
       ],
       "entryPoints": [

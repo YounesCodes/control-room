@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { TabLabel, WorkspaceTabScroller, type WorkspaceTabOption } from "./WorkspaceTabScroller";
 
 const TAB_WIDTH = 175;
@@ -188,7 +188,7 @@ describe("WorkspaceTabScroller reordering", () => {
     const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect");
     rectSpy.mockImplementation(function (this: HTMLElement) {
       const index = this.parentElement ? Array.from(this.parentElement.children).indexOf(this) : -1;
-      if (this.classList.contains("session-tab-scroll-region"))
+      if (this.classList.contains("session-tab-list"))
         return tabRect({ left: 0, right: 260, width: 260, top: 0, bottom: 34, height: 34 });
       if (this.classList.contains("session-tab-content"))
         return tabRect({ left: 0, right: 300, width: 300, top: 0, bottom: 34, height: 34 });
@@ -353,10 +353,14 @@ function OverflowStrip({
   terminals,
   initialActive,
   onClose,
+  menuAlwaysShown,
+  trailing,
 }: {
   terminals: MenuTerminal[];
   initialActive: number;
   onClose?: (label: string) => void;
+  menuAlwaysShown?: boolean;
+  trailing?: ReactNode;
 }) {
   const [activeLabel, setActiveLabel] = useState(terminals[initialActive].label);
   const [open, setOpen] = useState(terminals);
@@ -377,6 +381,8 @@ function OverflowStrip({
       }))}
       activeTabId={activeLabel}
       arrangementKey={open.map((terminal) => terminal.label).join("|")}
+      menuAlwaysShown={menuAlwaysShown}
+      trailing={trailing}
     >
       {open.map((terminal) => (
         <div className="session-tab-wrap" key={terminal.label}>
@@ -398,7 +404,7 @@ function menuItems(container: HTMLElement) {
 }
 
 function picker(container: HTMLElement) {
-  return container.querySelector<HTMLButtonElement>(".session-tab-picker")!;
+  return container.querySelector<HTMLButtonElement>(".session-tab-menu-button")!;
 }
 
 function itemName(item: HTMLElement) {
@@ -433,9 +439,11 @@ describe("WorkspaceTabScroller overflow", () => {
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
       this: HTMLElement,
     ) {
-      return this.classList.contains("session-tab-scroll-region")
-        ? tabRect({ left: 0, right: 400, width: 400, top: 0, bottom: 34, height: 34 })
-        : tabRect({});
+      if (this.classList.contains("session-tab-list"))
+        return tabRect({ left: 0, right: 400, width: 400, top: 0, bottom: 34, height: 34 });
+      if (this.classList.contains("session-tab-trailing"))
+        return tabRect({ left: 260, right: 400, width: 140, top: 0, bottom: 34, height: 34 });
+      return tabRect({});
     });
   });
   afterEach(() => {
@@ -448,25 +456,85 @@ describe("WorkspaceTabScroller overflow", () => {
   });
 
   function openMenu(container: HTMLElement) {
-    fireEvent.click(container.querySelector<HTMLButtonElement>(".session-tab-picker")!);
+    fireEvent.click(container.querySelector<HTMLButtonElement>(".session-tab-menu-button")!);
   }
 
-  it("counts hidden terminals on each side and flags hidden ones that need attention", () => {
+  it("counts every terminal and flags hidden ones that need attention", () => {
     const { container } = render(<OverflowStrip terminals={terminals} initialActive={5} />);
     expect(visibleTabs(container)).toEqual(["Staging host", "Example host 2"]);
-    const [left, right] = container.querySelectorAll<HTMLButtonElement>(".session-tab-pager");
-    expect(left.getAttribute("aria-label")).toBe("Scroll terminals left");
-    expect(left.title).toBe("4 hidden to the left, needs attention");
-    expect(left.dataset.attention).toBe("true");
-    expect(left.textContent).toBe("4");
-    expect(right.disabled).toBe(true);
-    expect(right.hasAttribute("title")).toBe(false);
+    expect(container.querySelector(".session-tab-pager")).toBeNull();
+    const button = picker(container);
+    const list = container.querySelector<HTMLElement>(".session-tab-list")!;
+    expect(button.getAttribute("aria-label")).toBe("All terminals");
+    expect(button.querySelector<HTMLElement>("[data-count]")!.dataset.count).toBe("6");
+    expect(button.title).toBe("All terminals: 4 not in the tab row, one needs attention");
+    expect(button.dataset.attention).toBe("true");
+    expect(list.dataset.moreLeft).toBe("true");
+    expect(list.dataset.moreRight).toBeUndefined();
 
-    fireEvent.click(left);
-    expect(visibleTabs(container)).toEqual(["PowerShell", "Command Prompt"]);
-    expect(left.title).toBe("2 hidden to the left, needs attention");
-    expect(right.title).toBe("2 hidden to the right");
-    expect(right.dataset.attention).toBeUndefined();
+    openMenu(container);
+    fireEvent.click(menuItems(container).find((item) => itemName(item) === "Example host")!);
+    expect(visibleTabs(container)).toEqual(["Example host", "PowerShell"]);
+    expect(button.title).toBe("All terminals: 4 not in the tab row");
+    expect(button.dataset.attention).toBeUndefined();
+    expect(list.dataset.moreLeft).toBe("true");
+    expect(list.dataset.moreRight).toBe("true");
+  });
+
+  it("keeps the menu and its button while closing terminals until it is dismissed", () => {
+    const { container } = render(<OverflowStrip terminals={terminals} initialActive={5} />);
+    openMenu(container);
+    for (let closed = 0; closed < 4; closed++) {
+      const focused = document.activeElement as HTMLElement;
+      fireEvent.keyDown(focused, { key: "Delete" });
+    }
+    expect(visibleTabs(container)).toHaveLength(2);
+    expect(menuItems(container)).toHaveLength(2);
+    expect(menuItems(container)).toContain(document.activeElement);
+    expect(picker(container).getAttribute("aria-expanded")).toBe("true");
+    expect(container.querySelector(".session-tab-list")!.hasAttribute("data-more-left")).toBe(
+      false,
+    );
+
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(container.querySelector(".session-tab-menu-button")).toBeNull();
+  });
+
+  it("keeps a pinned menu button when every tab fits", () => {
+    const { container } = render(
+      <OverflowStrip terminals={terminals.slice(0, 2)} initialActive={0} menuAlwaysShown />,
+    );
+    expect(visibleTabs(container)).toEqual(["Git Bash", "Example host"]);
+    expect(picker(container).querySelector<HTMLElement>("[data-count]")!.dataset.count).toBe("2");
+    expect(picker(container).title).toBe("All terminals");
+  });
+
+  it("closes the menu on a click anywhere but the menu and its button", () => {
+    const { container } = render(<OverflowStrip terminals={terminals} initialActive={5} />);
+    openMenu(container);
+    fireEvent.pointerDown(menuItems(container)[0]);
+    expect(picker(container).getAttribute("aria-expanded")).toBe("true");
+    fireEvent.pointerDown(container.querySelector(".session-tab-main")!);
+    expect(picker(container).getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("sizes tabs beside the trailing control and leaves wheel input over it alone", () => {
+    const { container } = render(
+      <OverflowStrip
+        terminals={terminals}
+        initialActive={5}
+        trailing={<button type="button">New terminal</button>}
+      />,
+    );
+    expect(visibleTabs(container)).toEqual(["Example host 2"]);
+    const content = container.querySelector<HTMLElement>(".session-tab-content")!;
+    expect(content.style.width).toBe("196px");
+    const newTerminal = container.querySelector(".session-tab-trailing button")!;
+    expect(content.nextElementSibling).toBe(newTerminal.parentElement);
+    fireEvent.wheel(newTerminal, { deltaY: -200 });
+    expect(visibleTabs(container)).toEqual(["Example host 2"]);
+    fireEvent.wheel(content, { deltaY: -200 });
+    expect(visibleTabs(container)).toEqual(["Staging host"]);
   });
 
   it("scrolls a terminal chosen from the menu or newly activated into view", () => {

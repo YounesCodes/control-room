@@ -44,10 +44,38 @@
 
 .session-tab-content {
   display: flex;
-  width: 100%;
+  flex: none;
   min-width: 0;
+  max-width: 100%;
   align-items: stretch;
   position: relative;
+}
+
+.session-tab-list[data-more-left] .session-tab-content::before,
+.session-tab-list[data-more-right] .session-tab-content::after {
+  position: absolute;
+  z-index: 31;
+  top: 0;
+  bottom: 0;
+  width: 16px;
+  pointer-events: none;
+  content: "";
+}
+
+.session-tab-list[data-more-left] .session-tab-content::before {
+  left: 0;
+  background: linear-gradient(90deg, var(--fill-selected), transparent);
+}
+
+.session-tab-list[data-more-right] .session-tab-content::after {
+  right: 0;
+  background: linear-gradient(270deg, var(--fill-selected), transparent);
+}
+
+.session-tab-trailing {
+  display: flex;
+  flex: none;
+  align-items: stretch;
 }
 
 .session-tab-scroll-region.can-reorder .session-tab-main,
@@ -104,49 +132,39 @@
   height: 0;
 }
 
-.session-tab-scroll-button {
-  display: grid;
-  width: 28px;
+.session-tab-menu-button {
+  position: relative;
+  display: flex;
   flex: none;
-  place-items: center;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
   border-right: 1px solid var(--border-subtle);
   background: var(--surface-chrome);
   color: var(--text-muted);
 }
 
-.session-tab-scroll-button:last-child {
-  border-right: 0;
-  border-left: 1px solid var(--border-subtle);
-}
-
-.session-tab-scroll-button:hover:not(:disabled) {
+.session-tab-menu-button:hover,
+.session-tab-menu-button[aria-expanded="true"] {
   background: var(--fill-hover);
   color: var(--text-strong);
 }
 
-.session-tab-scroll-button:disabled {
-  color: var(--text-faint);
-}
-
-.session-tab-pager {
-  position: relative;
-  display: flex;
-  width: 34px;
-  padding: 0;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-}
-
-.session-tab-hidden-count {
+.session-tab-menu-count {
+  min-width: 2ch;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  text-align: left;
 }
 
-.session-tab-pager[data-attention]::after {
+.session-tab-menu-count::after {
+  content: attr(data-count);
+}
+
+.session-tab-menu-button[data-attention]::after {
   position: absolute;
   top: 8px;
-  right: 5px;
+  left: 18px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -751,22 +769,18 @@
 
 .session-new-terminal {
   display: inline-flex;
-  width: 46px;
+  width: 40px;
   flex: none;
   align-items: center;
   justify-content: center;
   gap: 2px;
-  border-left: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
   background: transparent;
   padding: 0 8px;
   color: #dededa;
   font-size: 11.5px;
   font-weight: 600;
   line-height: 1;
-}
-
-.session-new-terminal > svg:last-of-type {
-  color: var(--text-muted);
 }
 
 .session-new-terminal > svg {

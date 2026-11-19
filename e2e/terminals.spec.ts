@@ -64,7 +64,11 @@ describe("Native PTY and Workspace lifecycle", () => {
     await $("[role=menu]").$("button*=Shell 1").click();
     await expectNativeText(await $(".session-tab-wrap.active .session-tab-label"), "Shell 1");
     await terminalCommand("echo OVERFLOW_FIRST", "OVERFLOW_FIRST");
-    await $("[aria-label='Scroll terminals right']").click();
+    await browser.execute(() =>
+      document
+        .querySelector(".session-tab-list")!
+        .dispatchEvent(new WheelEvent("wheel", { deltaY: 400, bubbles: true })),
+    );
     await $('button[aria-label="All terminals"]').click();
     await pressBoundaryKey("Home");
     await activateFocusedButton();

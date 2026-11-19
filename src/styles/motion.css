@@ -89,7 +89,7 @@
 .app-bar-button:active:not(:disabled),
 .host-menu:active:not(:disabled),
 .session-strip-button:active:not(:disabled),
-.session-tab-scroll-button:active:not(:disabled),
+.session-tab-menu-button:active,
 .session-new-terminal:active:not(:disabled),
 .session-tab-close:active:not(:disabled),
 .session-tab-rename:active:not(:disabled),
