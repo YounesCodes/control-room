@@ -2351,26 +2351,27 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.screenshot({ path: "../test-results/documentation-settings.png" });
   });
 
-  it("fits whole metric readings beside the update icon across Terminal and inspection tabs", async () => {
-    currentSettings = { ...currentSettings, hostMetricsEnabled: true };
-    overrides.set("check_for_update", () => ({
-      currentVersion: "0.9.2",
-      version: "9.9.9",
-      notes: "Fixture release",
-      publishedAt: null,
-    }));
-    await mount();
-    await page.getByRole("button", { name: "Open Settings" }).click();
-    await page.getByRole("button", { name: "App & Diagnostics", exact: true }).click();
-    await page.getByRole("button", { name: "Check for updates" }).click();
-    await page.getByRole("button", { name: "Close Settings", exact: true }).click();
-    for (const [width, height] of [
-      [1440, 900],
-      [1174, 700],
-      [1120, 700],
-      [960, 640],
-      [520, 480],
-    ]) {
+  it.each([
+    [1440, 900],
+    [1174, 700],
+    [1120, 700],
+    [960, 640],
+    [520, 480],
+  ])(
+    "fits whole metric readings beside the update icon across Terminal and inspection tabs at %ix%i",
+    async (width, height) => {
+      currentSettings = { ...currentSettings, hostMetricsEnabled: true };
+      overrides.set("check_for_update", () => ({
+        currentVersion: "0.9.2",
+        version: "9.9.9",
+        notes: "Fixture release",
+        publishedAt: null,
+      }));
+      await mount();
+      await page.getByRole("button", { name: "Open Settings" }).click();
+      await page.getByRole("button", { name: "App & Diagnostics", exact: true }).click();
+      await page.getByRole("button", { name: "Check for updates" }).click();
+      await page.getByRole("button", { name: "Close Settings", exact: true }).click();
       await page.viewport(width, height);
       for (const view of ["Systemd", "Terminal"]) {
         await navigate(view);
@@ -2414,12 +2415,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
           expect(header.getBoundingClientRect().bottom - bounds.bottom).toBeGreaterThanOrEqual(4);
         }
       }
-    }
-    await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
-    const panel = element.querySelector(".host-metrics-panel")!;
-    expect(panel.getBoundingClientRect().right).toBeLessThan(520);
-    await page.screenshot({ path: "../test-results/titlebar-metrics-details-520.png" });
-  });
+      if (width === 520) {
+        await page.getByRole("button", { name: /: Host metrics for Fixture Alpha$/ }).click();
+        const panel = element.querySelector(".host-metrics-panel")!;
+        expect(panel.getBoundingClientRect().right).toBeLessThan(520);
+        await page.screenshot({ path: "../test-results/titlebar-metrics-details-520.png" });
+      }
+    },
+  );
 
   it("checks updates manually, treats release notes as text and recovers from a download failure", async () => {
     overrides.set("check_for_update", () => ({
