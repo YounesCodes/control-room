@@ -499,6 +499,22 @@ function anchoredPopoverAt(
   };
 }
 
+function unscaledRect(element: Element): DOMRect {
+  const rect = element.getBoundingClientRect();
+  const transform = getComputedStyle(element).transform;
+  if (!transform || transform === "none" || typeof DOMMatrixReadOnly === "undefined") return rect;
+  const { a: scaleX, d: scaleY } = new DOMMatrixReadOnly(transform);
+  if (!scaleX || !scaleY) return rect;
+  const width = rect.width / scaleX;
+  const height = rect.height / scaleY;
+  return new DOMRect(
+    rect.left + (rect.width - width) / 2,
+    rect.top + (rect.height - height) / 2,
+    width,
+    height,
+  );
+}
+
 function cssZoomOf(element: Element | null): number {
   return (element as (Element & { currentCSSZoom?: number }) | null)?.currentCSSZoom ?? 1;
 }
@@ -1071,7 +1087,8 @@ export function App() {
   useLayoutEffect(() => {
     if (!scratchpadOpen || settingsOpen || activeWorkspace?.view !== "terminal") return;
     const position = () => {
-      const rect = scratchpadButtonRef.current?.getBoundingClientRect();
+      const button = scratchpadButtonRef.current;
+      const rect = button ? unscaledRect(button) : null;
       if (rect)
         setScratchpadAt(anchoredPopoverAt(rect, Math.min(320, window.innerWidth - 40), 380));
     };
@@ -1089,7 +1106,8 @@ export function App() {
 
   useLayoutEffect(() => {
     if (!newTerminalMenuOpen) return;
-    const rect = newTerminalButtonRef.current?.getBoundingClientRect();
+    const button = newTerminalButtonRef.current;
+    const rect = button ? unscaledRect(button) : null;
     if (rect)
       setNewTerminalMenuAt(
         anchoredPopoverAt(
@@ -1553,7 +1571,8 @@ export function App() {
       return;
     }
     setNewTerminalMode(mode);
-    const rect = newTerminalButtonRef.current?.getBoundingClientRect();
+    const button = newTerminalButtonRef.current;
+    const rect = button ? unscaledRect(button) : null;
     if (rect) {
       setNewTerminalMenuAt(
         anchoredPopoverAt(
