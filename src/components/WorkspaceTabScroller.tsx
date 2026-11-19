@@ -91,6 +91,8 @@ export interface TabDragOut {
 const MIN_TAB_WIDTH = 136;
 const MAX_TAB_WIDTH = 196;
 const MEASURE_TOLERANCE_PX = 0.5;
+const MENU_WINDOW_GUTTER_PX = 12;
+const MENU_ANCHOR_INSET_PX = 8;
 const DRAG_START_PX = 4;
 const DRAG_EDGE_PX = 28;
 const DRAG_STEP_MS = 350;
@@ -294,7 +296,7 @@ export function WorkspaceTabScroller({
   useLayoutEffect(() => {
     if (!menuOpen || !pickerRef.current || !menuRef.current) return;
     const anchor = pickerRef.current.getBoundingClientRect();
-    const menuWidth = Math.min(360, window.innerWidth - 16);
+    const menuWidth = Math.min(360, window.innerWidth - MENU_WINDOW_GUTTER_PX * 2);
     const gap = 6;
     const below = window.innerHeight - anchor.bottom - gap - 8;
     const above = anchor.top - gap - 8;
@@ -302,7 +304,13 @@ export function WorkspaceTabScroller({
     const maxHeight = Math.min(480, Math.max(0, useAbove ? above : below));
     const height = Math.min(menuRef.current.scrollHeight, maxHeight);
     setMenuPosition({
-      left: Math.max(8, Math.min(anchor.left, window.innerWidth - menuWidth - 8)),
+      left: Math.max(
+        MENU_WINDOW_GUTTER_PX,
+        Math.min(
+          anchor.left + MENU_ANCHOR_INSET_PX,
+          window.innerWidth - menuWidth - MENU_WINDOW_GUTTER_PX,
+        ),
+      ),
       top: useAbove ? Math.max(8, anchor.top - height - gap) : anchor.bottom + gap,
       maxHeight,
     });
