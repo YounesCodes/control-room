@@ -4020,6 +4020,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(activeStripTab()).toBe("Fixture Alpha");
     expect(document.activeElement?.className).toContain("session-tab-main");
 
+    const pastTheLastTab = page.getByRole("button", { name: "New terminal", exact: true });
+    await userEvent.dragAndDrop(beta, pastTheLastTab.element());
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta"]));
+    await vi.waitFor(() =>
+      expect(persisted.workspaces.map((workspace) => workspace.id)).toEqual(["tab-a", "tab-b"]),
+    );
+    expect(activeStripTab()).toBe("Fixture Alpha");
+
     await userEvent.click(beta);
     await vi.waitFor(() => expect(activeStripTab()).toBe("Fixture Beta"));
   });
@@ -4247,6 +4255,87 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await userEvent.keyboard("{Control>}{Shift>}{ArrowLeft}{/Shift}{/Control}");
     await vi.waitFor(() => expect(focusStrip()).toEqual(["Fixture Group 2", "Fixture Gamma"]));
     await vi.waitFor(() => expect(savedIds()).toEqual(["tab-a", "tab-b", "tab-c"]));
+  });
+
+  it("drags a tab past either end of an overflowing strip into the first or last slot and keeps it in view", async () => {
+    overrides.set("list_local_shells", () => ({
+      profiles: [{ id: "git-bash", label: "Git Bash", kind: "git-bash", elevated: false }],
+      administratorStatus: "disabled",
+    }));
+    const ids = Array.from({ length: 10 }, (_, index) => `t${index + 1}`);
+    persisted = {
+      panelSizes: {},
+      workspaces: ids.map((id) => ({
+        id,
+        label: id.toUpperCase(),
+        connectionId: null,
+        localShellId: "git-bash",
+        view: "terminal" as const,
+        historyPaused: false,
+      })),
+      activeWorkspaceId: "t1",
+      terminalGroups: [],
+      terminalLayout: null,
+    };
+    root.render(<App />);
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["T1", "T2", "T3", "T4", "T5"]));
+    const content = document.querySelector<HTMLElement>(".session-tab-content")!;
+    const savedIds = () => persisted.workspaces.map((workspace) => workspace.id);
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+    const drag = async (
+      label: string,
+      toX: (strip: DOMRect) => number,
+      { settle = true, dy = 0, shot }: { settle?: boolean; dy?: number; shot?: string } = {},
+    ) => {
+      const tab = stripTabMain(label)!;
+      const box = tab.getBoundingClientRect();
+      const fire = (node: HTMLElement, type: string, x: number, offset = 0) =>
+        node.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            pointerId: 1,
+            isPrimary: true,
+            clientX: x,
+            clientY: box.top + box.height / 2 + offset,
+          }),
+        );
+      const x = toX(content.getBoundingClientRect());
+      fire(tab, "pointerdown", box.left + 30);
+      fire(content, "pointermove", box.left + 40);
+      fire(content, "pointermove", x, dy);
+      if (settle) {
+        await nextFrame();
+        await nextFrame();
+        await vi.waitFor(() =>
+          expect(
+            document.querySelector(".session-tab-dragged .session-tab-label")?.textContent,
+          ).toBe(label),
+        );
+        if (shot) await page.screenshot({ path: `../test-results/${shot}` });
+      }
+      fire(content, "pointerup", x, dy);
+      await vi.waitFor(() => expect(document.querySelector(".session-tab-dragged")).toBeNull());
+    };
+
+    await drag("T2", (strip) => strip.right + 80, { shot: "drag-past-strip-end.png" });
+    await vi.waitFor(() => expect(savedIds().at(-1)).toBe("t2"));
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["T7", "T8", "T9", "T10", "T2"]));
+    expect(persisted.activeWorkspaceId).toBe("t1");
+
+    await drag("T9", (strip) => strip.right + 300, { settle: false });
+    await vi.waitFor(() => expect(savedIds().at(-1)).toBe("t9"));
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["T7", "T8", "T10", "T2", "T9"]));
+
+    await drag("T10", (strip) => strip.left - 60);
+    const reordered = ["t10", "t1", "t3", "t4", "t5", "t6", "t7", "t8", "t2", "t9"];
+    await vi.waitFor(() => expect(savedIds()).toEqual(reordered));
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["T10", "T1", "T3", "T4", "T5"]));
+
+    await drag("T3", (strip) => strip.left + 20, { dy: -60, shot: "drag-pulled-away.png" });
+    expect(savedIds()).toEqual(reordered);
+    expect(stripTabLabels()).toEqual(["T10", "T1", "T3", "T4", "T5"]);
   });
 
   it("keeps a dragged tab pinned inside the strip when the pointer leaves it", async () => {

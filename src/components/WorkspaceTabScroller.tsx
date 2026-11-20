@@ -123,8 +123,22 @@ interface ActiveDrag {
   pointerX: number;
   startX: number;
   out: boolean;
+  away: boolean;
   geometry: DragGeometry;
   windowStart: number;
+}
+
+interface RevealAfterMove {
+  id: string;
+  arrangementKey: string;
+}
+
+function pulledAway(geometry: DragGeometry, y: number) {
+  return y < geometry.top - DRAG_OUT_PX || y > geometry.bottom + DRAG_OUT_PX;
+}
+
+function pastStripEnd(geometry: DragGeometry, x: number): -1 | 0 | 1 {
+  return x > geometry.right ? 1 : x < geometry.left ? -1 : 0;
 }
 
 function dragTargetFrom(drag: ActiveDrag, windowStart: number, windowSize: number, total: number) {
@@ -154,6 +168,9 @@ export function WorkspaceTabScroller({
 }: WorkspaceTabScrollerProps) {
   const dragOutRef = useRef(onDragOut);
   dragOutRef.current = onDragOut;
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const revealAfterMoveRef = useRef<RevealAfterMove | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const trailingRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -275,8 +292,19 @@ export function WorkspaceTabScroller({
   }, [hasTrailing, measureStrip]);
 
   useLayoutEffect(() => {
+    const reveal = revealAfterMoveRef.current;
+    const moveApplied = reveal !== null && reveal.arrangementKey !== arrangementKey;
+    if (moveApplied) revealAfterMoveRef.current = null;
+    const movedIndex = moveApplied
+      ? itemsRef.current.findIndex((item) => item.id === reveal.id)
+      : -1;
     setStart((current) => {
       const bounded = Math.min(current, lastStart);
+      if (movedIndex >= 0) {
+        if (movedIndex < bounded) return movedIndex;
+        if (movedIndex >= bounded + pageSize) return Math.min(lastStart, movedIndex - pageSize + 1);
+        return bounded;
+      }
       if (!activeTabId || activeIndex < 0) return bounded;
       if (activeIndex < bounded) return activeIndex;
       if (activeIndex >= bounded + pageSize) return Math.min(lastStart, activeIndex - pageSize + 1);
@@ -419,6 +447,12 @@ export function WorkspaceTabScroller({
       stopDragScroll();
       return;
     }
+    const past = pastStripEnd(geometry, x);
+    if (past) {
+      stopDragScroll();
+      setStart(past > 0 ? lastStart : 0);
+      return;
+    }
     const direction: -1 | 0 | 1 =
       x < geometry.left + DRAG_EDGE_PX ? -1 : x > geometry.right - DRAG_EDGE_PX ? 1 : 0;
     if (direction === dragScrollRef.current.direction) return;
@@ -445,7 +479,8 @@ export function WorkspaceTabScroller({
     pointerYRef.current = null;
     if (x === null || y === null) return;
     const out = carriedOut(active, y);
-    const next = { ...active, pointerX: out ? active.startX : x, out };
+    const away = !out && pulledAway(active.geometry, y);
+    const next = { ...active, pointerX: out ? active.startX : x, out, away };
     activeDragRef.current = next;
     setDragging(next);
     if (out) {
@@ -453,7 +488,8 @@ export function WorkspaceTabScroller({
       dragOutRef.current?.move(active.id, x, y);
     } else {
       if (active.out) dragOutRef.current?.cancel();
-      steerDragScroll(x, next.geometry);
+      if (away) stopDragScroll();
+      else steerDragScroll(x, next.geometry);
     }
   }
 
@@ -616,6 +652,7 @@ export function WorkspaceTabScroller({
       content?.setPointerCapture(event.pointerId);
     } catch {}
     armClickSuppression();
+    revealAfterMoveRef.current = null;
     activeDragRef.current = {
       pointerId: pending.pointerId,
       id: pending.id,
@@ -623,6 +660,7 @@ export function WorkspaceTabScroller({
       pointerX: event.clientX,
       startX: pending.startX,
       out: false,
+      away: false,
       geometry: pending.geometry,
       windowStart: visibleStart,
     };
@@ -655,19 +693,18 @@ export function WorkspaceTabScroller({
     }
     if (!onReorder) return;
     const { geometry } = active;
-    const inside =
-      event.clientX >= geometry.left &&
-      event.clientX <= geometry.right &&
-      event.clientY >= geometry.top &&
-      event.clientY <= geometry.bottom;
-    if (!inside) return;
+    if (pulledAway(geometry, event.clientY)) return;
+    const past = pastStripEnd(geometry, event.clientX);
+    const windowStart = past > 0 ? lastStart : past < 0 ? 0 : visibleStart;
     const target = dragTargetFrom(
       { ...active, pointerX: event.clientX },
-      visibleStart,
+      windowStart,
       pageSize,
       count,
     );
-    if (target !== active.fromIndex) onReorder(active.id, target);
+    if (target === active.fromIndex) return;
+    revealAfterMoveRef.current = { id: active.id, arrangementKey };
+    onReorder(active.id, target);
   }
 
   function reorderWithKeyboard(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -684,6 +721,7 @@ export function WorkspaceTabScroller({
     if (!id) return;
     event.preventDefault();
     event.stopPropagation();
+    revealAfterMoveRef.current = { id, arrangementKey };
     onReorder(id, target);
   }
 
@@ -719,7 +757,11 @@ export function WorkspaceTabScroller({
   }, [overflow, lastStart, pageSize]);
 
   const activeDrag = dragging;
-  const dragTarget = activeDrag ? dragTargetFrom(activeDrag, visibleStart, pageSize, count) : null;
+  const dragTarget = activeDrag
+    ? activeDrag.away
+      ? activeDrag.fromIndex
+      : dragTargetFrom(activeDrag, visibleStart, pageSize, count)
+    : null;
   const visibleCount = Math.min(pageSize, count - visibleStart);
   const renderedTabs = activeDrag
     ? tabs.flatMap((tab, index) => {
@@ -738,7 +780,9 @@ export function WorkspaceTabScroller({
         if (index === activeDrag.fromIndex) {
           classes.push("session-tab-dragged");
           style.zIndex = 30;
-          const followed = activeDrag.pointerX - geometry.grabOffset;
+          const followed = activeDrag.away
+            ? geometry.left + (index - visibleStart) * geometry.tabWidth
+            : activeDrag.pointerX - geometry.grabOffset;
           const clamped = Math.max(
             geometry.left,
             Math.min(geometry.right - geometry.tabWidth, followed),
@@ -761,6 +805,7 @@ export function WorkspaceTabScroller({
         onReorder ? "can-reorder" : "",
         activeDrag ? "dragging" : "",
         activeDrag?.out ? "dragging-out" : "",
+        activeDrag?.away ? "dragging-away" : "",
       ]
         .filter(Boolean)
         .join(" ")}
