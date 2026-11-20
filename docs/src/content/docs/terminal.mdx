@@ -4,7 +4,9 @@ description: Open SSH and local terminals in tabs and split panes.
 ---
 
 import terminalMenuScreenshot from "../../assets/screenshots/new-terminal-menu.png";
-import terminalGroupsScreenshot from "../../assets/screenshots/terminal-groups.png";
+import DemoVideo from "../../components/DemoVideo.astro";
+import splitPanesDemo from "../../assets/videos/split-panes.mp4";
+import splitPanesPoster from "../../assets/videos/split-panes-poster.png";
 
 Each tab holds one terminal. Select a host in the sidebar to open its terminal. To open another, select **New terminal**, the plus button beside the tabs, and pick a saved host or a [local shell](/control-room/local-terminals/). Opening the same host twice gives you two separate sessions.
 
@@ -15,7 +17,6 @@ Each tab holds one terminal. Select a host in the sidebar to open its terminal. 
       alt="The New terminal menu open below the plus button, listing saved connections and local shells."
     />
   </a>
-  <figcaption>The New terminal menu. Example data shown.</figcaption>
 </figure>
 
 ## Tabs
@@ -42,15 +43,13 @@ Select **Focus terminal** at the top right to hide the sidebar and give the term
 
 In focus mode, open **New terminal**, choose **Split right** or **Split down**, then pick a terminal. You can also drag a tab onto the terminal and drop it near an edge. One group can mix hosts and local shells.
 
-<figure class="docs-screenshot">
-  <a href={terminalGroupsScreenshot.src} target="_blank" rel="noreferrer">
-    <img
-      src={terminalGroupsScreenshot.src}
-      alt="Focus mode with a Group 1 tab, a Panes row, and three terminals: one on the left and two stacked on the right."
-    />
-  </a>
-  <figcaption>Three terminals in one split group. Example data shown.</figcaption>
-</figure>
+<DemoVideo
+  src={splitPanesDemo}
+  poster={splitPanesPoster}
+  width={1440}
+  height={900}
+  label="Selecting Focus terminal, then using New terminal with Split right and Split down to arrange three terminals in one group."
+/>
 
 - A group shows as one tab. Click a pane to type in it.
 - Drag the line between panes to resize them. Double-click the line to make them equal again.

@@ -78,6 +78,15 @@ for (const theme of ["dark", "light"]) {
         const metrics = await page.evaluate(async () => {
           const article = document.querySelector(".sl-markdown-content")!;
           await Promise.all([...article.querySelectorAll("img")].map((img) => img.decode()));
+          await Promise.all(
+            [...article.querySelectorAll("video")].map((video) =>
+              video.readyState >= 1
+                ? null
+                : new Promise((resolve) =>
+                    video.addEventListener("loadedmetadata", resolve, { once: true }),
+                  ),
+            ),
+          );
           const toc = document.querySelector(".right-sidebar")!;
           const interFaces = await document.fonts.load('400 16px "Inter Local"', "Control Room");
           return {
@@ -91,6 +100,9 @@ for (const theme of ["dark", "light"]) {
             imagesLoaded: [...article.querySelectorAll("img")].every(
               (img) => img.complete && img.naturalWidth > 0,
             ),
+            videosLoaded: [...article.querySelectorAll("video")].every(
+              (video) => video.videoWidth > 0,
+            ),
           };
         });
         expect(metrics.page).toBeLessThanOrEqual(metrics.viewport);
@@ -99,6 +111,7 @@ for (const theme of ["dark", "light"]) {
         expect(metrics.bodyFont).toContain("Inter Local");
         expect(metrics.interLoaded).toBe(true);
         expect(metrics.imagesLoaded).toBe(true);
+        expect(metrics.videosLoaded).toBe(true);
         await page.screenshot({
           path: testInfo.outputPath(`${route.replaceAll("/", "-") || "home"}.png`),
         });
@@ -145,3 +158,19 @@ test("search, theme, anchors and mobile navigation retain native behavior", asyn
   await page.goto(`reference/security/#${id}`);
   await expect(heading).toBeInViewport();
 });
+
+for (const motion of ["no-preference", "reduce"] as const) {
+  test(`demo videos follow the ${motion} motion preference`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: motion });
+    await page.goto("inspection/logs/");
+    const video = page.locator(".docs-demo video");
+    await expect(video).toHaveAttribute("aria-label", /Start/);
+    await expect(video).toHaveAttribute("poster", /logs-poster/);
+    await expect
+      .poll(() => video.evaluate((element: HTMLVideoElement) => element.paused))
+      .toBe(motion === "reduce");
+    expect(await video.evaluate((element: HTMLVideoElement) => element.controls)).toBe(
+      motion === "reduce",
+    );
+  });
+}

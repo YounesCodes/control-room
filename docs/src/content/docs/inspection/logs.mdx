@@ -3,19 +3,19 @@ title: Logs
 description: Read recent service or container logs and follow new lines.
 ---
 
-import logsScreenshot from "../../../assets/screenshots/logs.png";
+import DemoVideo from "../../../components/DemoVideo.astro";
+import logsDemo from "../../../assets/videos/logs.mp4";
+import logsPoster from "../../../assets/videos/logs-poster.png";
 
 In **Logs**, choose a service or container, choose how many recent lines to load, then select **Start**. Turn on **Receive new lines** to keep reading as new lines arrive.
 
-<figure class="docs-screenshot">
-  <a href={logsScreenshot.src} target="_blank" rel="noreferrer">
-    <img
-      src={logsScreenshot.src}
-      alt="Logs for a service, with warning and error lines marked and the All, Warnings, and Errors filters."
-    />
-  </a>
-  <figcaption>A service log with warnings and errors marked. Example data shown.</figcaption>
-</figure>
+<DemoVideo
+  src={logsDemo}
+  poster={logsPoster}
+  width={1195}
+  height={804}
+  label="Selecting Start to load a service log, switching between the Warnings, Errors, and All filters, then searching for batch 4813."
+/>
 
 - **Warnings** and **Errors** show only those lines. Control Room spots them by words such as `warning`, `error`, or `failed`, or by a level written in the line, such as `level=error`.
 - Press `Ctrl+F` to search the loaded lines.

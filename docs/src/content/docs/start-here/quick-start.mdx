@@ -3,7 +3,9 @@ title: Quick start
 description: Install the app and open your first SSH host.
 ---
 
-import connectionScreenshot from "../../../assets/screenshots/connection-editor.png";
+import DemoVideo from "../../../components/DemoVideo.astro";
+import addConnectionDemo from "../../../assets/videos/add-connection.mp4";
+import addConnectionPoster from "../../../assets/videos/add-connection-poster.png";
 
 You need an account on a Linux, macOS, or Windows computer that you can reach over SSH. In these docs, that computer is called the host.
 
@@ -13,15 +15,13 @@ You need an account on a Linux, macOS, or Windows computer that you can reach ov
 4. Select **Test structured access**. It checks that Control Room can sign in with an SSH key or ssh-agent, without a password prompt. The host views, such as **Systemd** and **Ports**, need that. The terminal still works with a password.
 5. Select **Add connection** to save the host.
 
-<figure class="docs-screenshot">
-  <a href={connectionScreenshot.src} target="_blank" rel="noreferrer">
-    <img
-      src={connectionScreenshot.src}
-      alt="The Add connection form with a display name, SSH destination, and username filled in."
-    />
-  </a>
-  <figcaption>The Add connection form. Example data shown.</figcaption>
-</figure>
+<DemoVideo
+  src={addConnectionDemo}
+  poster={addConnectionPoster}
+  width={1060}
+  height={830}
+  label="Selecting Add connection, typing a name, address, and username, then selecting Test structured access, which reports that SSH works without a password."
+/>
 
 Select the host in the sidebar to open a terminal. Then pick a view under it, such as **Systemd** for services or **Ports** for open ports.
 
