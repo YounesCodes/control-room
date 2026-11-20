@@ -137,7 +137,7 @@ fn settings_written_before_the_updater_existed_still_load() {
     assert_eq!(loaded.default_log_tail, 500);
     assert!(!loaded.host_metrics_enabled);
     assert_eq!(loaded.host_metrics_interval_seconds, 5);
-    assert_eq!(loaded.host_metrics.len(), 5);
+    assert_eq!(loaded.host_metrics, AppSettings::default().host_metrics);
     assert!(loaded.global_sudo_enabled);
     assert!(loaded.automatic_terminal_titles);
     assert!(
