@@ -900,26 +900,7 @@ describe("App Workspace behavior", () => {
     );
   });
 
-  it("moves a focused group with Control and Shift arrow keys in focus mode", async () => {
-    await renderFocusGroupedApp();
-
-    stubTabStripLayout();
-    const alphaTab = groupTab("Alpha");
-    act(() => alphaTab.focus());
-    fireEvent.keyDown(alphaTab, { key: "ArrowRight", ctrlKey: true, shiftKey: true });
-    expect(focusStripLabels()).toEqual(["Host C", "Alpha 2", "Beta 2"]);
-    await waitFor(() =>
-      expect(lastSavedWorkspaceIds()).toEqual([
-        "workspace-2",
-        "workspace-0",
-        "workspace-1",
-        "workspace-3",
-        "workspace-4",
-      ]),
-    );
-  });
-
-  it("moves a focused tab with the keyboard and closes keep the new order", async () => {
+  it("closes a dragged tab and keeps the new order", async () => {
     const user = userEvent.setup();
     const first = connection("11111111-1111-4111-8111-111111111111", "Host A");
     const second = connection("22222222-2222-4222-8222-222222222222", "Host B");
@@ -931,9 +912,11 @@ describe("App Workspace behavior", () => {
     await screen.findByTestId("terminal-workspace-0", undefined, { timeout: 5_000 });
     expect(stripOrder()).toEqual(["Host A", "Host B", "Host C"]);
 
-    act(() => tabMainButton("Host B").focus());
+    stubTabStripLayout();
     const hostB = tabMainButton("Host B");
-    fireEvent.keyDown(hostB, { key: "ArrowLeft", ctrlKey: true, shiftKey: true });
+    stripPointer(hostB, "pointerdown", 262);
+    stripPointer(hostB, "pointermove", 60);
+    stripPointer(hostB, "pointerup", 60);
     expect(stripOrder()).toEqual(["Host B", "Host A", "Host C"]);
     expect(activeTabLabel()).toBe("Host A");
     await waitFor(() =>

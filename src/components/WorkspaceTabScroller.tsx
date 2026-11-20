@@ -77,7 +77,6 @@ interface WorkspaceTabScrollerProps {
   menuAlwaysShown?: boolean;
   trailing?: ReactNode;
   onReorder?: (id: string, targetIndex: number) => void;
-  reorderModifier?: "control" | "meta";
   onDragOut?: TabDragOut;
 }
 
@@ -163,7 +162,6 @@ export function WorkspaceTabScroller({
   menuAlwaysShown = false,
   trailing,
   onReorder,
-  reorderModifier = "control",
   onDragOut,
 }: WorkspaceTabScrollerProps) {
   const dragOutRef = useRef(onDragOut);
@@ -707,24 +705,6 @@ export function WorkspaceTabScroller({
     onReorder(active.id, target);
   }
 
-  function reorderWithKeyboard(event: ReactKeyboardEvent<HTMLDivElement>) {
-    if (!onReorder || count < 2 || activeDragRef.current) return;
-    const modifier = reorderModifier === "meta" ? event.metaKey : event.ctrlKey;
-    if (!modifier || !event.shiftKey) return;
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    const hit = tabFromEvent(event.target);
-    if (!hit) return;
-    const fromIndex = visibleStart + hit.index;
-    const target = event.key === "ArrowLeft" ? fromIndex - 1 : fromIndex + 1;
-    if (target < 0 || target >= count) return;
-    const id = items[fromIndex]?.id;
-    if (!id) return;
-    event.preventDefault();
-    event.stopPropagation();
-    revealAfterMoveRef.current = { id, arrangementKey };
-    onReorder(id, target);
-  }
-
   useEffect(() => {
     const list = listRef.current;
     if (!list || !overflow || pageSize === 0) return;
@@ -849,7 +829,6 @@ export function WorkspaceTabScroller({
           onPointerUp={onReorder ? releaseDrag : undefined}
           onPointerCancel={onReorder ? finishDrag : undefined}
           onLostPointerCapture={onReorder ? finishDrag : undefined}
-          onKeyDown={onReorder ? reorderWithKeyboard : undefined}
           style={
             {
               "--session-tab-width": `${tabWidth}px`,

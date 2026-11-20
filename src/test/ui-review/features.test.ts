@@ -7,7 +7,7 @@ import type { Feature } from "./features";
 const features = map.features as Feature[];
 const docsRoot = new URL("../../../docs/src/content/docs/", import.meta.url);
 const scenarios: Record<string, { states: string[] }> = registry.scenarios;
-const kinds = ["toolbar", "sidebar", "tabs", "settings", "menu", "page", "palette", "shortcut"];
+const kinds = ["toolbar", "sidebar", "tabs", "settings", "menu", "page", "shortcut"];
 
 function headingSlug(heading: string) {
   return heading
@@ -41,7 +41,6 @@ describe("feature map", () => {
         expect(kinds, feature.name).toContain(entry.kind);
         if (entry.kind === "shortcut") continue;
         expect(entry.role && entry.name, feature.name).toBeTruthy();
-        if (entry.kind === "palette") expect(entry.role, feature.name).toBe("option");
         if (entry.fixture) expect(fixtureExists(entry.fixture), feature.name).toBe(true);
         if (entry.viewport) expect(Object.keys(registry.viewports)).toContain(entry.viewport);
         for (const platform of entry.platforms ?? [])

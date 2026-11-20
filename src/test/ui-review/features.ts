@@ -18,7 +18,6 @@ type Located = {
 
 export type EntryPoint =
   | { kind: "shortcut"; keys: string }
-  | (Located & { kind: "palette"; role: "option" })
   | (Located & { kind: "toolbar" | "sidebar" | "tabs" | "settings" | "menu" | "page" });
 
 export type Feature = {

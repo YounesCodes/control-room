@@ -125,9 +125,8 @@ describe("motion guardrails", () => {
     expect(stylesSource).toMatch(/@keyframes popover-out \{[\s\S]*?opacity: 0;/);
   });
 
-  it("rises centered dialogs in place and keeps the palette dropping from above", () => {
+  it("rises centered dialogs in place", () => {
     expect(rule(".modal")).toContain("animation: dialog-in");
-    expect(rule(".command-palette")).toContain("animation: popover-in");
   });
 
   it("fades panel states in and out of view", () => {
@@ -143,10 +142,5 @@ describe("motion guardrails", () => {
     );
     expect(appSource).toContain("<ChevronDown size={13} />");
     expect(appSource).not.toMatch(/collapsed \? <Chevron/);
-  });
-
-  it("gives command palette items a hover fill and a smooth selection", () => {
-    expect(rule(".command-item")).toContain("transition");
-    expect(rule(".command-item:hover")).toContain("background: var(--fill-hover)");
   });
 });

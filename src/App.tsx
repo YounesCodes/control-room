@@ -52,7 +52,6 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { CommandPalette } from "./components/CommandPalette";
 import { ConfirmDialog } from "./components/ConfirmDialog";
 import { HostMetrics } from "./components/HostMetrics";
 import { displayedHeaderMetrics } from "./lib/header-metrics";
@@ -95,11 +94,7 @@ import { tagBadgeStyle } from "./lib/connection-tag-color";
 import { connectionTarget } from "./lib/format";
 import { detectHostCapabilities } from "./lib/host-capabilities";
 import { connectionTargetKey } from "./lib/connection-validation";
-import {
-  isWorkspaceShortcutBlocked,
-  pasteRunsLines,
-  trimTrailingLineBreaks,
-} from "./lib/terminal-flow";
+import { pasteRunsLines, trimTrailingLineBreaks } from "./lib/terminal-flow";
 import { clearScratchpadDraft, quiesceScratchpad, resumeScratchpad } from "./lib/scratchpad-draft";
 import {
   createTerminalLayout,
@@ -633,7 +628,6 @@ export function App() {
   });
   const [newTerminalMenuAt, setNewTerminalMenuAt] = useState<AnchoredPopover | null>(null);
   const [scratchpadAt, setScratchpadAt] = useState<AnchoredPopover | null>(null);
-  const [paletteOpen, setPaletteOpen] = useState(false);
   const [terminalActivity, setTerminalActivity] = useState<Record<string, "output" | "bell">>({});
   const [terminalProcessing, setTerminalProcessing] = useState<Record<string, boolean>>({});
   const [terminalTitles, setTerminalTitles] = useState<Record<string, string>>({});
@@ -969,73 +963,6 @@ export function App() {
   }, [loading, hasActiveWorkspace]);
 
   useEffect(() => {
-    function keydown(event: KeyboardEvent) {
-      if (
-        isWorkspaceShortcutBlocked(
-          event.target,
-          settingsOpen || dialogConnection !== null || hostMenuConnectionId !== null,
-        )
-      ) {
-        return;
-      }
-      const appModifier = clientPlatform === "macos" ? event.metaKey : event.ctrlKey;
-      if (appModifier && event.shiftKey && event.key.toLowerCase() === "t" && activeWorkspace) {
-        event.preventDefault();
-        updateWorkspace(activeWorkspace.id, { view: "terminal" });
-      }
-      if (appModifier && event.shiftKey && event.key.toLowerCase() === "w" && activeWorkspace) {
-        event.preventDefault();
-        void closeWorkspace(activeWorkspace.id);
-      }
-      if (appModifier && event.shiftKey && event.key.toLowerCase() === "r" && activeWorkspace) {
-        event.preventDefault();
-        updateWorkspace(activeWorkspace.id, {
-          connectRequested: true,
-          restored: false,
-          reconnectToken: activeWorkspace.reconnectToken + 1,
-        });
-      }
-      if (
-        appModifier &&
-        event.shiftKey &&
-        event.key.toLowerCase() === "f" &&
-        activeWorkspace?.view === "terminal"
-      ) {
-        event.preventDefault();
-        setTerminalFindRequests((current) => ({
-          ...current,
-          [activeWorkspace.id]: (current[activeWorkspace.id] ?? 0) + 1,
-        }));
-      }
-    }
-    window.addEventListener("keydown", keydown);
-    return () => window.removeEventListener("keydown", keydown);
-  }, [activeWorkspace, dialogConnection, clientPlatform, hostMenuConnectionId, settingsOpen]);
-
-  useEffect(() => {
-    function keydown(event: KeyboardEvent) {
-      if (
-        (clientPlatform === "macos" ? event.metaKey : event.ctrlKey) &&
-        event.shiftKey &&
-        event.key.toLowerCase() === "p" &&
-        !event.repeat
-      ) {
-        if (paletteOpen) {
-          event.preventDefault();
-          setPaletteOpen(false);
-          return;
-        }
-        if (dialogConnection !== null || document.querySelector('[role="dialog"]:not([inert])'))
-          return;
-        event.preventDefault();
-        setPaletteOpen(true);
-      }
-    }
-    window.addEventListener("keydown", keydown);
-    return () => window.removeEventListener("keydown", keydown);
-  }, [dialogConnection, clientPlatform, paletteOpen]);
-
-  useEffect(() => {
     if (!hostMenuConnectionId) return;
 
     function dismissMenu(event: PointerEvent) {
@@ -1253,15 +1180,6 @@ export function App() {
 
   function exitTerminalFocus() {
     workspaceSession.setTerminalFocusMode(false);
-  }
-
-  function openScratchpad() {
-    if (!activeWorkspace) return;
-    closeSettings(() => {
-      updateWorkspace(activeWorkspace.id, { view: "terminal" });
-      setNewTerminalMenuOpen(false);
-      setScratchpadOpen(true);
-    });
   }
 
   function selectTerminalGroup(group: TerminalGroup) {
@@ -2782,7 +2700,6 @@ export function App() {
               arrangementKey={tabArrangementKey}
               items={workspaceTabOptions}
               onReorder={moveTabTo}
-              reorderModifier={clientPlatform === "macos" ? "meta" : "control"}
               onDragOut={splitAvailable ? tabDragOut : undefined}
               menuAlwaysShown
               trailing={
@@ -3349,13 +3266,6 @@ export function App() {
                 The connection editor can test read-only inspection access before you save.
               </p>
             )}
-            <div className="empty-shortcuts">
-              <span className="empty-shortcut">
-                <kbd>{clientPlatform === "macos" ? "Cmd" : "Ctrl"}</kbd>
-                <kbd>Shift</kbd>
-                <kbd>P</kbd> Command palette
-              </span>
-            </div>
             {environment && !environment.sshPath && (
               <p className="inline-warning">
                 {clientPlatform === "windows"
@@ -3458,61 +3368,6 @@ export function App() {
             run();
           }}
           onClose={() => setConfirmState(null)}
-        />
-      )}
-
-      {paletteOpen && (
-        <CommandPalette
-          shortcutModifier={clientPlatform === "macos" ? "Cmd" : "Ctrl"}
-          connections={connections}
-          localShells={offeredShells}
-          workspaces={workspaces}
-          activeWorkspaceId={activeWorkspaceId}
-          activeView={activeWorkspace?.view ?? null}
-          canOpenNewTerminal={canOpenNewTerminal}
-          activeWorkspaceIsLocal={Boolean(activeWorkspace && isLocalWorkspace(activeWorkspace))}
-          canFocusTerminal={Boolean(activeWorkspace && activeWorkspace.view === "terminal")}
-          canSplitTerminal={canSplitTerminal}
-          views={activeWorkspace ? offeredNavigation : []}
-          hostCapabilities={hostCapabilities}
-          labelForWorkspace={activityLabel}
-          onClose={() => setPaletteOpen(false)}
-          onOpenConnection={(connection) => openConnection(connection)}
-          onOpenLocalShell={openLocalShell}
-          onSelectWorkspace={(workspace) => selectWorkspaceTab(workspace)}
-          onSetView={(view) => {
-            if (!activeWorkspace) return;
-            closeSettings(() => updateWorkspace(activeWorkspace.id, { view }));
-          }}
-          onNewTerminal={() => openNewTerminalMenu()}
-          onReconnect={() =>
-            activeWorkspace &&
-            updateWorkspace(activeWorkspace.id, {
-              connectRequested: true,
-              restored: false,
-              reconnectToken: activeWorkspace.reconnectToken + 1,
-            })
-          }
-          onCloseWorkspace={() => activeWorkspace && void closeWorkspace(activeWorkspace.id)}
-          onFocusTerminal={enterTerminalFocus}
-          onFindTerminal={() => {
-            if (!activeWorkspace) return;
-            setTerminalFindRequests((current) => ({
-              ...current,
-              [activeWorkspace.id]: (current[activeWorkspace.id] ?? 0) + 1,
-            }));
-          }}
-          onSplitTerminal={() => {
-            enterTerminalFocus();
-            setNewTerminalMode("split");
-            setNewTerminalMenuOpen(true);
-          }}
-          onOpenScratchpad={openScratchpad}
-          onRenameWorkspace={() => activeWorkspace && renameWorkspace(activeWorkspace)}
-          onManageConnections={() => setConnectionGroupsOpen(true)}
-          onAddConnection={() => setDialogConnection("new")}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onCheckForUpdates={() => void updater.checkNow()}
         />
       )}
     </div>

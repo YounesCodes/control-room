@@ -193,9 +193,10 @@ connectors through gutters, never through cards.
 
 ### Discoverability
 
-Keep the command palette searchable and keyboard-operable, and make shortcuts
-discoverable through it, tooltips, or nearby hints. The full shortcut list
-belongs in `docs/src/content/docs/reference/keyboard-shortcuts.md`.
+Reach every action through a visible control. Keep keyboard shortcuts to
+clipboard, search, and list or graph navigation, and make them discoverable
+through tooltips or nearby hints. The full shortcut list belongs in
+`docs/src/content/docs/reference/keyboard-shortcuts.md`.
 
 ## Accessibility
 

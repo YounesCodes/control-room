@@ -1,35 +1,5 @@
 export const MAX_PENDING_TERMINAL_INPUT_BYTES = 64 * 1024;
 
-type TerminalKeyEvent = Pick<KeyboardEvent, "type" | "ctrlKey" | "metaKey" | "shiftKey" | "key">;
-
-type ShortcutTarget = {
-  closest?: (selectors: string) => unknown;
-};
-
-export function isWorkspaceShortcutBlocked(
-  target: EventTarget | null,
-  applicationOverlayOpen: boolean,
-): boolean {
-  if (applicationOverlayOpen) return true;
-  const candidate = target as ShortcutTarget | null;
-  if (!candidate?.closest) return false;
-  if (candidate.closest(".xterm")) return false;
-  return Boolean(
-    candidate.closest("input, textarea, select, [contenteditable='true'], [role='dialog']"),
-  );
-}
-
-export function isControlRoomShortcut(
-  event: TerminalKeyEvent,
-  modifier: "control" | "meta" = "control",
-): boolean {
-  if (event.type !== "keydown") return false;
-  if (modifier === "meta" ? !event.metaKey : !event.ctrlKey) return false;
-  const key = event.key.toLowerCase();
-  if (!event.shiftKey) return false;
-  return key === "t" || key === "w" || key === "r" || key === "p" || key === "f";
-}
-
 type TerminalRightClickAction = "copy" | "paste" | "terminal" | "ignore";
 
 type TerminalRightClick = {

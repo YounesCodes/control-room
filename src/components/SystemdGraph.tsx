@@ -475,11 +475,6 @@ export function SystemdGraph({
                     if (event.currentTarget.matches(":focus-visible")) reveal(event.currentTarget);
                   }}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && event.shiftKey) {
-                      event.preventDefault();
-                      onRefocus(id);
-                      return;
-                    }
                     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
                     if (isGraphDirection(event.key)) {
                       event.preventDefault();

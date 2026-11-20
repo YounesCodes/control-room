@@ -74,14 +74,14 @@ captures. A session has a two-minute budget. Exit codes are 0 for success, 1 for
 capture failure, and 2 for invalid arguments. Use `--help` for available selections.
 
 `src/test/ui-review/features.json` maps each main-window feature to its name in the UI
-and docs, its entry points (toolbar, sidebar, tab strip, Settings, menu, command palette
-item, or shortcut, by accessible role and name), its docs page, and the capture
+and docs, its entry points (toolbar, sidebar, tab strip, Settings, menu, or shortcut, by
+accessible role and name), its docs page, and the capture
 scenarios and states that show it. `npm run ui:capture -- --features` prints it and
 lists features with no capture scenario (`"capture": null`). Those are the open
 visual coverage gaps. `npm test` checks that every referenced scenario, state, docs
 page, heading, and shortcut exists, and that every capture state belongs to a feature.
 `npm run test:browser` mounts the real App on the capture fixtures and resolves every
-entry point, so renaming a control or palette item without updating the map fails. An
+entry point, so renaming a control without updating the map fails. An
 entry point with `platforms` resolves only on those browser platforms; the window
 buttons, for example, exist only on Windows and Linux. Add
 a feature to the map when you add a scenario or a main-window control.
@@ -267,12 +267,11 @@ the actual clipboard contents. A raw Node PTY collector verifies multiline Unico
 and the exact bracketed-paste delimiters. Separate raw-input cases verify shell
 Ctrl+C and Ctrl+W. The clipboard is restored after each case.
 
-`native-shortcuts.spec.ts` sends native keys for the command palette, workspace
-reordering, restart, terminal search and close confirmation, Settings categories,
-and Settings tabs. It also checks that arrows in a text field still edit the
+`native-shortcuts.spec.ts` sends native keys for Settings categories and Settings
+tabs. It also checks that arrows in a text field still edit the
 caret. `native-inspection-shortcuts.live.ts` covers Logs search, returning to
 Terminal, Systemd inventory and dependency navigation, Ports and Docker graph
-navigation, refocusing, and Escape dismissal against a real SSH host. Select that
+navigation, and Escape dismissal against a real SSH host. Select that
 file explicitly with `--spec` and configure `CONTROL_ROOM_TEST_HOST`,
 `CONTROL_ROOM_TEST_USER`, and optionally `CONTROL_ROOM_TEST_PORT`. Missing access,
 journald, Docker, or usable graph data fails the fixture instead of skipping it.
@@ -301,7 +300,7 @@ afterward. It tests the mode before applying it and does not update the display
 registry. A missing suitable mode fails only the 150% fixture; 125% still runs.
 Run it only on a disposable desktop with no concurrent test run.
 
-The native suites use Cmd on macOS and Ctrl elsewhere for application shortcuts;
+The native suites use Cmd on macOS and Ctrl elsewhere for terminal copy and paste;
 shell Ctrl+C and Ctrl+W always retain Ctrl. macOS execution depends on the native
 support branch. Compact workspace and focus-motion specs have no blanket macOS
 skip. macOS minimum-width checks start at its native 960-pixel minimum and use
