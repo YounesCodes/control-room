@@ -47,7 +47,11 @@ struct ManagedSession {
 
 enum SessionMode {
     Ssh(RemoteSessionState),
-    Local { label: String, shell_id: String },
+    Local {
+        label: String,
+        shell_id: String,
+        input_after_resize: Option<&'static [u8]>,
+    },
 }
 
 struct RemoteSessionState {
@@ -83,6 +87,15 @@ impl SessionMode {
         match self {
             Self::Ssh(_) => "ssh".into(),
             Self::Local { shell_id, .. } => format!("local:{shell_id}"),
+        }
+    }
+
+    fn input_after_resize(&self) -> Option<&'static [u8]> {
+        match self {
+            Self::Ssh(_) => None,
+            Self::Local {
+                input_after_resize, ..
+            } => *input_after_resize,
         }
     }
 }
@@ -272,6 +285,7 @@ impl SessionManager {
             SessionMode::Local {
                 label: shell.label().to_string(),
                 shell_id: shell.id().to_string(),
+                input_after_resize: shell.input_after_resize(),
             },
             requested_at,
         )?;
@@ -529,18 +543,17 @@ impl SessionManager {
 
     pub fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), String> {
         let session = self.get(session_id)?;
-        session
-            .master
-            .lock()
+        let master = session.master.lock();
+        let master = master
             .as_ref()
-            .ok_or_else(|| "Terminal Session is no longer active".to_string())?
-            .resize(PtySize {
-                rows: rows.clamp(2, 500),
-                cols: cols.clamp(2, 1_000),
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|error| error.to_string())
+            .ok_or_else(|| "Terminal Session is no longer active".to_string())?;
+        resize_pty(
+            master.as_ref(),
+            session.writer.lock().as_mut(),
+            cols,
+            rows,
+            session.mode.input_after_resize(),
+        )
     }
 
     pub fn acknowledge_output(&self, session_id: &str, bytes: usize) {
@@ -571,6 +584,28 @@ impl SessionManager {
             .cloned()
             .ok_or_else(|| "Terminal Session is no longer active".into())
     }
+}
+
+fn resize_pty(
+    master: &dyn MasterPty,
+    writer: &mut dyn Write,
+    cols: u16,
+    rows: u16,
+    input_after_resize: Option<&[u8]>,
+) -> Result<(), String> {
+    master
+        .resize(PtySize {
+            rows: rows.clamp(2, 500),
+            cols: cols.clamp(2, 1_000),
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|error| error.to_string())?;
+    if let Some(input) = input_after_resize {
+        writer.write_all(input).map_err(|error| error.to_string())?;
+        writer.flush().map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
 fn drain_pty_output<T>(

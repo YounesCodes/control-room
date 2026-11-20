@@ -108,6 +108,15 @@ fn terminal_type(kind: LocalShellKind) -> Option<&'static str> {
     }
 }
 
+// MSYS notices a console resize while reading the next input event and drops
+// that event when its SIGWINCH interrupts the read. A Shift release in ConPTY's
+// win32-input-mode encoding takes that place instead of the user's next key.
+const SHIFT_RELEASE_WIN32_INPUT: &[u8] = b"\x1b[16;42;0;0;0;1_";
+
+pub(super) fn input_after_resize(kind: LocalShellKind) -> Option<&'static [u8]> {
+    (kind == LocalShellKind::GitBash).then_some(SHIFT_RELEASE_WIN32_INPUT)
+}
+
 pub(super) fn configure_terminal_environment(command: &mut CommandBuilder, kind: LocalShellKind) {
     if let Some(terminal) = terminal_type(kind) {
         command.env("TERM", terminal);
@@ -943,6 +952,21 @@ mod tests {
             resolve_installed("../../evil.exe").unwrap_err(),
             "Unknown local shell"
         );
+    }
+
+    #[test]
+    fn only_git_bash_receives_input_after_a_resize() {
+        assert_eq!(
+            input_after_resize(LocalShellKind::GitBash),
+            Some(b"\x1b[16;42;0;0;0;1_".as_slice())
+        );
+        for kind in [
+            LocalShellKind::PowerShell7,
+            LocalShellKind::WindowsPowerShell,
+            LocalShellKind::CommandPrompt,
+        ] {
+            assert_eq!(input_after_resize(kind), None);
+        }
     }
 
     #[test]

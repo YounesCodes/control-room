@@ -54,6 +54,14 @@ impl ResolvedLocalShell {
         self.administrator_launcher.is_some()
     }
 
+    /// Input written to the shell after every terminal resize.
+    pub fn input_after_resize(&self) -> Option<&'static [u8]> {
+        #[cfg(windows)]
+        return windows::input_after_resize(self.kind);
+        #[cfg(not(windows))]
+        None
+    }
+
     /// The resolved executable, for tests that need to run a discovered shell
     /// outside the pty. Test-only on purpose: in a real build there is still no
     /// way for anything to read or choose the program, which is what keeps

@@ -20,6 +20,9 @@ use super::{
     TerminalFailureHint, classify_local_exit, classify_session_exit, interactive_shell_command,
 };
 
+#[cfg(windows)]
+use super::resize_pty;
+
 #[cfg(any(windows, target_os = "macos"))]
 use super::map_pty_kill_result;
 
@@ -818,6 +821,7 @@ fn a_startup_log_line_splits_preparation_pty_spawn_and_stage_time() {
     let local = SessionMode::Local {
         label: "Command Prompt".into(),
         shell_id: "cmd".into(),
+        input_after_resize: None,
     };
 
     assert_eq!(
@@ -843,6 +847,7 @@ fn a_local_start_failure_names_the_shell_without_pty_internals() {
     let local = SessionMode::Local {
         label: "PowerShell 7".into(),
         shell_id: "pwsh".into(),
+        input_after_resize: None,
     };
     let remote = SessionMode::ssh("11111111-1111-4111-8111-111111111111");
 
@@ -1076,6 +1081,93 @@ fn closing_git_bash_ends_its_real_shell_and_releases_the_pseudoconsole() {
         "the Git Bash session outlived its close"
     );
     assert_eq!(tree.running(), 0);
+}
+
+#[test]
+#[cfg(windows)]
+fn git_bash_keeps_the_first_key_typed_after_a_resize() {
+    const READLINE_READY: &[u8] = b"\x1b[?2004h";
+    const READLINE_BLOCKED_IN_READ: Duration = Duration::from_millis(200);
+    const PAUSE_BEFORE_TYPING: Duration = Duration::from_millis(150);
+    const PAUSE_AFTER_FIRST_KEY: Duration = Duration::from_millis(60);
+    let shell = crate::local_shell::resolve_installed("git-bash").unwrap();
+    let pair = native_pty_system().openpty(PtySize::default()).unwrap();
+    let mut child = pair
+        .slave
+        .spawn_command(crate::local_shell::command_for(&shell))
+        .unwrap();
+    drop(pair.slave);
+    let mut reader = pair.master.try_clone_reader().unwrap();
+    let mut writer = pair.master.take_writer().unwrap();
+    let (sender, receiver) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut buffer = [0_u8; 4096];
+        while let Ok(count) = reader.read(&mut buffer) {
+            if count == 0 {
+                break;
+            }
+            let _ = sender.send(buffer[..count].to_vec());
+        }
+    });
+    let mut output = Vec::new();
+    let mut answered_queries = 0;
+    let mut wait_for = |writer: &mut Box<dyn Write + Send>, done: &dyn Fn(&[u8]) -> bool| {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while !done(&output) && Instant::now() < deadline {
+            if let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(20)) {
+                output.extend(chunk);
+            }
+            let query_count = output
+                .windows(4)
+                .filter(|window| *window == b"\x1b[6n")
+                .count();
+            while answered_queries < query_count {
+                writer.write_all(b"\x1b[1;1R").unwrap();
+                writer.flush().unwrap();
+                answered_queries += 1;
+            }
+        }
+        assert!(
+            done(&output),
+            "Git Bash output: {}",
+            String::from_utf8_lossy(&output)
+        );
+    };
+    let ready_prompts = |output: &[u8]| {
+        output
+            .windows(READLINE_READY.len())
+            .filter(|window| *window == READLINE_READY)
+            .count()
+    };
+
+    for (attempt, cols) in [(1, 100), (2, 90), (3, 110)] {
+        wait_for(&mut writer, &|output| ready_prompts(output) >= attempt);
+        std::thread::sleep(READLINE_BLOCKED_IN_READ);
+        resize_pty(
+            pair.master.as_ref(),
+            writer.as_mut(),
+            cols,
+            24,
+            shell.input_after_resize(),
+        )
+        .unwrap();
+        std::thread::sleep(PAUSE_BEFORE_TYPING);
+        writer.write_all(b"e").unwrap();
+        writer.flush().unwrap();
+        std::thread::sleep(PAUSE_AFTER_FIRST_KEY);
+        writer
+            .write_all(format!("cho KEPT_''{attempt}\r").as_bytes())
+            .unwrap();
+        writer.flush().unwrap();
+        let marker = format!("KEPT_{attempt}");
+        wait_for(&mut writer, &|output| {
+            String::from_utf8_lossy(output).contains(&marker)
+        });
+    }
+
+    let _ = super::windows::Killer::new(child.as_ref())
+        .and_then(|mut killer| portable_pty::ChildKiller::kill(&mut killer));
+    let _ = child.wait();
 }
 
 #[cfg(windows)]
