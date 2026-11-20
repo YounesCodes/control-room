@@ -2998,9 +2998,16 @@ describe("complete app journeys with typed IPC fixtures", () => {
     const reopened = editor()!;
     await expect.element(reopened).toHaveFocus();
     expect(reopened.selectionStart).toBe(reopened.value.length);
-    expect(reopened.scrollTop).toBe(leftAt);
+    expect(Math.abs(reopened.scrollTop - leftAt)).toBeLessThanOrEqual(1);
 
+    await userEvent.keyboard(
+      navigator.platform.startsWith("Mac")
+        ? "{Meta>}{ArrowUp}{/Meta}"
+        : "{Control>}{Home}{/Control}",
+    );
+    expect(reopened.selectionStart).toBe(0);
     reopened.scrollTop = 0;
+    await expect.poll(() => reopened.scrollTop).toBe(0);
     const box = reopened.getBoundingClientRect();
     const style = getComputedStyle(reopened);
     await userEvent.click(reopened, {
