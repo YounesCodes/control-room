@@ -59,3 +59,37 @@ export async function quiesceScratchpad(scope: ScratchpadScope, ownerId: string)
 export function resumeScratchpad(scope: ScratchpadScope, ownerId: string): void {
   coordinators.get(scratchpadDraftKey(scope, ownerId))?.resume();
 }
+
+export interface ScratchpadCaret {
+  start: number;
+  end: number;
+  direction: "forward" | "backward" | "none";
+  scrollTop: number;
+}
+
+const carets = new Map<string, ScratchpadCaret>();
+
+export function rememberScratchpadCaret(
+  scope: ScratchpadScope,
+  ownerId: string,
+  caret: ScratchpadCaret,
+): void {
+  carets.set(scratchpadDraftKey(scope, ownerId), caret);
+}
+
+export function recallScratchpadCaret(
+  scope: ScratchpadScope,
+  ownerId: string,
+): ScratchpadCaret | null {
+  return carets.get(scratchpadDraftKey(scope, ownerId)) ?? null;
+}
+
+export function forgetScratchpadCaret(scope: ScratchpadScope, ownerId: string): void {
+  carets.delete(scratchpadDraftKey(scope, ownerId));
+}
+
+export function lineAt(text: string, offset: number): string {
+  const start = text.lastIndexOf("\n", offset - 1) + 1;
+  const end = text.indexOf("\n", offset);
+  return text.slice(start, end === -1 ? text.length : end);
+}
