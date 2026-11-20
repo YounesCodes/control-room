@@ -97,13 +97,7 @@ function MetricValue({
         />
       </>
     );
-  return (
-    <AnimatedNumber
-      {...shared}
-      value={metric === "uptime" ? sample?.uptimeSeconds : number}
-      format={metric === "uptime" ? formatUptime : formatPercent}
-    />
-  );
+  return <AnimatedNumber {...shared} value={number} format={formatPercent} />;
 }
 
 function MetricChart({
@@ -256,7 +250,7 @@ export function HostMetrics({
   seconds: number;
   onSettings: () => void;
 }) {
-  const reading = useHeaderMetrics(target, metrics, seconds);
+  const reading = useHeaderMetrics(target, [...metrics, "uptime"], seconds);
   const [open, setOpen] = useState(false);
   const [range, setRange] = useState<MetricRangeSeconds>(DEFAULT_METRIC_RANGE);
   const { present, closing } = usePopoverExit(open);
@@ -285,7 +279,6 @@ export function HostMetrics({
   const gap = missingReadingGap(reading.interval);
   const covered = coveredSeconds(reading.history, end, range);
   const partial = reading.history.length > 0 && covered < range - reading.interval * 2;
-  const charted = metrics.filter((metric) => metric !== "uptime");
   const animate = status === "Live";
   const waiting = status === "Reading";
   const StatusIcon = {
@@ -458,7 +451,7 @@ export function HostMetrics({
           </div>
           {reading.error && <p className="inline-error host-metrics-error">{reading.error}</p>}
           <dl aria-busy={waiting || undefined}>
-            {charted.map((metric, index) => {
+            {metrics.map((metric, index) => {
               const detail =
                 metric === "diskIo" ? null : headerMetricDetail(metric, reading.sample);
               const unavailable =
@@ -474,44 +467,34 @@ export function HostMetrics({
                   <dd className="host-metric-figure">
                     {waiting ? (
                       <span className="skeleton-bone" data-shape="title" style={bone("56%")} />
-                    ) : (
-                      <strong data-unavailable={unavailable || undefined}>
-                        {metric === "diskIo" ? (
-                          <>
+                    ) : metric === "diskIo" && reading.sample && !unavailable ? (
+                      <div className="host-metric-rates">
+                        {(
+                          [
+                            ["read", "Read", readRate],
+                            ["main", "Write", writeRate],
+                          ] as const
+                        ).map(([trace, label, rate]) => (
+                          <span className="host-metric-rate" key={trace}>
+                            <span className="host-metric-direction" data-trace={trace}>
+                              {label}
+                            </span>
                             <AnimatedNumber
-                              value={
-                                unavailable || !reading.sample ? null : writeRate(reading.sample)
-                              }
+                              value={rate(reading.sample!)}
                               format={formatByteRate}
                               animate={animate}
                             />
-                            {!unavailable && (
-                              <span className="host-metric-direction" data-trace="main">
-                                write
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <MetricValue metric={metric} sample={reading.sample} animate={animate} />
-                        )}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <strong data-unavailable={unavailable || undefined}>
+                        <MetricValue metric={metric} sample={reading.sample} animate={animate} />
                       </strong>
                     )}
-                    <small>
-                      {metric === "diskIo" && reading.sample && !unavailable ? (
-                        <>
-                          <span className="host-metric-direction" data-trace="read">
-                            Read
-                          </span>
-                          <AnimatedNumber
-                            value={readRate(reading.sample)}
-                            format={formatByteRate}
-                            animate={animate}
-                          />
-                        </>
-                      ) : (
-                        (detail ?? " ")
-                      )}
-                    </small>
+                    {(metric !== "diskIo" || unavailable || !reading.sample) && (
+                      <small>{detail ?? " "}</small>
+                    )}
                   </dd>
                   <dd className="host-metric-chart">
                     <MetricChart
@@ -528,17 +511,15 @@ export function HostMetrics({
             })}
           </dl>
           <footer>
-            {metrics.includes("uptime") && (
-              <span className="host-metrics-uptime">
-                {waiting ? (
-                  <span className="skeleton-bone" data-shape="caption" style={bone("64px")} />
-                ) : formatUptime(reading.sample?.uptimeSeconds) === "Unavailable" ? (
-                  "Uptime unavailable"
-                ) : (
-                  `Up ${formatUptime(reading.sample?.uptimeSeconds)}`
-                )}
-              </span>
-            )}
+            <span className="host-metrics-uptime">
+              {waiting ? (
+                <span className="skeleton-bone" data-shape="caption" style={bone("64px")} />
+              ) : formatUptime(reading.sample?.uptimeSeconds) === "Unavailable" ? (
+                "Uptime unavailable"
+              ) : (
+                `Up ${formatUptime(reading.sample?.uptimeSeconds)}`
+              )}
+            </span>
             <button className="secondary-button" type="button" onClick={onSettings}>
               Customize in Settings
             </button>

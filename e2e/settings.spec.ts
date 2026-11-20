@@ -70,7 +70,7 @@ describe("Settings and native window", () => {
       $('.host-metrics-trigger[aria-label$="Host metrics for Local machine"]'),
     ).toBeDisplayed();
     expect((await savedSettings()).hostMetricsEnabled).toBe(true);
-    expect((await savedSettings()).hostMetrics).toEqual(["cpu", "ram", "diskIo", "uptime"]);
+    expect((await savedSettings()).hostMetrics).toEqual(["cpu", "ram", "diskIo"]);
     await $("aria/Open Settings").click();
     await $(
       "//label[input[@type='checkbox']][contains(.,'Show host metrics in header')]/input",
@@ -97,7 +97,7 @@ describe("Settings and native window", () => {
       await browser.waitUntil(() =>
         browser.execute((narrow) => {
           const cells = document.querySelectorAll(".host-metric:not([data-overflow])");
-          return cells.length === (narrow ? 2 : 5);
+          return cells.length === (narrow ? 2 : 4);
         }, narrow),
       );
       for (const selector of [

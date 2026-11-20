@@ -1844,7 +1844,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       [...row.querySelectorAll<HTMLElement>(".host-metric:not([data-overflow])")].map(
         (cell) => cell.dataset.metric,
       );
-    await expect.poll(visibleMetrics).toEqual(["cpu", "ram", "gpu", "diskIo", "uptime"]);
+    await expect.poll(visibleMetrics).toEqual(["cpu", "ram", "gpu", "diskIo"]);
     strip.style.maxWidth = "340px";
     await expect.poll(visibleMetrics).toEqual(["cpu", "ram"]);
     expect(row).not.toHaveAttribute("tabindex");
@@ -1861,7 +1861,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await userEvent.keyboard("{Escape}");
     await expect.element(trigger).toHaveFocus();
     strip.style.maxWidth = "";
-    await expect.poll(visibleMetrics).toEqual(["cpu", "ram", "gpu", "diskIo", "uptime"]);
+    await expect.poll(visibleMetrics).toEqual(["cpu", "ram", "gpu", "diskIo"]);
   });
   it("offers window drag targets across metric text and spacing while keeping details clickable", async () => {
     currentSettings = { ...currentSettings, hostMetricsEnabled: true };
@@ -2423,7 +2423,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
         const row = header.querySelector(".host-metrics-values")!;
         const cells = row.querySelectorAll(".host-metric:not([data-overflow])");
         if (width >= 960) expect(cells.length).toBeGreaterThanOrEqual(2);
-        if (width === 1440) expect(cells).toHaveLength(5);
+        if (width === 1440) expect(cells).toHaveLength(4);
         for (const cell of cells) {
           const bounds = cell.getBoundingClientRect();
           expect(bounds.right).toBeLessThanOrEqual(row.getBoundingClientRect().right);

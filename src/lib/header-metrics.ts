@@ -1,7 +1,7 @@
 import type { HeaderMetric, HeaderMetrics } from "../types";
 import { formatKib, memoryUsage } from "./host-resources";
 
-export const DEFAULT_HEADER_METRICS: HeaderMetric[] = ["cpu", "ram", "gpu", "diskIo", "uptime"];
+export const DEFAULT_HEADER_METRICS: HeaderMetric[] = ["cpu", "ram", "gpu", "diskIo"];
 export function displayedHeaderMetrics(metrics: HeaderMetric[] = DEFAULT_HEADER_METRICS) {
   return DEFAULT_HEADER_METRICS.filter((metric) => metrics.includes(metric));
 }

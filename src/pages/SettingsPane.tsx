@@ -35,7 +35,7 @@ const sections = {
   metrics: [
     "general",
     "Host metrics",
-    "header cpu ram gpu disk io uptime refresh polling interval monitoring",
+    "header cpu ram gpu disk io refresh polling interval monitoring",
   ],
   appearance: [
     "terminal",
