@@ -900,7 +900,7 @@ export function SettingsPane({
                         <>
                           {updateState.status === "downloaded" ? (
                             <button
-                              className="primary-button"
+                              className="primary-button settings-update-button"
                               type="button"
                               onClick={onRestartToUpdate}
                             >
@@ -908,7 +908,7 @@ export function SettingsPane({
                             </button>
                           ) : (
                             <button
-                              className="primary-button"
+                              className="primary-button settings-update-button"
                               type="button"
                               onClick={onDownloadUpdate}
                               disabled={
