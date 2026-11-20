@@ -51,25 +51,46 @@
   position: relative;
 }
 
-.session-tab-list[data-more-left] .session-tab-content::before,
-.session-tab-list[data-more-right] .session-tab-content::after {
+.session-tab-content::before,
+.session-tab-content::after {
   position: absolute;
   z-index: 31;
   top: 0;
   bottom: 0;
   width: 16px;
+  opacity: 0;
   pointer-events: none;
   content: "";
+  transition:
+    opacity var(--motion-med) var(--ease),
+    width var(--motion-med) var(--ease);
 }
 
-.session-tab-list[data-more-left] .session-tab-content::before {
+.session-tab-content::before {
   left: 0;
   background: linear-gradient(90deg, var(--fill-selected), transparent);
 }
 
-.session-tab-list[data-more-right] .session-tab-content::after {
+.session-tab-content::after {
   right: 0;
   background: linear-gradient(270deg, var(--fill-selected), transparent);
+}
+
+.session-tab-list[data-more-left] .session-tab-content::before,
+.session-tab-list[data-more-right] .session-tab-content::after {
+  opacity: 1;
+}
+
+.session-tab-list[data-drag-edge="left"][data-more-left] .session-tab-content::before,
+.session-tab-list[data-drag-edge="right"][data-more-right] .session-tab-content::after {
+  width: 40px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-tab-content::before,
+  .session-tab-content::after {
+    transition: none;
+  }
 }
 
 .session-tab-trailing {
@@ -123,6 +144,10 @@
   transition: none;
 }
 
+.session-tab-scroll-region.dragging .session-tab-content {
+  overflow: hidden;
+}
+
 .session-tab-scroll-region.dragging .session-tab-dragged:hover,
 .session-tab-scroll-region.dragging .session-tab-dragged:focus-within {
   background: var(--surface-chrome);
@@ -135,10 +160,12 @@
 .session-tab-menu-button {
   position: relative;
   display: flex;
+  min-width: 48px;
   flex: none;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  padding: 0 10px;
+  padding: 0 9px;
   border-right: 1px solid var(--border-subtle);
   background: var(--surface-chrome);
   color: var(--text-muted);
@@ -151,20 +178,30 @@
 }
 
 .session-tab-menu-count {
-  min-width: 2ch;
+  padding-top: 2px;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
-  text-align: left;
+  line-height: 1;
+}
+
+.session-tab-menu-button-icon {
+  position: relative;
+  display: block;
+  flex: none;
+}
+
+.session-tab-menu-button-icon > svg {
+  display: block;
 }
 
 .session-tab-menu-count::after {
   content: attr(data-count);
 }
 
-.session-tab-menu-button[data-attention]::after {
+.session-tab-menu-button[data-attention] .session-tab-menu-button-icon::after {
   position: absolute;
-  top: 9px;
-  left: 21px;
+  top: -2px;
+  right: -3px;
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -192,6 +229,25 @@
   background: var(--surface-overlay);
   box-shadow: var(--shadow-popover);
   animation: popover-in var(--motion-fast) var(--ease);
+}
+
+.session-tab-menu-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.session-tab-menu-heading-count {
+  font-variant-numeric: tabular-nums;
 }
 
 .session-tab-menu-filter {

@@ -124,13 +124,20 @@ interface ActiveDrag {
   startX: number;
   out: boolean;
   geometry: DragGeometry;
+  windowStart: number;
 }
 
-function dragTargetFrom(drag: ActiveDrag, sliceStart: number, total: number) {
+function dragTargetFrom(drag: ActiveDrag, windowStart: number, windowSize: number, total: number) {
   const { geometry } = drag;
   const center = drag.pointerX - geometry.grabOffset + geometry.tabWidth / 2;
-  const steps = Math.round((center - geometry.left) / geometry.tabWidth - 0.5);
-  return Math.max(sliceStart, Math.min(total - 1, sliceStart + steps));
+  const slot = Math.floor((center - geometry.left) / geometry.tabWidth);
+  const windowSlot = Math.max(0, Math.min(windowSize - 1, slot));
+  return Math.max(0, Math.min(total - 1, windowStart + windowSlot));
+}
+
+function draggedSlotOf(index: number, fromIndex: number, target: number) {
+  const withoutDragged = index < fromIndex ? index : index - 1;
+  return withoutDragged < target ? withoutDragged : withoutDragged + 1;
 }
 
 export function WorkspaceTabScroller({
@@ -177,6 +184,7 @@ export function WorkspaceTabScroller({
   const activeDragRef = useRef<ActiveDrag | null>(null);
   const grabbedHandleRef = useRef<HTMLElement | null>(null);
   const [dragging, setDragging] = useState<ActiveDrag | null>(null);
+  const [dragEdge, setDragEdge] = useState<-1 | 0 | 1>(0);
   const frameRef = useRef<number | null>(null);
   const pointerXRef = useRef<number | null>(null);
   const pointerYRef = useRef<number | null>(null);
@@ -403,6 +411,7 @@ export function WorkspaceTabScroller({
     const { timer } = dragScrollRef.current;
     dragScrollRef.current = { direction: 0, timer: null };
     if (timer !== null) window.clearInterval(timer);
+    setDragEdge(0);
   }
 
   function steerDragScroll(x: number, geometry: DragGeometry) {
@@ -419,6 +428,7 @@ export function WorkspaceTabScroller({
       setStart((current) => Math.max(0, Math.min(lastStart, current + direction)));
     }, DRAG_STEP_MS);
     dragScrollRef.current = { direction, timer };
+    setDragEdge(direction);
   }
 
   function carriedOut(active: ActiveDrag, y: number) {
@@ -614,6 +624,7 @@ export function WorkspaceTabScroller({
       startX: pending.startX,
       out: false,
       geometry: pending.geometry,
+      windowStart: visibleStart,
     };
     pendingDragRef.current = null;
     setDragging(activeDragRef.current);
@@ -650,8 +661,12 @@ export function WorkspaceTabScroller({
       event.clientY >= geometry.top &&
       event.clientY <= geometry.bottom;
     if (!inside) return;
-    const sliceStart = Math.min(visibleStart, active.fromIndex);
-    const target = dragTargetFrom({ ...active, pointerX: event.clientX }, sliceStart, count);
+    const target = dragTargetFrom(
+      { ...active, pointerX: event.clientX },
+      visibleStart,
+      pageSize,
+      count,
+    );
     if (target !== active.fromIndex) onReorder(active.id, target);
   }
 
@@ -704,10 +719,39 @@ export function WorkspaceTabScroller({
   }, [overflow, lastStart, pageSize]);
 
   const activeDrag = dragging;
-  const dragSliceStart = activeDrag ? Math.min(visibleStart, activeDrag.fromIndex) : visibleStart;
-  const dragTarget = activeDrag ? dragTargetFrom(activeDrag, dragSliceStart, count) : null;
+  const dragTarget = activeDrag ? dragTargetFrom(activeDrag, visibleStart, pageSize, count) : null;
+  const visibleCount = Math.min(pageSize, count - visibleStart);
   const renderedTabs = activeDrag
-    ? tabs.slice(dragSliceStart, Math.max(visibleStart + pageSize, activeDrag.fromIndex + 1))
+    ? tabs.flatMap((tab, index) => {
+        if (!isValidElement(tab) || dragTarget === null) return [];
+        const element = tab as ReactElement<{ className?: string; style?: CSSProperties }>;
+        const geometry = activeDrag.geometry;
+        const classes = [element.props.className ?? ""];
+        const style: CSSProperties = {
+          ...element.props.style,
+          position: "absolute",
+          left: (index - activeDrag.windowStart) * geometry.tabWidth,
+          top: 0,
+          bottom: 0,
+          width: geometry.tabWidth,
+        };
+        if (index === activeDrag.fromIndex) {
+          classes.push("session-tab-dragged");
+          style.zIndex = 30;
+          const followed = activeDrag.pointerX - geometry.grabOffset;
+          const clamped = Math.max(
+            geometry.left,
+            Math.min(geometry.right - geometry.tabWidth, followed),
+          );
+          style.transform = `translate3d(${clamped - geometry.left - (index - activeDrag.windowStart) * geometry.tabWidth}px, 0, 0)`;
+        } else {
+          const slot = draggedSlotOf(index, activeDrag.fromIndex, dragTarget);
+          if (slot < visibleStart - 1 || slot > visibleStart + pageSize) return [];
+          if (slot !== index) classes.push("session-tab-shifted");
+          style.transform = `translate3d(${(slot - visibleStart - index + activeDrag.windowStart) * geometry.tabWidth}px, 0, 0)`;
+        }
+        return [cloneElement(element, { className: classes.filter(Boolean).join(" "), style })];
+      })
     : tabs.slice(visibleStart, visibleStart + pageSize);
 
   return (
@@ -737,7 +781,9 @@ export function WorkspaceTabScroller({
           data-attention={hiddenAttention || undefined}
           onClick={() => setMenuOpen((current) => !current)}
         >
-          <GalleryVerticalEnd size={14} aria-hidden="true" />
+          <span className="session-tab-menu-button-icon" aria-hidden="true">
+            <GalleryVerticalEnd size={14} />
+          </span>
           <span className="session-tab-menu-count" data-count={count} aria-hidden="true" />
         </button>
       )}
@@ -747,6 +793,7 @@ export function WorkspaceTabScroller({
         data-tauri-drag-region
         data-more-left={visibleStart > 0 || undefined}
         data-more-right={hiddenRight > 0 || undefined}
+        data-drag-edge={dragEdge < 0 ? "left" : dragEdge > 0 ? "right" : undefined}
       >
         <div
           className="session-tab-content"
@@ -761,48 +808,15 @@ export function WorkspaceTabScroller({
           style={
             {
               "--session-tab-width": `${tabWidth}px`,
-              width: measured ? renderedTabs.length * tabWidth : undefined,
+              width: activeDrag
+                ? visibleCount * activeDrag.geometry.tabWidth
+                : measured
+                  ? visibleCount * tabWidth
+                  : undefined,
             } as CSSProperties
           }
         >
-          {renderedTabs.map((tab, index) => {
-            const slotIndex = dragSliceStart + index;
-            if (!activeDrag || !isValidElement(tab)) return tab;
-            const element = tab as ReactElement<{ className?: string; style?: CSSProperties }>;
-            const geometry = activeDrag.geometry;
-            const classes = [element.props.className ?? ""];
-            const style: CSSProperties = {
-              ...element.props.style,
-              position: "absolute",
-              left: (slotIndex - dragSliceStart) * geometry.tabWidth,
-              top: 0,
-              bottom: 0,
-              width: geometry.tabWidth,
-            };
-            if (slotIndex === activeDrag.fromIndex) {
-              classes.push("session-tab-dragged");
-              style.zIndex = 30;
-              const followed = activeDrag.pointerX - geometry.grabOffset;
-              const clamped = Math.max(
-                geometry.left,
-                Math.min(geometry.right - geometry.tabWidth, followed),
-              );
-              style.transform = `translate3d(${clamped - geometry.left - (activeDrag.fromIndex - dragSliceStart) * geometry.tabWidth}px, 0, 0)`;
-            } else if (dragTarget !== null && dragTarget !== activeDrag.fromIndex) {
-              const slides =
-                dragTarget < activeDrag.fromIndex
-                  ? slotIndex >= dragTarget && slotIndex < activeDrag.fromIndex
-                  : slotIndex > activeDrag.fromIndex && slotIndex <= dragTarget;
-              if (slides) {
-                classes.push("session-tab-shifted");
-                style.transform = `translate3d(${dragTarget < activeDrag.fromIndex ? geometry.tabWidth : -geometry.tabWidth}px, 0, 0)`;
-              }
-            }
-            return cloneElement(element, {
-              className: classes.filter(Boolean).join(" "),
-              style,
-            });
-          })}
+          {renderedTabs}
         </div>
         {trailing !== undefined && (
           <div className="session-tab-trailing" ref={trailingRef}>
@@ -821,6 +835,10 @@ export function WorkspaceTabScroller({
           data-app-popover=""
           onKeyDown={handleMenuKey}
         >
+          <div className="session-tab-menu-heading" aria-hidden="true">
+            <span>{menuLabel}</span>
+            <span className="session-tab-menu-heading-count">{count} open</span>
+          </div>
           {(count >= MENU_FILTER_MIN_ITEMS || filter) && (
             <input
               ref={filterRef}

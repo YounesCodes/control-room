@@ -183,7 +183,7 @@ describe("WorkspaceTabScroller reordering", () => {
     expect(onReorder).toHaveBeenCalledWith("id-1", 3);
   });
 
-  it("pages an overflowing strip open at the drag edge and reveals the next tab", () => {
+  it("slides tabs past a tab held at the drag edge while the strip pages", () => {
     vi.useFakeTimers();
     const rectSpy = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect");
     rectSpy.mockImplementation(function (this: HTMLElement) {
@@ -215,8 +215,21 @@ describe("WorkspaceTabScroller reordering", () => {
     act(() => {
       vi.advanceTimersByTime(350);
     });
-    expect(wrapsMounted()).toBe(2);
+    const offsetOf = (label: string) => {
+      const wrap = mainButton(container, label).closest<HTMLElement>(".session-tab-wrap")!;
+      const shift = /translate3d\((-?[\d.]+)px/.exec(wrap.style.transform)?.[1] ?? "0";
+      return parseFloat(wrap.style.left) + parseFloat(shift);
+    };
+    expect(wrapsMounted()).toBe(3);
+    expect(offsetOf("B")).toBe(-196);
+    expect(offsetOf("C")).toBe(196);
+    expect(container.querySelector(".session-tab-dragged .session-tab-main")!.textContent).toBe(
+      "A",
+    );
+    const list = container.querySelector<HTMLElement>(".session-tab-list")!;
+    expect(list.dataset.dragEdge).toBe("right");
     pointer(first, "pointerup", 280);
+    expect(list.dataset.dragEdge).toBeUndefined();
     expect(onReorder).toHaveBeenCalledWith("id-1", 1);
     act(() => {
       vi.runOnlyPendingTimers();
@@ -484,6 +497,8 @@ describe("WorkspaceTabScroller overflow", () => {
   it("keeps the menu and its button while closing terminals until it is dismissed", () => {
     const { container } = render(<OverflowStrip terminals={terminals} initialActive={5} />);
     openMenu(container);
+    const heading = () => container.querySelector(".session-tab-menu-heading")!.textContent;
+    expect(heading()).toBe("All terminals6 open");
     for (let closed = 0; closed < 4; closed++) {
       const focused = document.activeElement as HTMLElement;
       fireEvent.keyDown(focused, { key: "Delete" });
@@ -491,6 +506,7 @@ describe("WorkspaceTabScroller overflow", () => {
     expect(visibleTabs(container)).toHaveLength(2);
     expect(menuItems(container)).toHaveLength(2);
     expect(menuItems(container)).toContain(document.activeElement);
+    expect(heading()).toBe("All terminals2 open");
     expect(picker(container).getAttribute("aria-expanded")).toBe("true");
     expect(container.querySelector(".session-tab-list")!.hasAttribute("data-more-left")).toBe(
       false,
