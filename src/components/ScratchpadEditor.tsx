@@ -47,6 +47,7 @@ export function ScratchpadEditor({
   const textRef = useRef("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hiddenScrollRestoreRef = useRef<number | null>(null);
+  const selectedBeforeRightClickRef = useRef(false);
   const onSelectionChangeRef = useRef(onSelectionChange);
   onSelectionChangeRef.current = onSelectionChange;
   const undoRef = useRef<string[]>([]);
@@ -134,11 +135,13 @@ export function ScratchpadEditor({
     );
   }
 
-  function copyRequest(): { text: string; kind: ScratchpadCopyKind } | null {
+  function copyRequest(
+    { lineOnly }: { lineOnly: boolean } = { lineOnly: false },
+  ): { text: string; kind: ScratchpadCopyKind } | null {
     const textarea = textareaRef.current;
     if (!loaded || !textarea) return null;
     const { selectionStart, selectionEnd, value } = textarea;
-    if (selectionStart !== selectionEnd)
+    if (!lineOnly && selectionStart !== selectionEnd)
       return { text: value.slice(selectionStart, selectionEnd), kind: "selection" };
     const line = lineAt(value, selectionStart);
     return line.trim() ? { text: line, kind: "line" } : null;
@@ -423,10 +426,20 @@ export function ScratchpadEditor({
           event.currentTarget.scrollTop = hiddenScrollRestoreRef.current;
           hiddenScrollRestoreRef.current = null;
         }}
+        onMouseDown={(event) => {
+          if (event.button !== 2) return;
+          const textarea = event.currentTarget;
+          selectedBeforeRightClickRef.current = textarea.selectionStart !== textarea.selectionEnd;
+        }}
         onContextMenu={(event) => {
-          const request = onCopyText && copyRequest();
+          const textarea = event.currentTarget;
+          const selectedByThisClick = !selectedBeforeRightClickRef.current;
+          selectedBeforeRightClickRef.current = false;
+          const request = onCopyText && copyRequest({ lineOnly: selectedByThisClick });
           if (!request) return;
           event.preventDefault();
+          if (request.kind === "line" && textarea.selectionStart !== textarea.selectionEnd)
+            textarea.setSelectionRange(textarea.selectionStart, textarea.selectionStart);
           onCopyText(request.text, request.kind);
         }}
         onKeyDown={(event) => {

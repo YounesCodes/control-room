@@ -270,12 +270,21 @@ describe("Terminal Scratchpad popover", () => {
     expect(await screen.findByRole("button", { name: "Copied line" })).toBeTruthy();
 
     editor.setSelectionRange(0, 3);
+    fireEvent.mouseDown(editor, { button: 2 });
     expect(fireEvent.contextMenu(editor)).toBe(false);
     await waitFor(() => expect(clipboardWrite).toHaveBeenLastCalledWith("fir"));
     expect(await screen.findByRole("button", { name: "Copied selection" })).toBeTruthy();
 
+    editor.setSelectionRange(1, 1);
+    fireEvent.mouseDown(editor, { button: 2 });
+    editor.setSelectionRange(6, 12);
+    expect(fireEvent.contextMenu(editor)).toBe(false);
+    await waitFor(() => expect(clipboardWrite).toHaveBeenLastCalledWith("second line"));
+    expect([editor.selectionStart, editor.selectionEnd]).toEqual([6, 6]);
+
     clipboardWrite.mockClear();
     editor.setSelectionRange(18, 18);
+    fireEvent.mouseDown(editor, { button: 2 });
     expect(fireEvent.contextMenu(editor)).toBe(true);
     expect(fireEvent.keyDown(editor, { key: "c", ctrlKey: true })).toBe(true);
     expect(clipboardWrite).not.toHaveBeenCalled();
