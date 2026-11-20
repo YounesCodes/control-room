@@ -325,7 +325,7 @@ export function SettingsPane({
             shell.elevated ? `Offer ${shell.label}, run as administrator` : `Offer ${shell.label}`
           }
         />
-        <LocalShellIcon kind={shell.kind} elevated={shell.elevated} />
+        <LocalShellIcon kind={shell.kind} profileId={shell.id} elevated={shell.elevated} />
         {shell.label}
       </label>
     );
@@ -753,7 +753,9 @@ export function SettingsPane({
                 <label>
                   <span>Default local terminal</span>
                   <div className="local-shell-default">
-                    {defaultProfile && <LocalShellIcon kind={defaultProfile.kind} />}
+                    {defaultProfile && (
+                      <LocalShellIcon kind={defaultProfile.kind} profileId={defaultProfile.id} />
+                    )}
                     <select
                       value={draft.defaultLocalShellId ?? ""}
                       onChange={(event) =>

@@ -504,6 +504,36 @@ pub enum LocalShellKind {
     Sh,
     #[serde(rename = "login-shell")]
     LoginShell,
+    #[serde(rename = "wsl")]
+    Wsl,
+}
+
+pub const WSL_PROFILE_PREFIX: &str = "wsl:";
+const WSL_DISTRIBUTION_NAME_MAX_LENGTH: usize = 64;
+
+/// WSL accepts more in a registered name than this; anything else is never
+/// offered, so a profile id cannot carry spaces, quotes, or path separators.
+pub fn is_offered_wsl_distribution_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= WSL_DISTRIBUTION_NAME_MAX_LENGTH
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'))
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn wsl_profile_id(distribution: &str) -> String {
+    format!("{WSL_PROFILE_PREFIX}{distribution}")
+}
+
+#[cfg(not(target_os = "linux"))]
+pub fn wsl_profile_label(distribution: &str) -> String {
+    format!("WSL: {distribution}")
+}
+
+pub fn wsl_distribution_from_profile_id(id: &str) -> Option<&str> {
+    id.strip_prefix(WSL_PROFILE_PREFIX)
+        .filter(|name| is_offered_wsl_distribution_name(name))
 }
 
 impl LocalShellKind {
@@ -531,6 +561,7 @@ impl LocalShellKind {
             LocalShellKind::Fish => "fish",
             LocalShellKind::Sh => "sh",
             LocalShellKind::LoginShell => "login-shell",
+            LocalShellKind::Wsl => "wsl",
         }
     }
 
@@ -545,6 +576,7 @@ impl LocalShellKind {
             LocalShellKind::Fish => "fish",
             LocalShellKind::Sh => "POSIX shell",
             LocalShellKind::LoginShell => "Login shell",
+            LocalShellKind::Wsl => "WSL",
         }
     }
 
@@ -587,6 +619,9 @@ impl LocalShellKind {
     pub fn from_profile_id(id: &str) -> Option<(Self, bool)> {
         if let Some(kind) = Self::from_id(id) {
             return Some((kind, false));
+        }
+        if wsl_distribution_from_profile_id(id).is_some() {
+            return Some((Self::Wsl, false));
         }
         [
             Self::PowerShell7,

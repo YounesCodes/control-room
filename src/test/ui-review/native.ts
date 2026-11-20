@@ -292,6 +292,8 @@ const tabShells = [
     label: "Command Prompt",
     elevated: false,
   },
+  { id: "wsl:Ubuntu-24.04", kind: "wsl" as const, label: "WSL: Ubuntu-24.04", elevated: false },
+  { id: "wsl:Debian", kind: "wsl" as const, label: "WSL: Debian", elevated: false },
 ];
 if (scenario === "tabs") {
   const terminal = (id: string, target: { connectionId?: string; localShellId?: string }) => ({
@@ -312,6 +314,7 @@ if (scenario === "tabs") {
     terminal("tab-powershell-2", { localShellId: "windows-powershell" }),
     terminal("tab-host-a-2", { connectionId: host.id }),
     terminal("tab-command-prompt-2", { localShellId: "command-prompt" }),
+    terminal("tab-wsl", { localShellId: "wsl:Ubuntu-24.04" }),
     terminal("tab-host-a-3", { connectionId: host.id }),
   ];
   workspace.activeWorkspaceId = "tab-host-a-3";

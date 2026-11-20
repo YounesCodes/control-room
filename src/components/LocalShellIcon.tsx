@@ -1,23 +1,36 @@
 import { Shield, SquareTerminal } from "lucide-react";
 import type { LocalShellKind } from "../types";
 import gitBashIcon from "../assets/shells/git-for-windows.ico";
+import { DISTRO_PATHS, wslDistroKind } from "./HostOsIcon";
+
+const WSL_PROFILE_PREFIX = "wsl:";
 
 // Git Bash: git-for-windows/build-extra, portable/root/usr/share/git/git-for-windows.ico.
 // PowerShell: PowerShell/PowerShell assets/ps_black_64.svg.
 // Trademarks belong to their owners.
 export function LocalShellIcon({
   kind,
+  profileId,
   elevated = false,
 }: {
   kind: LocalShellKind;
+  profileId?: string;
   elevated?: boolean;
 }) {
+  const distro =
+    kind === "wsl" && profileId?.startsWith(WSL_PROFILE_PREFIX)
+      ? wslDistroKind(profileId.slice(WSL_PROFILE_PREFIX.length))
+      : null;
   return (
     <span
-      className={`local-shell-icon local-shell-mark identity-mark local-shell-icon-${kind}`}
+      className={`local-shell-icon identity-mark local-shell-icon-${kind} ${distro ? `host-os-${distro}` : "local-shell-mark"}`}
       aria-hidden="true"
     >
-      {kind === "git-bash" ? (
+      {distro ? (
+        <svg viewBox="0 0 24 24">
+          <path d={DISTRO_PATHS[distro]} />
+        </svg>
+      ) : kind === "git-bash" ? (
         <img src={gitBashIcon} alt="" draggable={false} />
       ) : kind === "powershell-7" || kind === "windows-powershell" ? (
         <svg
@@ -30,6 +43,11 @@ export function LocalShellIcon({
         </svg>
       ) : (
         <SquareTerminal size={17} strokeWidth={1.8} />
+      )}
+      {kind === "wsl" && (
+        <svg className="local-shell-platform" viewBox="0 0 24 24">
+          <path d="M2 3h9v8H2zM13 3h9v8h-9zM2 13h9v8H2zM13 13h9v8h-9z" />
+        </svg>
       )}
       {elevated && <Shield className="local-shell-elevation" strokeWidth={2} />}
     </span>

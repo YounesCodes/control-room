@@ -5,7 +5,9 @@ description: Open installed Windows, Linux, or macOS shells in tabs and splits.
 
 Select **New terminal** next to the workspace tabs, then choose a shell under **Local terminals**. The same launcher is available before you open your first tab and in Focus Mode. Local tabs use the same terminal settings and splits as SSH tabs, but have no Linux inspection views.
 
-On Windows, Control Room offers installed PowerShell 7, Windows PowerShell, Command Prompt, and Git Bash from Git for Windows. On Linux, it puts your login shell first, then offers Bash, zsh, fish, and `sh` where installed. You can hide a shell in [Settings](/control-room/reference/settings/#local-terminal). A shell already running stays open.
+On Windows, Control Room offers installed PowerShell 7, Windows PowerShell, Command Prompt, Git Bash from Git for Windows, and each installed WSL distribution. On Linux, it puts your login shell first, then offers Bash, zsh, fish, and `sh` where installed. You can hide a shell in [Settings](/control-room/reference/settings/#local-terminal). A shell already running stays open.
+
+A WSL terminal such as **WSL: Ubuntu** starts that distribution in your Linux home directory, with your default distribution listed first. Distributions that Docker Desktop and Rancher Desktop install for their own use are not listed. The first WSL terminal after Windows starts can take a few seconds while WSL boots. Install a distribution, for example with `wsl --install`, then reopen the **New terminal** menu to see it.
 
 In Git Bash, OpenCode and other OpenTUI apps use the main terminal screen by default. This avoids a Windows console issue that can break terminal input when they quit. Control Room sets `OTUI_USE_ALTERNATE_SCREEN=0` for new Git Bash sessions unless you already set that variable in your Windows environment. Other terminal apps keep their usual screen behavior.
 
@@ -29,4 +31,4 @@ Windows 11 version 24H2 or later provides this setting. **Inline** keeps the adm
 
 Expand **Run as administrator** in the menu for setup instructions. This section appears only when an enabled shell supports administrator mode and needs that setup. Git Bash alone does not trigger it.
 
-Git Bash has no administrator option. Local shells do not record Enhanced History. After an app restart, restored local tabs start fresh shells.
+Git Bash and WSL have no administrator option. Local shells do not record Enhanced History. After an app restart, restored local tabs start fresh shells.

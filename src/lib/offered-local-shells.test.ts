@@ -66,4 +66,14 @@ describe("Administrator setup", () => {
     expect(needsAdministratorSetup(shells, [], "available")).toBe(false);
     expect(needsAdministratorSetup(shells, [], "unsupportedWindows")).toBe(false);
   });
+
+  it("does not ask for administrator setup for WSL distributions", () => {
+    const ubuntu: LocalShellProfile = {
+      id: "wsl:Ubuntu",
+      label: "WSL: Ubuntu",
+      kind: "wsl",
+      elevated: false,
+    };
+    expect(needsAdministratorSetup([ubuntu], [], "disabled")).toBe(false);
+  });
 });

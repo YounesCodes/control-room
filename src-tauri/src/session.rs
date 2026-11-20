@@ -48,8 +48,8 @@ struct ManagedSession {
 enum SessionMode {
     Ssh(RemoteSessionState),
     Local {
-        label: &'static str,
-        shell_id: &'static str,
+        label: String,
+        shell_id: String,
         input_after_resize: Option<&'static [u8]>,
     },
 }
@@ -283,8 +283,8 @@ impl SessionManager {
             rows,
             output,
             SessionMode::Local {
-                label: shell.label(),
-                shell_id: shell.id(),
+                label: shell.label().to_string(),
+                shell_id: shell.id().to_string(),
                 input_after_resize: shell.input_after_resize(),
             },
             requested_at,
@@ -292,7 +292,7 @@ impl SessionManager {
 
         Ok(LocalSessionStarted {
             session_id,
-            shell_id: shell.id().into(),
+            shell_id: shell.id().to_string(),
         })
     }
 

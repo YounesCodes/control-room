@@ -353,7 +353,7 @@ export type EnvironmentInfo = {
   inAppUpdates: boolean;
 };
 
-export type LocalShellKind = "powershell-7" | "windows-powershell" | "command-prompt" | "git-bash" | "zsh" | "bash" | "fish" | "sh" | "login-shell";
+export type LocalShellKind = "powershell-7" | "windows-powershell" | "command-prompt" | "git-bash" | "zsh" | "bash" | "fish" | "sh" | "login-shell" | "wsl";
 
 export type LocalShellProfile = {
   id: string;

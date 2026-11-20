@@ -21,6 +21,7 @@ const MAX_IDENTITY_PATH_CHARS: usize = 32_767;
 const MAX_GROUP_NAME_CHARS: usize = 60;
 const MAX_TAG_NAME_CHARS: usize = 32;
 const MAX_TAGS_PER_CONNECTION: usize = 5;
+const MAX_HIDDEN_LOCAL_SHELLS: usize = 64;
 pub(crate) const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
 pub(crate) const MAX_HISTORY_CWD_BYTES: usize = 32_767;
 pub(crate) const MAX_SCRATCHPAD_CHARS: usize = 16_384;
@@ -1188,7 +1189,7 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
     if !LOG_TAIL_OPTIONS.contains(&settings.default_log_tail) {
         return Err("Unsupported default log tail count".into());
     }
-    if settings.hidden_local_shells.len() > 16 {
+    if settings.hidden_local_shells.len() > MAX_HIDDEN_LOCAL_SHELLS {
         return Err("Too many hidden local terminals".into());
     }
     for shell_id in &settings.hidden_local_shells {

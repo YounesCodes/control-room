@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hostOsKind, hostOsLabel, windowsVersion } from "./HostOsIcon";
+import { hostOsKind, hostOsLabel, windowsVersion, wslDistroKind } from "./HostOsIcon";
 
 describe("hostOsKind", () => {
   it("recognizes macOS and Darwin with the same accessible name", () => {
@@ -68,5 +68,24 @@ describe("hostOsKind", () => {
   it("names a detected distro even when it uses the neutral mark", () => {
     expect(hostOsLabel("gentoo")).toBe("gentoo host");
     expect(hostOsLabel(null)).toBe("Host OS not detected");
+  });
+});
+
+describe("wslDistroKind", () => {
+  it("recognizes the distribution names WSL registers, with or without a version", () => {
+    expect(wslDistroKind("Ubuntu")).toBe("ubuntu");
+    expect(wslDistroKind("Ubuntu-24.04")).toBe("ubuntu");
+    expect(wslDistroKind("Debian")).toBe("debian");
+    expect(wslDistroKind("kali-linux")).toBe("kali");
+    expect(wslDistroKind("openSUSE-Tumbleweed")).toBe("opensuse");
+    expect(wslDistroKind("SUSE-Linux-Enterprise-15-SP6")).toBe("suse");
+    expect(wslDistroKind("OracleLinux_9_5")).toBe("oracle");
+    expect(wslDistroKind("AlmaLinux-9")).toBe("alma");
+    expect(wslDistroKind("archlinux")).toBe("arch");
+    expect(wslDistroKind("FedoraLinux-42")).toBe("fedora");
+  });
+
+  it("leaves an unrecognized distribution without a logo", () => {
+    expect(wslDistroKind("my-dev-box")).toBeNull();
   });
 });
