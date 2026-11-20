@@ -97,7 +97,7 @@ describe("Settings and native window", () => {
       await browser.waitUntil(() =>
         browser.execute((narrow) => {
           const cells = document.querySelectorAll(".host-metric:not([data-overflow])");
-          return cells.length === (narrow ? 2 : 5);
+          return cells.length === (narrow ? 2 : 4);
         }, narrow),
       );
       for (const selector of [
