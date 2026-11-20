@@ -272,6 +272,24 @@ export function ScratchpadEditor({
 
   useLayoutEffect(syncCaret, [text]);
 
+  const syncCaretRef = useRef(syncCaret);
+  syncCaretRef.current = syncCaret;
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const sync = () => syncCaretRef.current();
+    const syncAfterClick = () => window.requestAnimationFrame(sync);
+    const textareaEvents = ["select", "selectionchange", "keyup", "mouseup", "focus"] as const;
+    for (const type of textareaEvents) textarea.addEventListener(type, sync);
+    textarea.addEventListener("mousedown", syncAfterClick);
+    document.addEventListener("selectionchange", sync);
+    return () => {
+      for (const type of textareaEvents) textarea.removeEventListener(type, sync);
+      textarea.removeEventListener("mousedown", syncAfterClick);
+      document.removeEventListener("selectionchange", sync);
+    };
+  }, []);
+
   async function deleteNote() {
     await quiesce();
     setError(null);
@@ -399,7 +417,6 @@ export function ScratchpadEditor({
         onChange={(event) => {
           if (loaded) setEditedText(event.target.value);
         }}
-        onSelect={syncCaret}
         onScroll={syncCaret}
         onFocus={(event) => {
           if (hiddenScrollRestoreRef.current === null) return;
