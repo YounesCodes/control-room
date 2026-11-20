@@ -143,7 +143,7 @@ describe("WorkspaceTabScroller reordering", () => {
     expect(container.querySelector(".session-tab-dragged")).toBeNull();
   });
 
-  it("keeps the lifted tab inside the strip when the pointer overshoots", () => {
+  it("drops a tab into the end slot it shows when the pointer overshoots the strip", () => {
     const onReorder = vi.fn();
     const { container } = render(<Strip labels={["A", "B", "C", "D"]} onReorder={onReorder} />);
     stubStripGeometry(container);
@@ -155,7 +155,7 @@ describe("WorkspaceTabScroller reordering", () => {
       "translate3d(175px, 0, 0)",
     );
     pointer(third, "pointerup", 3000);
-    expect(onReorder).not.toHaveBeenCalled();
+    expect(onReorder).toHaveBeenLastCalledWith("id-3", 3);
     expect(container.querySelector(".session-tab-dragged")).toBeNull();
 
     pointer(third, "pointerdown", 360);
@@ -164,7 +164,8 @@ describe("WorkspaceTabScroller reordering", () => {
       "translate3d(-350px, 0, 0)",
     );
     pointer(third, "pointerup", -300);
-    expect(onReorder).not.toHaveBeenCalled();
+    expect(onReorder).toHaveBeenLastCalledWith("id-3", 0);
+    expect(onReorder).toHaveBeenCalledTimes(2);
   });
 
   it("drags a tab onto a later slot", () => {

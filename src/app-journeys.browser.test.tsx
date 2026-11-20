@@ -4020,6 +4020,14 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(activeStripTab()).toBe("Fixture Alpha");
     expect(document.activeElement?.className).toContain("session-tab-main");
 
+    const pastTheLastTab = page.getByRole("button", { name: "New terminal", exact: true });
+    await userEvent.dragAndDrop(beta, pastTheLastTab.element());
+    await vi.waitFor(() => expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta"]));
+    await vi.waitFor(() =>
+      expect(persisted.workspaces.map((workspace) => workspace.id)).toEqual(["tab-a", "tab-b"]),
+    );
+    expect(activeStripTab()).toBe("Fixture Alpha");
+
     await userEvent.click(beta);
     await vi.waitFor(() => expect(activeStripTab()).toBe("Fixture Beta"));
   });

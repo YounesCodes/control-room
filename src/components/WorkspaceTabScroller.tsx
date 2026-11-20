@@ -655,12 +655,8 @@ export function WorkspaceTabScroller({
     }
     if (!onReorder) return;
     const { geometry } = active;
-    const inside =
-      event.clientX >= geometry.left &&
-      event.clientX <= geometry.right &&
-      event.clientY >= geometry.top &&
-      event.clientY <= geometry.bottom;
-    if (!inside) return;
+    const withinStripRow = event.clientY >= geometry.top && event.clientY <= geometry.bottom;
+    if (!withinStripRow) return;
     const target = dragTargetFrom(
       { ...active, pointerX: event.clientX },
       visibleStart,
