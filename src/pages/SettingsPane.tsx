@@ -6,7 +6,7 @@ import {
   type FormEvent,
   type ReactNode,
 } from "react";
-import { ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
+import { ArrowDownToLine, ArrowLeft, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { FontCatalogPicker } from "../components/FontCatalogPicker";
 import { Skeleton, SkeletonFields } from "../components/PanelState";
 import { LocalShellIcon } from "../components/LocalShellIcon";
@@ -21,6 +21,7 @@ import { offeredLocalShells } from "../lib/offered-local-shells";
 import { settingsHaveChanges } from "../lib/settings-draft";
 import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
 import type { ManualCheckResult } from "../hooks/use-app-updater";
+import { downloadLabel, type AppUpdateState } from "../lib/app-update";
 import { Search } from "../components/MagnifierIcon";
 
 const categories = [
@@ -176,6 +177,9 @@ export function SettingsPane({
   environment,
   appVersion,
   onCheckForUpdates,
+  updateState,
+  onDownloadUpdate,
+  onRestartToUpdate,
   onSaved,
   onClose,
   onDirtyChange,
@@ -187,6 +191,9 @@ export function SettingsPane({
   environment: EnvironmentInfo | null;
   appVersion: string | null;
   onCheckForUpdates: () => Promise<ManualCheckResult>;
+  updateState: AppUpdateState;
+  onDownloadUpdate: () => void;
+  onRestartToUpdate: () => void;
   onSaved: (settings: AppSettings) => void;
   onClose: () => boolean;
   onDirtyChange: (dirty: boolean) => void;
@@ -889,12 +896,59 @@ export function SettingsPane({
                             </span>
                           </span>
                         </p>
+                      ) : "info" in updateState ? (
+                        <>
+                          {updateState.status === "downloaded" ? (
+                            <button
+                              className="primary-button settings-update-button"
+                              type="button"
+                              onClick={onRestartToUpdate}
+                            >
+                              <RotateCcw size={14} /> Restart to update
+                            </button>
+                          ) : (
+                            <button
+                              className="primary-button settings-update-button"
+                              type="button"
+                              onClick={onDownloadUpdate}
+                              disabled={
+                                updateState.status === "downloading" ||
+                                updateState.status === "installing"
+                              }
+                            >
+                              <ArrowDownToLine size={14} />{" "}
+                              {updateState.status === "downloading"
+                                ? downloadLabel(updateState.downloaded, updateState.total)
+                                : updateState.status === "installing"
+                                  ? "Installing…"
+                                  : updateState.status === "failed"
+                                    ? "Try again"
+                                    : "Update now"}
+                            </button>
+                          )}
+                          {updateState.status === "failed" ? (
+                            <p className="inline-error settings-update-error" role="status">
+                              <span>
+                                Could not update to version {updateState.info.version}.
+                                <span className="settings-update-reason">
+                                  {updateState.failure.kind === "signature"
+                                    ? "The update signature did not verify, so it was not installed."
+                                    : updateState.failure.message}
+                                </span>
+                              </span>
+                            </p>
+                          ) : (
+                            <p className="settings-update-status" role="status">
+                              {updateState.status === "downloaded"
+                                ? `Version ${updateState.info.version} is ready to install.`
+                                : `Version ${updateState.info.version} is available.`}
+                            </p>
+                          )}
+                        </>
                       ) : (
-                        checkResult && (
+                        checkResult?.outcome === "current" && (
                           <p className="settings-update-status" role="status">
-                            {checkResult.outcome === "current"
-                              ? "You're up to date."
-                              : `Version ${checkResult.version} is available.`}
+                            You're up to date.
                           </p>
                         )
                       )}

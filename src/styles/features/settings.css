@@ -11,6 +11,11 @@
   gap: 12px;
 }
 
+.settings-update-button {
+  min-width: 160px;
+  font-variant-numeric: tabular-nums;
+}
+
 .settings-update-status {
   margin: 0;
   color: var(--text-muted);

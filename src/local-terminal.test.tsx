@@ -494,7 +494,7 @@ describe("Local Terminal", () => {
 
     expect(await screen.findByRole("heading", { name: /No connections yet/ })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "New terminal" })).toBeNull();
-    expect(screen.queryByText("Local terminal opens a shell on this machine.")).toBeNull();
+    expect(screen.queryByText(/open a local terminal/)).toBeNull();
   });
 
   it("separates administrator terminals and labels the elevated action", async () => {
@@ -664,6 +664,19 @@ describe("Local Terminal", () => {
     await user.click(within(scratchpad).getByRole("button", { name: "Paste into terminal" }));
     expect(terminalInput.pasteText).toHaveBeenCalledWith(workspaceId, "make\nmake install");
     expect(screen.queryByRole("dialog", { name: "Run pasted lines?" })).toBeNull();
+  });
+
+  it("points the empty workspace to local terminals in New terminal", async () => {
+    const host = connection("11111111-1111-4111-8111-111111111111", "prod-web");
+    api.listConnections.mockResolvedValue([host]);
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Select a connection" })).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Choose a saved connection from the sidebar, or open a local terminal from New terminal in the header.",
+      ),
+    ).toBeTruthy();
   });
 
   it("keeps a local Workspace terminal-only", async () => {

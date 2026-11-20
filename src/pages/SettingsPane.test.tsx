@@ -20,7 +20,8 @@ vi.mock("../lib/api", () => ({
 vi.mock("@tauri-apps/api/core", () => ({ Channel: class {} }));
 
 import { SettingsPane } from "./SettingsPane";
-import type { AppSettings, EnvironmentInfo, LocalShellProfile } from "../types";
+import type { AppSettings, AppUpdateInfo, EnvironmentInfo, LocalShellProfile } from "../types";
+import type { AppUpdateState } from "../lib/app-update";
 
 const settings: AppSettings = {
   automaticTerminalTitles: true,
@@ -75,6 +76,13 @@ const administratorPowerShell: LocalShellProfile = {
   elevated: true,
 };
 
+const updateInfo: AppUpdateInfo = {
+  version: "0.7.0",
+  currentVersion: "0.6.1",
+  notes: "",
+  publishedAt: null,
+};
+
 function renderPane(overrides: Partial<Parameters<typeof SettingsPane>[0]> = {}) {
   const props = {
     settings,
@@ -84,6 +92,9 @@ function renderPane(overrides: Partial<Parameters<typeof SettingsPane>[0]> = {})
     environment,
     appVersion: "0.6.1",
     onCheckForUpdates: vi.fn(async () => ({ outcome: "current" }) as const),
+    updateState: { status: "idle" } as AppUpdateState,
+    onDownloadUpdate: vi.fn(),
+    onRestartToUpdate: vi.fn(),
     onSaved: vi.fn(),
     onClose: vi.fn(() => true),
     onDirtyChange: vi.fn(),
@@ -511,14 +522,48 @@ describe("Settings actions", () => {
     expect(await screen.findByText("You're up to date.")).toBeTruthy();
   });
 
-  it("names the available version after a manual check", async () => {
+  it("offers to update now when a version is available", async () => {
     const user = userEvent.setup();
+    const props = renderPane({ updateState: { status: "available", info: updateInfo } });
+    fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
+    expect(screen.getByText("Version 0.7.0 is available.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /Update now/ }));
+    expect(props.onDownloadUpdate).toHaveBeenCalledTimes(1);
+    expect(props.onRestartToUpdate).not.toHaveBeenCalled();
+  });
+
+  it("shows download progress without a second download action", () => {
     renderPane({
-      onCheckForUpdates: vi.fn(async () => ({ outcome: "available", version: "0.7.0" }) as const),
+      updateState: { status: "downloading", info: updateInfo, downloaded: 42, total: 100 },
     });
     fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
-    await user.click(screen.getByRole("button", { name: /Check for updates/ }));
-    expect(await screen.findByText("Version 0.7.0 is available.")).toBeTruthy();
+    const progress = screen.getByRole("button", { name: /Downloading 42%/ }) as HTMLButtonElement;
+    expect(progress.disabled).toBe(true);
+  });
+
+  it("restarts to install a downloaded update", async () => {
+    const user = userEvent.setup();
+    const props = renderPane({ updateState: { status: "downloaded", info: updateInfo } });
+    fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
+    expect(screen.getByText("Version 0.7.0 is ready to install.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /Restart to update/ }));
+    expect(props.onRestartToUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("explains a failed download and offers to try again", async () => {
+    const user = userEvent.setup();
+    const props = renderPane({
+      updateState: {
+        status: "failed",
+        info: updateInfo,
+        failure: { kind: "download", message: "Connection reset." },
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "App & Diagnostics" }));
+    expect(screen.getByText(/Could not update to version 0\.7\.0\./)).toBeTruthy();
+    expect(screen.getByText("Connection reset.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: /Try again/ }));
+    expect(props.onDownloadUpdate).toHaveBeenCalledTimes(1);
   });
 
   it("reports a failed manual check concisely, with the reason beneath it", async () => {
