@@ -74,3 +74,11 @@ export class BoundedByteQueue {
     this.retainedBytes = 0;
   }
 }
+
+export function trimTrailingLineBreaks(text: string): string {
+  return text.replace(/[\r\n]+$/, "");
+}
+
+export function pasteRunsLines(text: string, bracketedPaste: boolean): boolean {
+  return !bracketedPaste && /[\r\n]/.test(text);
+}

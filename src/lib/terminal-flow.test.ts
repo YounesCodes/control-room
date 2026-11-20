@@ -4,7 +4,9 @@ import {
   isControlRoomShortcut,
   isWorkspaceShortcutBlocked,
   MAX_PENDING_TERMINAL_INPUT_BYTES,
+  pasteRunsLines,
   terminalRightClickAction,
+  trimTrailingLineBreaks,
 } from "./terminal-flow";
 
 describe("BoundedByteQueue", () => {
@@ -161,5 +163,19 @@ describe("terminalRightClickAction", () => {
       terminalRightClickAction(click({ mouseTrackingMode: "any" })),
     ];
     expect(results).toEqual(["copy", "paste", "terminal"]);
+  });
+});
+
+describe("pasted text", () => {
+  it("drops trailing line breaks so a paste never ends with Enter", () => {
+    expect(trimTrailingLineBreaks("ls -la\r\n\n")).toBe("ls -la");
+    expect(trimTrailingLineBreaks("one\ntwo")).toBe("one\ntwo");
+  });
+
+  it("runs lines only when the shell has not enabled bracketed paste", () => {
+    expect(pasteRunsLines("one\ntwo", false)).toBe(true);
+    expect(pasteRunsLines("one\rtwo", false)).toBe(true);
+    expect(pasteRunsLines("one\ntwo", true)).toBe(false);
+    expect(pasteRunsLines("one", false)).toBe(false);
   });
 });

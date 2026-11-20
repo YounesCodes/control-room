@@ -95,7 +95,11 @@ import { tagBadgeStyle } from "./lib/connection-tag-color";
 import { connectionTarget } from "./lib/format";
 import { detectHostCapabilities } from "./lib/host-capabilities";
 import { connectionTargetKey } from "./lib/connection-validation";
-import { isWorkspaceShortcutBlocked } from "./lib/terminal-flow";
+import {
+  isWorkspaceShortcutBlocked,
+  pasteRunsLines,
+  trimTrailingLineBreaks,
+} from "./lib/terminal-flow";
 import { clearScratchpadDraft, quiesceScratchpad, resumeScratchpad } from "./lib/scratchpad-draft";
 import {
   createTerminalLayout,
@@ -1983,16 +1987,42 @@ export function App() {
     setRenameTarget(workspace);
   }
 
+  function pasteIntoWorkspaceTerminal(workspace: Workspace, text: string, afterPaste?: () => void) {
+    const terminal = terminalHandlesRef.current.get(workspace.id);
+    if (!terminal) {
+      setActionError("Reconnect the terminal before pasting.");
+      return;
+    }
+    const pasted = trimTrailingLineBreaks(text);
+    if (!pasted) return;
+    const paste = () => {
+      terminal.pasteText(pasted);
+      afterPaste?.();
+    };
+    if (!pasteRunsLines(pasted, terminal.bracketedPasteActive())) {
+      paste();
+      return;
+    }
+    setConfirmState({
+      title: "Run pasted lines?",
+      message:
+        "This shell runs each line as soon as it is pasted. Only the last line will wait for Enter.",
+      confirmLabel: "Paste and run",
+      danger: true,
+      onConfirm: paste,
+    });
+  }
+
   function pasteIntoTerminal(command: string) {
     if (!activeRemoteWorkspace?.sessionId) {
       setActionError("Reconnect the Terminal Session before pasting a command.");
       return;
     }
     setActionError(null);
-    void api
-      .writeSession(activeRemoteWorkspace.sessionId, new TextEncoder().encode(command))
-      .catch((caught) => setActionError(`Could not paste into terminal: ${errorMessage(caught)}`));
-    updateWorkspace(activeRemoteWorkspace.id, { view: "terminal" });
+    const workspace = activeRemoteWorkspace;
+    pasteIntoWorkspaceTerminal(workspace, command, () =>
+      updateWorkspace(workspace.id, { view: "terminal" }),
+    );
   }
 
   function pasteNoteIntoTerminal(text: string) {
@@ -2001,9 +2031,7 @@ export function App() {
       return;
     }
     setActionError(null);
-    void api
-      .writeSession(activeWorkspace.sessionId, new TextEncoder().encode(text))
-      .catch((caught) => setActionError(`Could not paste into terminal: ${errorMessage(caught)}`));
+    pasteIntoWorkspaceTerminal(activeWorkspace, text);
   }
 
   function workspaceMark(workspace: Workspace) {

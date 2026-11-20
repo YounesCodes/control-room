@@ -2,7 +2,13 @@
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useImperativeHandle } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const terminalInput = vi.hoisted(() => ({
+  pasteText: vi.fn(),
+  bracketedPaste: false,
+}));
 
 const api = vi.hoisted(() => ({
   listConnections: vi.fn(),
@@ -42,11 +48,13 @@ vi.mock("./components/WindowControls", () => ({
 
 vi.mock("./components/TerminalPane", () => ({
   TerminalPane: ({
+    ref,
     workspace,
     concealed,
     onState,
     onSession,
   }: {
+    ref?: import("react").Ref<import("./components/TerminalPane").TerminalPaneHandle>;
     workspace: {
       id: string;
       kind: string;
@@ -60,28 +68,38 @@ vi.mock("./components/TerminalPane", () => ({
     concealed?: boolean;
     onState: (state: string, reason: string | null) => void;
     onSession: (sessionId: string | null) => void;
-  }) => (
-    <div
-      data-testid={`terminal-${workspace.id}`}
-      data-kind={workspace.kind}
-      data-target={workspace.kind === "local" ? workspace.shell?.id : workspace.connectionId}
-      data-connect-requested={String(workspace.connectRequested)}
-      data-session={String(workspace.sessionId)}
-      data-concealed={String(!!concealed)}
-      data-remote-shell={workspace.remoteShell?.id ?? ""}
-      data-reconnect-token={String(workspace.reconnectToken ?? 0)}
-    >
-      <button type="button" onClick={() => onState("connected", null)}>
-        report connected
-      </button>
-      <button type="button" onClick={() => onState("error", "SSH session ended.")}>
-        report ended
-      </button>
-      <button type="button" onClick={() => onSession(`${workspace.id}-session`)}>
-        report session
-      </button>
-    </div>
-  ),
+  }) => {
+    useImperativeHandle(ref, () => ({
+      focus: () => undefined,
+      copySelection: () => undefined,
+      pasteClipboard: () => undefined,
+      toggleSearch: () => undefined,
+      pasteText: (text: string) => terminalInput.pasteText(workspace.id, text),
+      bracketedPasteActive: () => terminalInput.bracketedPaste,
+    }));
+    return (
+      <div
+        data-testid={`terminal-${workspace.id}`}
+        data-kind={workspace.kind}
+        data-target={workspace.kind === "local" ? workspace.shell?.id : workspace.connectionId}
+        data-connect-requested={String(workspace.connectRequested)}
+        data-session={String(workspace.sessionId)}
+        data-concealed={String(!!concealed)}
+        data-remote-shell={workspace.remoteShell?.id ?? ""}
+        data-reconnect-token={String(workspace.reconnectToken ?? 0)}
+      >
+        <button type="button" onClick={() => onState("connected", null)}>
+          report connected
+        </button>
+        <button type="button" onClick={() => onState("error", "SSH session ended.")}>
+          report ended
+        </button>
+        <button type="button" onClick={() => onSession(`${workspace.id}-session`)}>
+          report session
+        </button>
+      </div>
+    );
+  },
 }));
 
 import { App } from "./App";
@@ -186,6 +204,7 @@ describe("Local Terminal", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    terminalInput.bracketedPaste = false;
     api.discoverRemoteShells.mockResolvedValue({
       platform: "linux",
       shells: [],
@@ -593,12 +612,8 @@ describe("Local Terminal", () => {
     );
 
     await user.click(within(dialog).getByRole("button", { name: "Paste into terminal" }));
-    await waitFor(() =>
-      expect(api.writeSession).toHaveBeenCalledWith(
-        `${workspaceId}-session`,
-        new TextEncoder().encode("cargo build"),
-      ),
-    );
+    expect(terminalInput.pasteText).toHaveBeenCalledWith(workspaceId, "cargo build");
+    expect(api.writeSession).not.toHaveBeenCalled();
 
     fireEvent.keyDown(dialog, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Scratchpad" })).toBeNull());
@@ -618,6 +633,37 @@ describe("Local Terminal", () => {
     await user.click(within(actions).getByRole("button", { name: "Scratchpad" }));
     const reopened = (await screen.findByLabelText("Terminal note")) as HTMLTextAreaElement;
     expect(reopened.value).toBe("cargo build");
+  });
+
+  it("asks before pasting Scratchpad lines that the shell would run", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+
+    await openLocalShell(user, "PowerShell 7");
+    const terminal = await screen.findByTestId(/^terminal-/);
+    const workspaceId = terminal.dataset.testid!.slice("terminal-".length);
+    await user.click(within(terminal).getByRole("button", { name: "report connected" }));
+    await user.click(within(terminal).getByRole("button", { name: "report session" }));
+
+    const actions = screen.getByRole("group", { name: "Terminal actions" });
+    await user.click(within(actions).getByRole("button", { name: "Scratchpad" }));
+    const scratchpad = await screen.findByRole("dialog", { name: "Scratchpad" });
+    await user.type(
+      within(scratchpad).getByLabelText("Terminal note"),
+      "make{Enter}make install{Enter}",
+    );
+
+    await user.click(within(scratchpad).getByRole("button", { name: "Paste into terminal" }));
+    const confirm = await screen.findByRole("dialog", { name: "Run pasted lines?" });
+    expect(terminalInput.pasteText).not.toHaveBeenCalled();
+    await user.click(within(confirm).getByRole("button", { name: "Paste and run" }));
+    expect(terminalInput.pasteText).toHaveBeenCalledWith(workspaceId, "make\nmake install");
+
+    terminalInput.pasteText.mockClear();
+    terminalInput.bracketedPaste = true;
+    await user.click(within(scratchpad).getByRole("button", { name: "Paste into terminal" }));
+    expect(terminalInput.pasteText).toHaveBeenCalledWith(workspaceId, "make\nmake install");
+    expect(screen.queryByRole("dialog", { name: "Run pasted lines?" })).toBeNull();
   });
 
   it("keeps a local Workspace terminal-only", async () => {
