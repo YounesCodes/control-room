@@ -10,11 +10,7 @@ import { api, errorMessage } from "../lib/api";
 import { isControlRoomConnectedOsc, parseHistoryOsc } from "../lib/history-osc";
 import { notifyHistoryChanged } from "../lib/history-events";
 import { nextFrameOrTimeout } from "../lib/animation-timing";
-import {
-  BoundedByteQueue,
-  isControlRoomShortcut,
-  terminalRightClickAction,
-} from "../lib/terminal-flow";
+import { BoundedByteQueue, terminalRightClickAction } from "../lib/terminal-flow";
 import { trackCodexMouse } from "../lib/terminal-mouse";
 import { buildTerminalTheme } from "../lib/terminal-theme";
 import { TerminalProcessing } from "../lib/terminal-processing";
@@ -297,7 +293,6 @@ export function TerminalPane({
     );
     terminal.attachCustomKeyEventHandler((event) => {
       const useMetaKey = platformRef.current === "macos";
-      if (isControlRoomShortcut(event, useMetaKey ? "meta" : "control")) return false;
       const primary = useMetaKey ? event.metaKey : event.ctrlKey;
       const other = useMetaKey ? event.ctrlKey : event.metaKey;
       if (event.type !== "keydown" || !primary || event.altKey || other) return true;

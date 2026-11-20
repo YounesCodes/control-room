@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   BoundedByteQueue,
-  isControlRoomShortcut,
-  isWorkspaceShortcutBlocked,
   MAX_PENDING_TERMINAL_INPUT_BYTES,
   pasteRunsLines,
   terminalRightClickAction,
@@ -34,84 +32,6 @@ describe("BoundedByteQueue", () => {
     expect(queue.enqueue(new Uint8Array([1]))).toBe(false);
     queue.clear();
     expect(queue.byteCount).toBe(0);
-  });
-});
-
-describe("isControlRoomShortcut", () => {
-  const event = (key: string, shiftKey: boolean, type = "keydown") => ({
-    type,
-    key,
-    ctrlKey: true,
-    metaKey: false,
-    shiftKey,
-  });
-
-  it.each([event("T", true), event("w", true), event("r", true), event("P", true)])(
-    "keeps app shortcuts out of the remote terminal",
-    (keyboardEvent) => {
-      expect(isControlRoomShortcut(keyboardEvent)).toBe(true);
-    },
-  );
-
-  it("leaves terminal copy, paste, F11, new-terminal, and ordinary keys alone", () => {
-    expect(isControlRoomShortcut(event("c", true))).toBe(false);
-    expect(isControlRoomShortcut(event("v", true))).toBe(false);
-    expect(isControlRoomShortcut(event("n", true))).toBe(false);
-    expect(isControlRoomShortcut(event("k", false))).toBe(false);
-    expect(isControlRoomShortcut(event("k", false, "keyup"))).toBe(false);
-    expect(
-      isControlRoomShortcut({
-        type: "keydown",
-        key: "F11",
-        ctrlKey: false,
-        metaKey: false,
-        shiftKey: false,
-      }),
-    ).toBe(false);
-    expect(
-      isControlRoomShortcut({
-        type: "keydown",
-        key: "t",
-        ctrlKey: false,
-        metaKey: false,
-        shiftKey: true,
-      }),
-    ).toBe(false);
-  });
-
-  it("uses only the macOS Command modifier when requested", () => {
-    expect(
-      isControlRoomShortcut(
-        {
-          type: "keydown",
-          key: "p",
-          ctrlKey: false,
-          metaKey: true,
-          shiftKey: true,
-        },
-        "meta",
-      ),
-    ).toBe(true);
-    expect(isControlRoomShortcut(event("p", true), "meta")).toBe(false);
-  });
-});
-
-describe("isWorkspaceShortcutBlocked", () => {
-  function target(matches: string[]) {
-    return {
-      closest: (selector: string) => matches.some((value) => selector.includes(value)),
-    } as unknown as EventTarget;
-  }
-
-  it("blocks shortcuts in application forms and dialogs", () => {
-    expect(isWorkspaceShortcutBlocked(target(["input"]), false)).toBe(true);
-    expect(isWorkspaceShortcutBlocked(target(["[role='dialog']"]), false)).toBe(true);
-    expect(isWorkspaceShortcutBlocked(null, true)).toBe(true);
-  });
-
-  it("keeps shortcuts available inside xterm and ordinary application controls", () => {
-    expect(isWorkspaceShortcutBlocked(target([".xterm", "textarea"]), false)).toBe(false);
-    expect(isWorkspaceShortcutBlocked(target([]), false)).toBe(false);
   });
 });
 

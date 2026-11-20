@@ -25,7 +25,6 @@ const featureSheetOwners: Record<string, RegExp> = {
   "./styles/features/settings.css": /^(settings-(?!mode$)|terminal-appearance|terminal-color)/,
   "./styles/features/dialogs.css":
     /^(modal|remote-shell-|known-tag|tag-color|connection-(organization|dialog|form|key-field|test|tag-selector|groups-dialog|group-(create|list|manage|delete)|tag-(create|color|manage|delete)))/,
-  "./styles/features/command-palette.css": /^command-/,
   "./styles/features/ports.css": /^(ports-(?!page$)|port-list-controls$)/,
   "./styles/features/font-catalog.css": /^font-/,
 };

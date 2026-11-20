@@ -216,10 +216,7 @@
 .session-tab-menu-row > [role="menuitem"]:hover .identity-mark,
 .session-tab-menu-row > [role="menuitem"]:focus .identity-mark,
 .session-tab-menu-row > [role="menuitem"]:focus-visible .identity-mark,
-.session-tab-menu-row > [role="menuitem"][aria-current="page"] .identity-mark,
-.command-item:hover .identity-mark,
-.command-item:focus-visible .identity-mark,
-.command-item.active .identity-mark {
+.session-tab-menu-row > [role="menuitem"][aria-current="page"] .identity-mark {
   color: var(--identity);
   --shell-artwork-filter: none;
 }

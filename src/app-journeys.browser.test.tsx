@@ -848,7 +848,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     // Opening five terminals alone takes most of the default budget on slow WebKit runners.
   }, 60_000);
 
-  it("shows shell identities and elevation in the command palette and Settings", async () => {
+  it("shows shell identities and elevation in Settings", async () => {
     await page.viewport(1200, 800);
     overrides.set("list_local_shells", () => ({
       profiles: [
@@ -866,42 +866,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       administratorStatus: "available",
     }));
     await mount();
-    for (const label of ["Git Bash", "PowerShell 7"]) {
-      await page.getByRole("button", { name: "New terminal", exact: true }).click();
-      await page.getByRole("button", { name: `Local terminals: ${label}`, exact: true }).click();
-    }
-    await userEvent.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
-    const palette = page.getByRole("dialog", { name: "Command palette" });
-    await expect.element(palette).toBeVisible();
-    await expect
-      .poll(
-        () =>
-          getComputedStyle(palette.element().querySelector(".command-item.active .host-os-icon")!)
-            .color,
-      )
-      .toBe("rgb(233, 84, 32)");
-    expect(
-      palette.element().querySelector('[id^="ws-"] .local-shell-icon-git-bash'),
-    ).not.toBeNull();
-    for (const kind of ["git-bash", "powershell-7", "windows-powershell", "command-prompt"]) {
-      expect(
-        palette
-          .element()
-          .querySelector(
-            `#shell-${kind} .local-shell-icon-${kind} ${kind === "git-bash" ? "img" : "svg"}`,
-          ),
-      ).not.toBeNull();
-    }
-    await page.getByRole("combobox", { name: "Search commands" }).fill("administrator");
-    const admin = palette.element().querySelector("#shell-admin")!;
-    const logo = admin.querySelector(".local-shell-icon > svg")!;
-    const badge = admin.querySelector(".local-shell-elevation")!;
-    await expect.poll(() => getComputedStyle(logo).color).toBe("rgb(83, 145, 254)");
-    expect(getComputedStyle(badge).color).toBe("rgb(214, 168, 74)");
-    expect(badge.getBoundingClientRect().width).toBeCloseTo(10, 2);
-    await page.getByRole("combobox", { name: "Search commands" }).fill("");
-    await page.screenshot({ path: "../test-results/local-shell-icons-palette.png" });
-    await userEvent.keyboard("{Escape}");
     await page.getByRole("button", { name: "Open Settings" }).click();
     await page.getByRole("button", { name: "Terminal", exact: true }).click();
     await page.getByRole("tab", { name: "Local shells", exact: true }).click();
@@ -2694,22 +2658,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     },
   );
 
-  it("keeps window controls available in Settings opened from terminal focus", async () => {
-    await mount();
-    await navigate("Terminal");
-    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
-    await userEvent.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
-    await page.getByRole("combobox", { name: "Search commands" }).fill("settings");
-    await userEvent.keyboard("{Enter}");
-    await expect.element(page.getByRole("button", { name: "Close Settings" })).toBeVisible();
-    await expect.element(page.getByRole("button", { name: "Close window" })).toBeVisible();
-    await page.getByRole("button", { name: "Close Settings" }).click();
-    await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
-    expect(element.querySelector(".app-shell")!.classList.contains("terminal-focus-mode")).toBe(
-      true,
-    );
-  });
-
   it("keeps Settings edits after a save failure and retries at minimum window size", async () => {
     await page.viewport(960, 640);
     await mount();
@@ -2726,7 +2674,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(element.scrollWidth).toBeLessThanOrEqual(window.innerWidth);
   });
 
-  it("applies hidden shell settings to new terminal, split menu and palette", async () => {
+  it("applies hidden shell settings to new terminal and split menu", async () => {
     await mount();
     await page.getByRole("button", { name: "Open Settings", exact: true }).click();
     await page.getByRole("button", { name: "Terminal", exact: true }).click();
@@ -2749,12 +2697,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .element(page.getByRole("button", { name: /Command Prompt/ }))
       .not.toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
-    await page.getByRole("button", { name: "Exit terminal focus", exact: true }).click();
-    await userEvent.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
-    await page.getByRole("combobox", { name: "Search commands" }).fill("Command Prompt");
-    await expect
-      .element(page.getByRole("option", { name: /Command Prompt/ }))
-      .not.toBeInTheDocument();
     expect(
       native.invoke.mock.calls.filter(([command]) => command === "start_session"),
     ).toHaveLength(1);
@@ -2993,11 +2935,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await find.click();
     await expect.element(input).not.toBeInTheDocument();
     await expect.element(find).toHaveAttribute("aria-expanded", "false");
-    await userEvent.keyboard("{Control>}{Shift>}f{/Shift}{/Control}");
-    await expect.element(input).toHaveFocus();
   });
 
-  it("restores legacy Scratchpad pages to Terminal and opens notes from the palette", async () => {
+  it("restores legacy Scratchpad pages to Terminal and opens notes from the toolbar", async () => {
     persisted.workspaces = [
       {
         id: "saved-remote",
@@ -3038,10 +2978,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .element(navigation.getByRole("button", { name: "Scratchpad", exact: true }))
       .not.toBeInTheDocument();
     expect(element.querySelector(".scratchpad-page")).toBeNull();
-    await navigate("Docker");
-    await userEvent.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
-    await page.getByRole("combobox", { name: "Search commands" }).fill("Scratchpad");
-    await userEvent.keyboard("{Enter}");
+    await page.getByRole("button", { name: "Scratchpad", exact: true }).click();
     const popup = page.getByRole("dialog", { name: "Scratchpad" });
     await expect
       .element(popup.getByRole("textbox", { name: "Connection note" }))
@@ -3738,11 +3675,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(currentSettings.globalSudoEnabled).toBe(false);
   });
 
-  it("drives the app command palette with a keyboard and checks the Settings page with axe", async () => {
+  it("checks the Settings page with axe", async () => {
     await mount();
-    await userEvent.keyboard("{Control>}{Shift>}p{/Shift}{/Control}");
-    await page.getByRole("combobox", { name: "Search commands" }).fill("settings");
-    await userEvent.keyboard("{Enter}");
+    await page.getByRole("button", { name: "Open Settings", exact: true }).click();
     await expect
       .element(page.getByRole("heading", { name: "Settings", exact: true }))
       .toBeVisible();
@@ -4115,65 +4050,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(element.querySelector(".terminal-drop-layer")).toBeNull();
   });
 
-  it("moves a focused workspace tab with Control and Shift arrow keys", async () => {
-    overrides.set("list_connections", () => [
-      fixtures.connection(),
-      fixtures.connection("host-b"),
-      { ...fixtures.connection("host-c"), displayName: "Fixture Gamma" },
-    ]);
-    persisted = {
-      panelSizes: {},
-      workspaces: [
-        {
-          id: "tab-a",
-          label: null,
-          connectionId: "host-a",
-          localShellId: null,
-          view: "terminal",
-          historyPaused: false,
-        },
-        {
-          id: "tab-b",
-          label: null,
-          connectionId: "host-b",
-          localShellId: null,
-          view: "terminal",
-          historyPaused: false,
-        },
-        {
-          id: "tab-c",
-          label: null,
-          connectionId: "host-c",
-          localShellId: null,
-          view: "terminal",
-          historyPaused: false,
-        },
-      ],
-      activeWorkspaceId: "tab-a",
-      terminalGroups: [],
-      terminalLayout: null,
-    };
-    root.render(<App />);
-    await expect.element(page.getByRole("navigation", { name: "Saved connections" })).toBeVisible();
-    await vi.waitFor(() =>
-      expect(stripTabLabels()).toEqual(["Fixture Alpha", "Fixture Beta", "Fixture Gamma"]),
-    );
-
-    stripTabMain("Fixture Beta")!.focus();
-    await userEvent.keyboard("{Control>}{Shift>}{ArrowLeft}{/Shift}{/Control}");
-    await vi.waitFor(() =>
-      expect(stripTabLabels()).toEqual(["Fixture Beta", "Fixture Alpha", "Fixture Gamma"]),
-    );
-    await vi.waitFor(() =>
-      expect(persisted.workspaces.map((workspace) => workspace.id)).toEqual([
-        "tab-b",
-        "tab-a",
-        "tab-c",
-      ]),
-    );
-    expect(activeStripTab()).toBe("Fixture Alpha");
-  });
-
   it("reorders a focus-mode group tab by dragging and saves the block order", async () => {
     overrides.set("list_connections", () => [
       fixtures.connection(),
@@ -4250,11 +4126,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(document.querySelector(".session-tab-group.active")?.textContent).toContain(
       "Fixture Group",
     );
-
-    groupMain().focus();
-    await userEvent.keyboard("{Control>}{Shift>}{ArrowLeft}{/Shift}{/Control}");
-    await vi.waitFor(() => expect(focusStrip()).toEqual(["Fixture Group 2", "Fixture Gamma"]));
-    await vi.waitFor(() => expect(savedIds()).toEqual(["tab-a", "tab-b", "tab-c"]));
   });
 
   it("drags a tab past either end of an overflowing strip into the first or last slot and keeps it in view", async () => {

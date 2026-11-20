@@ -6,7 +6,6 @@ import axe from "axe-core";
 import { runAxe } from "../test/axe";
 import { Plus } from "lucide-react";
 import { Modal } from "./Modal";
-import { CommandPalette } from "./CommandPalette";
 import { ConnectionDialog } from "./ConnectionDialog";
 import { WindowControls } from "./WindowControls";
 import { TabLabel, WorkspaceTabScroller } from "./WorkspaceTabScroller";
@@ -73,55 +72,6 @@ function ModalFixture({ long = false }: { long?: boolean }) {
             </footer>
           </div>
         </Modal>
-      )}
-    </>
-  );
-}
-
-function PaletteFixture({ onSettings }: { onSettings: () => void }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.currentTarget.focus();
-          setOpen(true);
-        }}
-      >
-        Open palette
-      </button>
-      {open && (
-        <CommandPalette
-          connections={[]}
-          localShells={[]}
-          workspaces={[]}
-          activeWorkspaceId={null}
-          activeView={null}
-          canOpenNewTerminal={false}
-          activeWorkspaceIsLocal={false}
-          canFocusTerminal={false}
-          canSplitTerminal={false}
-          views={[]}
-          hostCapabilities={{}}
-          labelForWorkspace={() => ""}
-          onClose={() => setOpen(false)}
-          onOpenConnection={() => undefined}
-          onOpenLocalShell={() => undefined}
-          onSelectWorkspace={() => undefined}
-          onSetView={() => undefined}
-          onNewTerminal={() => undefined}
-          onReconnect={() => undefined}
-          onCloseWorkspace={() => undefined}
-          onFocusTerminal={() => undefined}
-          onFindTerminal={() => undefined}
-          onSplitTerminal={() => undefined}
-          onRenameWorkspace={() => undefined}
-          onManageConnections={() => undefined}
-          onAddConnection={() => undefined}
-          onOpenSettings={onSettings}
-          onCheckForUpdates={() => undefined}
-        />
       )}
     </>
   );
@@ -749,21 +699,6 @@ describe("critical UI in Chromium", () => {
     expect(header.top).toBeGreaterThanOrEqual(bounds.top);
     expect(actions.bottom).toBeLessThanOrEqual(bounds.bottom);
     await expect.element(page.getByRole("button", { name: "Save" })).toBeVisible();
-  });
-
-  it("navigates the command palette with a real keyboard", async () => {
-    const onSettings = vi.fn();
-    mount(<PaletteFixture onSettings={onSettings} />);
-    const trigger = page.getByRole("button", { name: "Open palette" });
-    await trigger.click();
-    const search = page.getByRole("combobox", { name: "Search commands" });
-    await expect.element(search).toHaveFocus();
-    await search.fill("settings");
-    await expect.element(page.getByRole("option", { name: "Open settings" })).toBeVisible();
-    await expectAccessibleDialog();
-    await userEvent.keyboard("{Enter}");
-    expect(onSettings).toHaveBeenCalledOnce();
-    await expect.element(trigger).toHaveFocus();
   });
 
   it("keeps Add connection quiet on a raised charcoal surface with a moving plus", async () => {

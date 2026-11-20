@@ -10,11 +10,9 @@ const STRIP = { left: 0, right: 700, top: 0, bottom: 34 };
 function Strip({
   labels,
   onReorder,
-  reorderModifier,
 }: {
   labels: string[];
   onReorder?: (id: string, targetIndex: number) => void;
-  reorderModifier?: "control" | "meta";
 }) {
   return (
     <WorkspaceTabScroller
@@ -29,7 +27,6 @@ function Strip({
       activeTabId="id-1"
       arrangementKey="test"
       onReorder={onReorder}
-      reorderModifier={reorderModifier}
     >
       {labels.map((label, index) => (
         <div className="session-tab-wrap" key={`id-${index + 1}`}>
@@ -317,41 +314,14 @@ describe("WorkspaceTabScroller reordering", () => {
     expect(onReorder).not.toHaveBeenCalled();
   });
 
-  it("moves a focused tab with Cmd+Shift+arrow keys on macOS and leaves Ctrl to the shell", () => {
+  it("leaves modified arrow keys on a focused tab alone", () => {
     const onReorder = vi.fn();
-    const { container } = render(
-      <Strip labels={["A", "B", "C"]} onReorder={onReorder} reorderModifier="meta" />,
-    );
+    const { container } = render(<Strip labels={["A", "B", "C"]} onReorder={onReorder} />);
     const second = mainButton(container, "B");
 
     fireEvent.keyDown(second, { key: "ArrowLeft", ctrlKey: true, shiftKey: true });
-    expect(onReorder).not.toHaveBeenCalled();
-    fireEvent.keyDown(second, { key: "ArrowLeft", metaKey: true, shiftKey: true });
-    expect(onReorder).toHaveBeenCalledWith("id-2", 0);
     fireEvent.keyDown(second, { key: "ArrowRight", metaKey: true, shiftKey: true });
-    expect(onReorder).toHaveBeenCalledWith("id-2", 2);
-  });
-
-  it("moves a focused tab with Ctrl+Shift+arrow keys and clamps at the ends", () => {
-    const onReorder = vi.fn();
-    const { container } = render(<Strip labels={["A", "B", "C", "D"]} onReorder={onReorder} />);
-    const second = mainButton(container, "B");
-
-    fireEvent.keyDown(second, { key: "ArrowLeft", ctrlKey: true, shiftKey: true });
-    expect(onReorder).toHaveBeenCalledWith("id-2", 0);
-    fireEvent.keyDown(second, { key: "ArrowRight", ctrlKey: true, shiftKey: true });
-    expect(onReorder).toHaveBeenCalledWith("id-2", 2);
-
-    const first = mainButton(container, "A");
-    fireEvent.keyDown(first, { key: "ArrowLeft", ctrlKey: true, shiftKey: true });
-    const last = mainButton(container, "D");
-    fireEvent.keyDown(last, { key: "ArrowRight", ctrlKey: true, shiftKey: true });
-    expect(onReorder).toHaveBeenCalledTimes(2);
-
-    fireEvent.keyDown(first, { key: "ArrowRight" });
-    fireEvent.keyDown(first, { key: "ArrowRight", ctrlKey: true });
-    fireEvent.keyDown(first, { key: "ArrowRight", shiftKey: true });
-    expect(onReorder).toHaveBeenCalledTimes(2);
+    expect(onReorder).not.toHaveBeenCalled();
   });
 
   it("starts drags only on the main tab button of a reorderable strip", () => {

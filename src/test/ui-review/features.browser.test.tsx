@@ -42,7 +42,6 @@ const platform: ClientPlatform = navigator.platform.startsWith("Mac")
   : navigator.platform.startsWith("Linux")
     ? "linux"
     : "windows";
-const appModifier = platform === "macos" ? "Meta" : "Control";
 
 afterEach(() => {
   mounted?.root.unmount();
@@ -83,45 +82,25 @@ async function perform({ role, name, key }: FixtureAction) {
   await userEvent.keyboard(`{${key}}`);
 }
 
-function paletteOptionLabels() {
-  return Array.from(document.querySelectorAll('[role="option"]'), (option) => ({
-    label: option.querySelector("strong")?.textContent ?? "",
-    keys: Array.from(option.querySelectorAll("kbd"), (key) => key.textContent)
-      .join("+")
-      .replace(/^Cmd\+/, "Ctrl+"),
-  }));
-}
-
-async function resolve(entry: Exclude<EntryPoint, { kind: "shortcut" }>, shortcuts: string[]) {
+async function resolve(entry: Exclude<EntryPoint, { kind: "shortcut" }>) {
   const viewport = registry.viewports[entry.viewport ?? "normal"];
   await page.viewport(viewport.width, viewport.height);
   await mount(entry.fixture ?? map.fixture);
   for (const action of entry.open ?? []) await perform(action);
-  if (entry.kind === "palette") {
-    await userEvent.keyboard(`{${appModifier}>}{Shift>}P{/Shift}{/${appModifier}}`);
-    await expect.element(page.getByRole("listbox")).toBeVisible();
-    const option = paletteOptionLabels().find(({ label }) => label === entry.name);
-    expect(option, `Command palette lists ${entry.name}`).toBeDefined();
-    if (option!.keys) expect(shortcuts).toContain(option!.keys);
-    return;
-  }
   await expect.element(locate(entry.role, entry.name, entry.within)).toBeVisible();
 }
 
-const cases = (map.features as Feature[]).flatMap((feature) => {
-  const shortcuts = feature.entryPoints.flatMap((entry) =>
-    entry.kind === "shortcut" ? [entry.keys] : [],
-  );
-  return feature.entryPoints.flatMap((entry) =>
+const cases = (map.features as Feature[]).flatMap((feature) =>
+  feature.entryPoints.flatMap((entry) =>
     entry.kind === "shortcut"
       ? []
-      : [[feature.name, `${entry.kind} ${entry.role} "${entry.name}"`, entry, shortcuts] as const],
-  );
-});
+      : [[feature.name, `${entry.kind} ${entry.role} "${entry.name}"`, entry] as const],
+  ),
+);
 
 describe("feature map entry points", () => {
-  it.for(cases)("%s: %s", async ([, , entry, shortcuts], { skip }) => {
+  it.for(cases)("%s: %s", async ([, , entry], { skip }) => {
     if (entry.platforms && !entry.platforms.includes(platform)) skip();
-    await resolve(entry, shortcuts);
+    await resolve(entry);
   });
 });

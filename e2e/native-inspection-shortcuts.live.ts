@@ -139,18 +139,6 @@ describe("Native inspection shortcuts on a real SSH fixture", () => {
     await expect($(".systemd-tools-panel")).not.toExist();
     await $("button[aria-label^='Dependency graph']").click();
     await graphKeys("Systemd dependency graph", "Unit details");
-    const nodes = "[aria-label='Systemd dependency graph'] button.arch-chip";
-    await focus(nodes);
-    const target = await browser.execute(
-      (selector) => document.querySelector(selector)!.querySelector("strong")!.textContent!.trim(),
-      nodes,
-    );
-    await nativeKey("shift+enter");
-    await expect($("button[aria-label^='Dependency graph']")).toHaveAttribute(
-      "aria-label",
-      `Dependency graph ${target}`,
-    );
-    await expect($("[aria-label='Unit details']")).not.toExist();
   });
 
   it("navigates live Ports nodes and dismisses its inspector and toolbar", async () => {

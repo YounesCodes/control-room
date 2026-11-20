@@ -1137,7 +1137,7 @@ describe("TerminalPane sessions", () => {
     expect(writtenText()).toEqual(["echo once"]);
   });
 
-  it("uses Command shortcuts on macOS while leaving Control input to the shell", async () => {
+  it("uses Command copy on macOS and sends other modified keys to the shell", async () => {
     api.startSession.mockResolvedValue({ sessionId: "session-mac" });
     renderPane(createRemoteWorkspace(connection), vi.fn(), { platform: "macos" });
     await vi.waitFor(() => expect(xterm.customKeyHandler).toBeTruthy());
@@ -1146,7 +1146,7 @@ describe("TerminalPane sessions", () => {
         xterm.customKeyHandler?.(
           new KeyboardEvent("keydown", { key, metaKey: true, shiftKey: true }),
         ),
-      ).toBe(false);
+      ).toBe(true);
       expect(
         xterm.customKeyHandler?.(
           new KeyboardEvent("keydown", { key, ctrlKey: true, shiftKey: true }),

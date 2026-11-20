@@ -68,7 +68,6 @@ describe("Native OS clipboard and shell control keys", () => {
       await nativeKey("ctrl+" + key);
       await terminalContains("NATIVE_KEY_" + byte);
       expect((await runtime()).sessionIds).toEqual(before);
-      await expect($("[aria-label='Command palette']")).not.toExist();
       await expect($("[role=dialog]")).not.toExist();
     });
   }
