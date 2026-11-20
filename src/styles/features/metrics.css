@@ -360,9 +360,7 @@
 }
 
 .host-metric-figure .host-metric-direction {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  display: inline-block;
   color: var(--text-faint);
   font-family: var(--font-ui);
   font-size: 11px;
@@ -371,14 +369,16 @@
 }
 
 .host-metric-figure strong .host-metric-direction {
-  margin-left: 6px;
-  vertical-align: 3px;
+  margin-left: 8px;
 }
 
 .host-metric-figure .host-metric-direction::before {
   content: "";
+  display: inline-block;
   width: 10px;
+  margin-right: 4px;
   border-top: 1.5px solid var(--text);
+  vertical-align: middle;
 }
 
 .host-metric-figure .host-metric-direction[data-trace="read"]::before {

@@ -480,7 +480,7 @@ export function HostMetrics({
                             />
                             {!unavailable && (
                               <span className="host-metric-direction" data-trace="main">
-                                write
+                                Write
                               </span>
                             )}
                           </>
