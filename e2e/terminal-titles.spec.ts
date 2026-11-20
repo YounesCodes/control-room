@@ -39,7 +39,7 @@ import {
     );
     await browser.keys("Enter");
     await expectNativeText(await tab.$(".session-tab-label"), `node · ${localShellLabel}`);
-    await expect(tab).toHaveAttribute("title", `node · ${localShellLabel}`);
+    await expect(tab).toHaveAttribute("title", `node · ${localShellLabel} · Local terminal`);
     await browser.keys("Enter");
     await terminalContains("TITLE_FINISHED");
     await expectNativeText(await tab.$(".session-tab-label"), localShellLabel);
