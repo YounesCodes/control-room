@@ -209,6 +209,112 @@ describe("Terminal Scratchpad popover", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("copies and pastes the selection, or the whole note when nothing is selected", async () => {
+    const user = userEvent.setup();
+    const clipboardWrite = installClipboardSpy(user);
+    const onPaste = vi.fn();
+    api.scratchpadNote.mockResolvedValue(
+      savedNote({
+        scope: "local",
+        ownerId: workspaceId,
+        connectionId: null,
+        text: "make\nmake install",
+      }),
+    );
+    mount({ onPaste });
+    const editor = (await screen.findByLabelText("Terminal note")) as HTMLTextAreaElement;
+    await waitFor(() => expect(editor.value).toBe("make\nmake install"));
+
+    const select = (start: number, end: number) => {
+      editor.focus();
+      editor.setSelectionRange(start, end);
+      fireEvent.keyUp(editor);
+    };
+
+    select(5, 17);
+    await user.click(await screen.findByRole("button", { name: "Copy selection" }));
+    expect(clipboardWrite).toHaveBeenLastCalledWith("make install");
+    expect(screen.getByRole("button", { name: "Copied selection" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Paste selection" }));
+    expect(onPaste).toHaveBeenLastCalledWith("make install");
+
+    select(2, 2);
+    await user.click(await screen.findByRole("button", { name: "Paste into terminal" }));
+    expect(onPaste).toHaveBeenLastCalledWith("make\nmake install");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Copy" })).toBeTruthy(), {
+      timeout: 3000,
+    });
+    await user.click(screen.getByRole("button", { name: "Copy" }));
+    expect(clipboardWrite).toHaveBeenLastCalledWith("make\nmake install");
+    expect(screen.getByRole("button", { name: "Copied note" })).toBeTruthy();
+  });
+
+  it("copies the selection or the caret's line with Ctrl+C and right-click", async () => {
+    const user = userEvent.setup();
+    const clipboardWrite = installClipboardSpy(user);
+    api.scratchpadNote.mockResolvedValue(
+      savedNote({
+        scope: "local",
+        ownerId: workspaceId,
+        connectionId: null,
+        text: "first\nsecond line\n\nlast",
+      }),
+    );
+    mount();
+    const editor = (await screen.findByLabelText("Terminal note")) as HTMLTextAreaElement;
+    await waitFor(() => expect(editor.readOnly).toBe(false));
+
+    editor.setSelectionRange(9, 9);
+    expect(fireEvent.keyDown(editor, { key: "c", ctrlKey: true })).toBe(false);
+    await waitFor(() => expect(clipboardWrite).toHaveBeenLastCalledWith("second line"));
+    expect(await screen.findByRole("button", { name: "Copied line" })).toBeTruthy();
+
+    editor.setSelectionRange(0, 3);
+    fireEvent.mouseDown(editor, { button: 2 });
+    expect(fireEvent.contextMenu(editor)).toBe(false);
+    await waitFor(() => expect(clipboardWrite).toHaveBeenLastCalledWith("fir"));
+    expect(await screen.findByRole("button", { name: "Copied selection" })).toBeTruthy();
+
+    editor.setSelectionRange(1, 1);
+    fireEvent.mouseDown(editor, { button: 2 });
+    editor.setSelectionRange(6, 12);
+    expect(fireEvent.contextMenu(editor)).toBe(false);
+    await waitFor(() => expect(clipboardWrite).toHaveBeenLastCalledWith("second line"));
+    expect([editor.selectionStart, editor.selectionEnd]).toEqual([6, 6]);
+
+    clipboardWrite.mockClear();
+    editor.setSelectionRange(18, 18);
+    fireEvent.mouseDown(editor, { button: 2 });
+    expect(fireEvent.contextMenu(editor)).toBe(true);
+    expect(fireEvent.keyDown(editor, { key: "c", ctrlKey: true })).toBe(true);
+    expect(clipboardWrite).not.toHaveBeenCalled();
+  });
+
+  it("reopens a note with the caret or selection where it was left", async () => {
+    const ownerId = "44444444-4444-4444-8444-444444444444";
+    api.scratchpadNote.mockResolvedValue(
+      savedNote({
+        scope: "local",
+        ownerId,
+        connectionId: null,
+        text: "one\ntwo\nthree",
+      }),
+    );
+    const first = mount({ ownerId });
+    const editor = (await screen.findByLabelText("Terminal note")) as HTMLTextAreaElement;
+    await waitFor(() => expect(editor.value).toBe("one\ntwo\nthree"));
+    expect([editor.selectionStart, editor.selectionEnd]).toEqual([0, 0]);
+    editor.focus();
+    editor.setSelectionRange(4, 7);
+    fireEvent.keyUp(editor);
+    first.unmount();
+
+    mount({ ownerId });
+    const reopened = (await screen.findByLabelText("Terminal note")) as HTMLTextAreaElement;
+    await waitFor(() => expect(reopened.value).toBe("one\ntwo\nthree"));
+    expect([reopened.selectionStart, reopened.selectionEnd]).toEqual([4, 7]);
+  });
+
   it("keeps keyboard undo in the compact editor", async () => {
     await mount();
     const editor = (await screen.findByLabelText("Terminal note")) as HTMLTextAreaElement;

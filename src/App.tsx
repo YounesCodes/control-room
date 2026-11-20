@@ -2919,6 +2919,19 @@ export function App() {
                     <Search size={15} />
                   </button>
                   <button
+                    ref={scratchpadButtonRef}
+                    className="session-strip-button"
+                    type="button"
+                    data-scratchpad-trigger
+                    onClick={() => setScratchpadOpen((open) => !open)}
+                    aria-label="Scratchpad"
+                    title="Scratchpad"
+                    aria-haspopup="dialog"
+                    aria-expanded={scratchpadOpen}
+                  >
+                    <StickyNote size={15} />
+                  </button>
+                  <button
                     className="session-strip-button"
                     type="button"
                     onClick={() =>
@@ -2941,19 +2954,6 @@ export function App() {
                     title="Paste"
                   >
                     <Clipboard size={15} />
-                  </button>
-                  <button
-                    ref={scratchpadButtonRef}
-                    className="session-strip-button"
-                    type="button"
-                    data-scratchpad-trigger
-                    onClick={() => setScratchpadOpen((open) => !open)}
-                    aria-label="Scratchpad"
-                    title="Scratchpad"
-                    aria-haspopup="dialog"
-                    aria-expanded={scratchpadOpen}
-                  >
-                    <StickyNote size={15} />
                   </button>
                 </div>
                 {scratchpadPresent && activeWorkspace?.view === "terminal" && (

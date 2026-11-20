@@ -2925,6 +2925,105 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await expect.element(page.getByRole("button", { name: "Find in terminal" })).toBeVisible();
   });
 
+  it("returns Scratchpad actions to the whole note when a one-line selection is cleared", async () => {
+    overrides.set("get_scratchpad_note", () => ({
+      id: "example-note",
+      scope: "connection",
+      ownerId: "host-a",
+      text: "rrrr",
+      createdAt: "",
+      updatedAt: "",
+    }));
+    await mount();
+    await page.getByRole("button", { name: "Scratchpad", exact: true }).click();
+    const popup = page.getByRole("dialog", { name: "Scratchpad" });
+    const editor = popup.getByRole("textbox", { name: "Connection note" });
+    await expect.element(editor).toHaveValue("rrrr");
+    await expect.element(editor).not.toHaveAttribute("readonly");
+    await userEvent.keyboard(
+      navigator.platform.startsWith("Mac") ? "{Meta>}a{/Meta}" : "{Control>}a{/Control}",
+    );
+    await expect
+      .element(popup.getByRole("button", { name: "Copy selection", exact: true }))
+      .toBeVisible();
+    await userEvent.click(editor.element(), { position: { x: 120, y: 60 } });
+    await expect.element(popup.getByRole("button", { name: "Copy", exact: true })).toBeVisible();
+    await expect
+      .element(popup.getByRole("button", { name: "Paste into terminal", exact: true }))
+      .toBeVisible();
+    await userEvent.keyboard("{Shift>}{Home}{/Shift}");
+    await expect
+      .element(popup.getByRole("button", { name: "Copy selection", exact: true }))
+      .toBeVisible();
+    await userEvent.keyboard("{ArrowRight}");
+    await expect.element(popup.getByRole("button", { name: "Copy", exact: true })).toBeVisible();
+  });
+
+  it("reopens Scratchpad where it was left and copies the right-clicked line", async () => {
+    const lines = Array.from({ length: 40 }, (_, index) => `Example note ${index}`);
+    overrides.set("get_scratchpad_note", () => ({
+      id: "example-note",
+      scope: "connection",
+      ownerId: "host-a",
+      text: lines.join("\n"),
+      createdAt: "",
+      updatedAt: "",
+    }));
+    const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
+    await mount();
+    const actions = page.getByRole("group", { name: "Terminal actions" });
+    expect(
+      [...actions.element().querySelectorAll("button")].map((button) =>
+        button.getAttribute("aria-label"),
+      ),
+    ).toEqual(["Find in terminal", "Scratchpad", "Copy terminal selection", "Paste into terminal"]);
+    const trigger = actions.getByRole("button", { name: "Scratchpad", exact: true });
+    const editor = () =>
+      element.querySelector<HTMLTextAreaElement>(".scratchpad-editor textarea:not([readonly])");
+
+    await trigger.click();
+    await vi.waitFor(() => expect(editor()?.value).toBe(lines.join("\n")));
+    await userEvent.keyboard(
+      navigator.platform.startsWith("Mac")
+        ? "{Meta>}{ArrowDown}{/Meta}"
+        : "{Control>}{End}{/Control}",
+    );
+    const leftAt = editor()!.scrollTop;
+    expect(leftAt).toBeGreaterThan(0);
+    await userEvent.keyboard("{Escape}");
+    await expect.element(page.getByRole("dialog", { name: "Scratchpad" })).not.toBeInTheDocument();
+
+    await trigger.click();
+    await vi.waitFor(() => expect(editor()?.value).toBe(lines.join("\n")));
+    const reopened = editor()!;
+    await expect.element(reopened).toHaveFocus();
+    expect(reopened.selectionStart).toBe(reopened.value.length);
+    expect(Math.abs(reopened.scrollTop - leftAt)).toBeLessThanOrEqual(1);
+
+    await userEvent.keyboard(
+      navigator.platform.startsWith("Mac")
+        ? "{Meta>}{ArrowUp}{/Meta}"
+        : "{Control>}{Home}{/Control}",
+    );
+    expect(reopened.selectionStart).toBe(0);
+    reopened.scrollTop = 0;
+    await expect.poll(() => reopened.scrollTop).toBe(0);
+    const box = reopened.getBoundingClientRect();
+    const style = getComputedStyle(reopened);
+    await userEvent.click(reopened, {
+      button: "right",
+      position: {
+        x: box.width / 2,
+        y: reopened.clientTop + parseFloat(style.paddingTop) + parseFloat(style.lineHeight) * 2.5,
+      },
+    });
+    await vi.waitFor(() => expect(writeText).toHaveBeenLastCalledWith("Example note 2"));
+    await expect
+      .element(page.getByRole("button", { name: "Copied line", exact: true }))
+      .toBeVisible();
+    writeText.mockRestore();
+  });
+
   it("opens and closes Find in terminal from the same toolbar button", async () => {
     await mount();
     const find = page.getByRole("button", { name: "Find in terminal" });

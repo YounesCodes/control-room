@@ -672,7 +672,7 @@
       "capture": [
         {
           "scenario": "scratchpad",
-          "states": ["populated", "global", "save-error"]
+          "states": ["populated", "selection", "global", "save-error"]
         }
       ],
       "entryPoints": [

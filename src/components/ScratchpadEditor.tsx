@@ -7,12 +7,17 @@ import { api, errorMessage } from "../lib/api";
 import {
   MAX_SCRATCHPAD_CHARS,
   clearScratchpadDraft,
+  forgetScratchpadCaret,
+  lineAt,
   readScratchpadDraft,
+  recallScratchpadCaret,
+  rememberScratchpadCaret,
   registerScratchpadQuiesce,
   writeScratchpadDraft,
 } from "../lib/scratchpad-draft";
 import type { ScratchpadScope } from "../types";
 type SaveStatus = "saved" | "unsaved" | "saving" | "error";
+export type ScratchpadCopyKind = "selection" | "line";
 const EDIT_HISTORY_LIMIT = 100;
 
 export function ScratchpadEditor({
@@ -20,11 +25,15 @@ export function ScratchpadEditor({
   ownerId,
   connectionId,
   onTextChange,
+  onSelectionChange,
+  onCopyText,
 }: {
   scope: ScratchpadScope;
   ownerId: string;
   connectionId: string | null;
   onTextChange?: (text: string) => void;
+  onSelectionChange?: (selectedText: string) => void;
+  onCopyText?: (text: string, kind: ScratchpadCopyKind) => void;
 }) {
   const [text, setText] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -37,6 +46,10 @@ export function ScratchpadEditor({
   const [, setHistoryVersion] = useState(0);
   const textRef = useRef("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const hiddenScrollRestoreRef = useRef<number | null>(null);
+  const selectedBeforeRightClickRef = useRef(false);
+  const onSelectionChangeRef = useRef(onSelectionChange);
+  onSelectionChangeRef.current = onSelectionChange;
   const undoRef = useRef<string[]>([]);
   const redoRef = useRef<string[]>([]);
   const savedTextRef = useRef("");
@@ -93,9 +106,46 @@ export function ScratchpadEditor({
   }, [connectionId, loadVersion, ownerId, scope]);
 
   useLayoutEffect(() => {
-    // Assigning a focused textarea's value leaves the caret at the end.
-    if (loaded) textareaRef.current?.setSelectionRange(0, 0);
+    const textarea = textareaRef.current;
+    if (!loaded || !textarea) return;
+    const caret = recallScratchpadCaret(scope, ownerId);
+    const length = textarea.value.length;
+    textarea.setSelectionRange(
+      Math.min(caret?.start ?? 0, length),
+      Math.min(caret?.end ?? 0, length),
+      caret?.direction,
+    );
+    textarea.scrollTop = caret?.scrollTop ?? 0;
+    hiddenScrollRestoreRef.current = textarea.getClientRects().length
+      ? null
+      : (caret?.scrollTop ?? 0);
   }, [loaded]);
+
+  function syncCaret() {
+    const textarea = textareaRef.current;
+    if (!loaded || !textarea) return;
+    rememberScratchpadCaret(scope, ownerId, {
+      start: textarea.selectionStart,
+      end: textarea.selectionEnd,
+      direction: textarea.selectionDirection ?? "none",
+      scrollTop: hiddenScrollRestoreRef.current ?? textarea.scrollTop,
+    });
+    onSelectionChangeRef.current?.(
+      textarea.value.slice(textarea.selectionStart, textarea.selectionEnd),
+    );
+  }
+
+  function copyRequest(
+    { lineOnly }: { lineOnly: boolean } = { lineOnly: false },
+  ): { text: string; kind: ScratchpadCopyKind } | null {
+    const textarea = textareaRef.current;
+    if (!loaded || !textarea) return null;
+    const { selectionStart, selectionEnd, value } = textarea;
+    if (!lineOnly && selectionStart !== selectionEnd)
+      return { text: value.slice(selectionStart, selectionEnd), kind: "selection" };
+    const line = lineAt(value, selectionStart);
+    return line.trim() ? { text: line, kind: "line" } : null;
+  }
 
   function setEditedText(nextText: string) {
     const currentText = textRef.current;
@@ -223,6 +273,26 @@ export function ScratchpadEditor({
     onTextChangeRef.current?.(text);
   }, [text]);
 
+  useLayoutEffect(syncCaret, [text]);
+
+  const syncCaretRef = useRef(syncCaret);
+  syncCaretRef.current = syncCaret;
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const sync = () => syncCaretRef.current();
+    const syncAfterClick = () => window.requestAnimationFrame(sync);
+    const textareaEvents = ["select", "selectionchange", "keyup", "mouseup", "focus"] as const;
+    for (const type of textareaEvents) textarea.addEventListener(type, sync);
+    textarea.addEventListener("mousedown", syncAfterClick);
+    document.addEventListener("selectionchange", sync);
+    return () => {
+      for (const type of textareaEvents) textarea.removeEventListener(type, sync);
+      textarea.removeEventListener("mousedown", syncAfterClick);
+      document.removeEventListener("selectionchange", sync);
+    };
+  }, []);
+
   async function deleteNote() {
     await quiesce();
     setError(null);
@@ -234,6 +304,7 @@ export function ScratchpadEditor({
       redoRef.current = [];
       setHistoryVersion((current) => current + 1);
       clearScratchpadDraft(scope, ownerId);
+      forgetScratchpadCaret(scope, ownerId);
       setText("");
       setHasRecord(false);
       setStatus("saved");
@@ -349,10 +420,37 @@ export function ScratchpadEditor({
         onChange={(event) => {
           if (loaded) setEditedText(event.target.value);
         }}
+        onScroll={syncCaret}
+        onFocus={(event) => {
+          if (hiddenScrollRestoreRef.current === null) return;
+          event.currentTarget.scrollTop = hiddenScrollRestoreRef.current;
+          hiddenScrollRestoreRef.current = null;
+        }}
+        onMouseDown={(event) => {
+          if (event.button !== 2) return;
+          const textarea = event.currentTarget;
+          selectedBeforeRightClickRef.current = textarea.selectionStart !== textarea.selectionEnd;
+        }}
+        onContextMenu={(event) => {
+          const textarea = event.currentTarget;
+          const selectedByThisClick = !selectedBeforeRightClickRef.current;
+          selectedBeforeRightClickRef.current = false;
+          const request = onCopyText && copyRequest({ lineOnly: selectedByThisClick });
+          if (!request) return;
+          event.preventDefault();
+          if (request.kind === "line" && textarea.selectionStart !== textarea.selectionEnd)
+            textarea.setSelectionRange(textarea.selectionStart, textarea.selectionStart);
+          onCopyText(request.text, request.kind);
+        }}
         onKeyDown={(event) => {
           if (!loaded || !(event.ctrlKey || event.metaKey)) return;
           const key = event.key.toLowerCase();
-          if (key === "z") {
+          if (key === "c" && !event.shiftKey && !event.altKey) {
+            const request = onCopyText && copyRequest();
+            if (!request) return;
+            event.preventDefault();
+            onCopyText(request.text, request.kind);
+          } else if (key === "z") {
             event.preventDefault();
             if (event.shiftKey) redoEdit();
             else undoEdit();

@@ -1,9 +1,17 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { Copy, Globe2, SquareTerminal, TerminalSquare } from "lucide-react";
-import { ScratchpadEditor } from "./ScratchpadEditor";
+import { Check, Copy, Globe2, SquareTerminal, TerminalSquare } from "lucide-react";
+import { ScratchpadEditor, type ScratchpadCopyKind } from "./ScratchpadEditor";
 import type { ScratchpadScope } from "../types";
 
 type NoteSelection = "terminal" | "global";
+type CopyFeedback = { kind: ScratchpadCopyKind | "note"; failed: boolean };
+
+const COPY_FEEDBACK_MS = 1500;
+const COPY_FEEDBACK_LABELS: Record<CopyFeedback["kind"], string> = {
+  note: "Copied note",
+  selection: "Copied selection",
+  line: "Copied line",
+};
 
 export function TerminalScratchpad({
   terminalScope,
@@ -26,12 +34,20 @@ export function TerminalScratchpad({
 }) {
   const [selection, setSelection] = useState<NoteSelection>("terminal");
   const [texts, setTexts] = useState<Record<NoteSelection, string>>({ terminal: "", global: "" });
+  const [selectedTexts, setSelectedTexts] = useState<Record<NoteSelection, string>>({
+    terminal: "",
+    global: "",
+  });
+  const [copyFeedback, setCopyFeedback] = useState<CopyFeedback | null>(null);
+  const copyFeedbackTimerRef = useRef<number | undefined>(undefined);
   const [wasClosing, setWasClosing] = useState(Boolean(closing));
   if (wasClosing !== Boolean(closing)) {
     setWasClosing(Boolean(closing));
     if (!closing) setSelection("terminal");
   }
   const text = texts[selection];
+  const selectedText = selectedTexts[selection];
+  const actionText = selectedText || text;
   const rootRef = useRef<HTMLDivElement>(null);
   const notesRef = useRef<Record<NoteSelection, HTMLDivElement | null>>({
     terminal: null,
@@ -46,7 +62,12 @@ export function TerminalScratchpad({
       ? `Terminal note for ${ownerLabel}`
       : `Connection note for ${ownerLabel}`;
   const terminalNoteKey = `${terminalScope}:${ownerId}`;
-  useLayoutEffect(() => setTexts((current) => ({ ...current, terminal: "" })), [terminalNoteKey]);
+  useLayoutEffect(() => {
+    setTexts((current) => ({ ...current, terminal: "" }));
+    setSelectedTexts((current) => ({ ...current, terminal: "" }));
+  }, [terminalNoteKey]);
+
+  useEffect(() => () => window.clearTimeout(copyFeedbackTimerRef.current), []);
 
   useLayoutEffect(() => {
     if (shownSelection.current === selection) return;
@@ -92,10 +113,23 @@ export function TerminalScratchpad({
     }
   }
 
-  async function copyNote() {
-    if (!text) return;
-    await navigator.clipboard.writeText(text);
+  async function copyText(copied: string, kind: CopyFeedback["kind"]) {
+    window.clearTimeout(copyFeedbackTimerRef.current);
+    let failed = false;
+    try {
+      await navigator.clipboard.writeText(copied);
+    } catch {
+      failed = true;
+    }
+    setCopyFeedback({ kind, failed });
+    copyFeedbackTimerRef.current = window.setTimeout(() => setCopyFeedback(null), COPY_FEEDBACK_MS);
   }
+
+  const copyFeedbackLabel = copyFeedback
+    ? copyFeedback.failed
+      ? "Copy failed"
+      : COPY_FEEDBACK_LABELS[copyFeedback.kind]
+    : null;
 
   return (
     <div
@@ -150,6 +184,12 @@ export function TerminalScratchpad({
           onTextChange={(terminalText) =>
             setTexts((current) => ({ ...current, terminal: terminalText }))
           }
+          onSelectionChange={(selected) =>
+            setSelectedTexts((current) =>
+              current.terminal === selected ? current : { ...current, terminal: selected },
+            )
+          }
+          onCopyText={(copied, kind) => void copyText(copied, kind)}
         />
       </div>
       <div
@@ -164,25 +204,43 @@ export function TerminalScratchpad({
           ownerId="global"
           connectionId={null}
           onTextChange={(globalText) => setTexts((current) => ({ ...current, global: globalText }))}
+          onSelectionChange={(selected) =>
+            setSelectedTexts((current) =>
+              current.global === selected ? current : { ...current, global: selected },
+            )
+          }
+          onCopyText={(copied, kind) => void copyText(copied, kind)}
         />
       </div>
       <div className="scratchpad-popover-actions">
         <button
           className="secondary-button"
           type="button"
-          disabled={!text}
-          onClick={() => void copyNote()}
+          data-copy-feedback={
+            copyFeedback ? (copyFeedback.failed ? "failed" : "copied") : undefined
+          }
+          disabled={!actionText}
+          onClick={() => void copyText(actionText, selectedText ? "selection" : "note")}
         >
-          <Copy size={14} /> Copy
+          {copyFeedback && !copyFeedback.failed ? (
+            <Check size={14} aria-hidden="true" />
+          ) : (
+            <Copy size={14} aria-hidden="true" />
+          )}
+          {copyFeedbackLabel ?? (selectedText ? "Copy selection" : "Copy")}
         </button>
         <button
           className="secondary-button"
           type="button"
-          disabled={!text || !canPaste}
-          onClick={() => onPaste(text)}
+          disabled={!actionText || !canPaste}
+          onClick={() => onPaste(actionText)}
         >
-          <TerminalSquare size={14} /> Paste into terminal
+          <TerminalSquare size={14} aria-hidden="true" />
+          {selectedText ? "Paste selection" : "Paste into terminal"}
         </button>
+        <span className="sr-only" aria-live="polite">
+          {copyFeedbackLabel}
+        </span>
       </div>
     </div>
   );
