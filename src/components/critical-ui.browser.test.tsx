@@ -190,7 +190,13 @@ function SettingsFixture() {
   );
 }
 
-function TabOverflowFixture({ longNames = false }: { longNames?: boolean }) {
+function TabOverflowFixture({
+  longNames = false,
+  pinned = true,
+}: {
+  longNames?: boolean;
+  pinned?: boolean;
+}) {
   const [active, setActive] = useState(0);
   const [count, setCount] = useState(5);
   const [narrow, setNarrow] = useState(false);
@@ -198,7 +204,7 @@ function TabOverflowFixture({ longNames = false }: { longNames?: boolean }) {
   const label = (index: number) =>
     longNames ? `Terminal ${index + 1} ${"production".repeat(12)}` : `Terminal ${index + 1}`;
   return (
-    <div style={{ width: narrow ? 340 : 740 }}>
+    <div style={{ width: narrow ? 340 : 800 }}>
       <nav className="session-tabs" aria-label="Open Workspaces">
         <WorkspaceTabScroller
           activeTabId={`tab-${active}`}
@@ -209,6 +215,12 @@ function TabOverflowFixture({ longNames = false }: { longNames?: boolean }) {
             active: index === active,
             onSelect: () => setActive(index),
           }))}
+          menuAlwaysShown={pinned}
+          trailing={
+            <button className="session-new-terminal" type="button">
+              New terminal
+            </button>
+          }
         >
           {tabs.map((index) => (
             <div className={`session-tab-wrap ${index === active ? "active" : ""}`} key={index}>
@@ -218,9 +230,6 @@ function TabOverflowFixture({ longNames = false }: { longNames?: boolean }) {
             </div>
           ))}
         </WorkspaceTabScroller>
-        <button className="session-new-terminal" type="button">
-          New terminal
-        </button>
       </nav>
       <button type="button" onClick={() => setNarrow((current) => !current)}>
         Resize tabs
@@ -465,9 +474,10 @@ describe("critical UI in Chromium", () => {
     });
   });
 
-  it("fits whole tabs beside the overflow controls however wide the engine draws them", async () => {
+  it("fits whole tabs beside the strip controls however wide the engine draws them", async () => {
     const wider = document.createElement("style");
-    wider.textContent = ".session-tab-pager { width: 41px; }";
+    wider.textContent =
+      ".session-tab-menu-button { padding: 0 17px; } .session-new-terminal { width: 53px; }";
     document.head.append(wider);
     try {
       mount(<TabOverflowFixture />);
@@ -486,6 +496,8 @@ describe("critical UI in Chromium", () => {
             expect(rect.left).toBeGreaterThanOrEqual(bounds.left - 1);
             expect(rect.right).toBeLessThanOrEqual(bounds.right + 1);
           }
+          const newTerminal = list.querySelector<HTMLElement>(".session-new-terminal")!;
+          expect(newTerminal.getBoundingClientRect().right).toBeLessThanOrEqual(bounds.right + 1);
         });
       }
     } finally {
@@ -516,32 +528,46 @@ describe("critical UI in Chromium", () => {
     }
   });
 
-  it("keeps New terminal reachable and reveals tabs when the strip overflows", async () => {
+  it("keeps New terminal beside the last tab and reveals tabs when the strip overflows", async () => {
     mount(<TabOverflowFixture />);
-    await expect
-      .element(page.getByRole("button", { name: "Scroll terminals right" }))
-      .not.toBeInTheDocument();
-    await page.getByRole("button", { name: "Add terminal" }).click();
+    await expect.element(page.getByRole("button", { name: "New terminal" })).toBeVisible();
     const list = document.querySelector<HTMLElement>(".session-tab-list")!;
-    await expect
-      .element(page.getByRole("button", { name: "Scroll terminals right" }))
-      .toBeVisible();
+    const newTerminal = () => document.querySelector<HTMLElement>(".session-new-terminal")!;
+    const tabs = () => [...list.querySelectorAll<HTMLElement>(".session-tab-wrap")];
     await vi.waitFor(() => {
+      expect(tabs()).toHaveLength(5);
+      expect(newTerminal().getBoundingClientRect().left).toBeCloseTo(
+        tabs()[4].getBoundingClientRect().right,
+        0,
+      );
+    });
+    expect(list.hasAttribute("data-more-left")).toBe(false);
+
+    await page.getByRole("button", { name: "Add terminal" }).click();
+    await vi.waitFor(() => {
+      expect(list.dataset.moreLeft).toBe("true");
       const selected = document.querySelector<HTMLElement>(".session-tab-wrap.active")!;
       expect(selected.getBoundingClientRect().right).toBeLessThanOrEqual(
+        newTerminal().getBoundingClientRect().left + 1,
+      );
+      expect(newTerminal().getBoundingClientRect().right).toBeLessThanOrEqual(
         list.getBoundingClientRect().right + 1,
       );
     });
+    expect(
+      page
+        .getByRole("button", { name: "All terminals", exact: true })
+        .element()
+        .querySelector<HTMLElement>("[data-count]")!.dataset.count,
+    ).toBe("6");
 
     await page.getByRole("button", { name: "Select first terminal" }).click();
     await page.getByRole("button", { name: "Resize tabs" }).click();
-    await expect
-      .element(page.getByRole("button", { name: "Scroll terminals right" }))
-      .toBeVisible();
+    await vi.waitFor(() => expect(list.dataset.moreRight).toBe("true"));
     expect(list.scrollWidth).toBeLessThanOrEqual(list.clientWidth + 1);
     await expect.element(page.getByRole("button", { name: "New terminal" })).toBeVisible();
 
-    await page.getByRole("button", { name: "Scroll terminals right" }).click();
+    list.dispatchEvent(new WheelEvent("wheel", { deltaY: 150, bubbles: true }));
     await expect
       .element(page.getByRole("button", { name: "Terminal 2", exact: true }))
       .toBeVisible();
@@ -556,18 +582,18 @@ describe("critical UI in Chromium", () => {
     await expect.element(page.getByRole("button", { name: "New terminal" })).toBeVisible();
   });
 
-  it("keeps the first visible terminal tab whole after scrolling right", async () => {
+  it("keeps the first visible terminal tab whole after paging right", async () => {
     await page.viewport(1024, 768);
     mount(<TabOverflowFixture />);
     await page.getByRole("button", { name: "Add terminal" }).click();
     await page.getByRole("button", { name: "Select first terminal" }).click();
     const list = document.querySelector<HTMLElement>(".session-tab-list")!;
-    const right = page.getByRole("button", { name: "Scroll terminals right" });
-    await right.click();
+    await vi.waitFor(() => expect(list.dataset.moreRight).toBe("true"));
+    list.dispatchEvent(new WheelEvent("wheel", { deltaY: 150, bubbles: true }));
     await expect
-      .element(page.getByRole("button", { name: "Terminal 4", exact: true }))
+      .element(page.getByRole("button", { name: "Terminal 6", exact: true }))
       .toBeVisible();
-    await vi.waitFor(() => expect((right.element() as HTMLButtonElement).disabled).toBe(true));
+    await vi.waitFor(() => expect(list.hasAttribute("data-more-right")).toBe(false));
 
     const edge = list.getBoundingClientRect().left;
     const firstVisible = Array.from(list.querySelectorAll<HTMLElement>(".session-tab-wrap")).find(
@@ -611,7 +637,9 @@ describe("critical UI in Chromium", () => {
     await expect
       .element(page.getByRole("button", { name: /^Terminal 1 production/ }))
       .toBeVisible();
-    await page.getByRole("button", { name: "Scroll terminals right" }).click();
+    document
+      .querySelector(".session-tab-list")!
+      .dispatchEvent(new WheelEvent("wheel", { deltaY: 150, bubbles: true }));
     await expect
       .element(page.getByRole("button", { name: /^Terminal 1 production/ }))
       .not.toBeInTheDocument();
@@ -643,7 +671,7 @@ describe("critical UI in Chromium", () => {
   });
 
   it("closes the overflow picker on outside click and resize, and removes it when all tabs fit", async () => {
-    mount(<TabOverflowFixture />);
+    mount(<TabOverflowFixture pinned={false} />);
     await page.getByRole("button", { name: "Add terminal" }).click();
     const picker = page.getByRole("button", { name: "All terminals", exact: true });
     await picker.click();

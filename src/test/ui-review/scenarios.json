@@ -737,10 +737,20 @@
       }
     },
     "tabs": {
-      "states": ["overflow", "overflow-menu"],
+      "states": ["overflow", "overflow-menu", "focus-menu"],
       "ready": ".app-shell",
       "prepare": {
         "overflow-menu": [
+          {
+            "role": "button",
+            "name": "All terminals"
+          }
+        ],
+        "focus-menu": [
+          {
+            "role": "button",
+            "name": "Focus terminal"
+          },
           {
             "role": "button",
             "name": "All terminals"
@@ -749,7 +759,8 @@
       },
       "settled": {
         "overflow": ".session-tab-scroll-region .session-tab-wrap.active",
-        "overflow-menu": ".session-tab-overflow-menu [aria-current='page']"
+        "overflow-menu": ".session-tab-overflow-menu [aria-current='page']",
+        "focus-menu": ".app-shell.terminal-focus-mode .session-tab-overflow-menu [aria-current='page']"
       }
     }
   }

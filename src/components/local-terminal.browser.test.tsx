@@ -274,9 +274,7 @@ describe("Local Terminal Mode in the real App", () => {
       expect(strip.querySelectorAll(".session-tab-wrap")).toHaveLength(0);
       const paneRow = container!.querySelector<HTMLElement>(".session-pane-tabs")!;
       expect(paneRow.querySelectorAll(".session-tab-wrap")).toHaveLength(3);
-      await vi.waitFor(() =>
-        expect(paneRow.querySelector(".session-tab-scroll-button")).toBeNull(),
-      );
+      await vi.waitFor(() => expect(paneRow.querySelector(".session-tab-menu-button")).toBeNull());
       const first = paneRow.querySelector<HTMLButtonElement>(".session-tab-main")!;
       first.focus();
       await userEvent.keyboard("{Enter}");
@@ -332,19 +330,16 @@ describe("Local Terminal Mode in the real App", () => {
         .click();
       await page.getByRole("button", { name: "Ungroup", exact: true }).click();
       expect(container!.querySelector(".session-pane-tabs")).toBeNull();
-      const allTerminals = strip.querySelector<HTMLButtonElement>('[aria-label="All terminals"]');
-      if (allTerminals) {
-        await userEvent.click(allTerminals);
-        expect(
-          page
-            .getByRole("menu", { name: "All terminals menu" })
-            .element()
-            .querySelectorAll('[role="menuitem"]'),
-        ).toHaveLength(4);
-        await userEvent.keyboard("{Escape}");
-      } else {
-        expect(strip.querySelectorAll(".session-tab-wrap")).toHaveLength(4);
-      }
+      await userEvent.click(
+        strip.querySelector<HTMLButtonElement>('[aria-label="All terminals"]')!,
+      );
+      expect(
+        page
+          .getByRole("menu", { name: "All terminals menu" })
+          .element()
+          .querySelectorAll('[role="menuitem"]'),
+      ).toHaveLength(4);
+      await userEvent.keyboard("{Escape}");
     },
   );
   it.each([800, 960, 1600])(
@@ -395,10 +390,10 @@ describe("Local Terminal Mode in the real App", () => {
       expect(find.left - newTerminal.right).toBeLessThanOrEqual(1);
       expect(newTerminal.top).toBe(strip.top);
       expect(find.top).toBe(strip.top);
-      const scrollBack = container!
-        .querySelector('[aria-label="Scroll terminals left"]')!
+      const allTerminals = container!
+        .querySelector('[aria-label="All terminals"]')!
         .getBoundingClientRect();
-      expect(scrollBack.top).toBe(strip.top);
+      expect(allTerminals.top).toBe(strip.top);
       const firstTab = container!.querySelector(
         ".session-tab-content > .session-tab-wrap, .session-tab-content > .session-tab-group",
       ) as HTMLElement | null;
@@ -406,34 +401,34 @@ describe("Local Terminal Mode in the real App", () => {
       expect(
         container!.querySelector(".session-tab-main")!.hasAttribute("data-tauri-drag-region"),
       ).toBe(false);
-      await expect
-        .element(page.getByRole("button", { name: "Scroll terminals left" }))
-        .toBeVisible();
+      expect(container!.querySelector(".session-tab-list")).toHaveAttribute("data-more-left");
     },
   );
-  it("keeps the New terminal plus and chevron clustered as one control beside the picker", async () => {
+  it("puts a single New terminal plus right after the last tab in Focus Mode", async () => {
     await page.viewport(1200, 640);
     mountApp();
     await expect.element(page.getByRole("button", { name: "Exit terminal focus" })).toBeVisible();
-    for (let index = 0; index < 8; index++) {
-      await page.getByRole("button", { name: "New terminal", exact: true }).click();
-      await page
-        .getByRole("dialog", { name: "New terminal" })
-        .getByRole("button", { name: /Command Prompt/ })
-        .click();
-    }
-    const control = container!.querySelector(".session-new-terminal") as HTMLElement;
-    const [plus, menuChevron] = control.querySelectorAll<SVGSVGElement>("svg");
-    const plusBox = plus.getBoundingClientRect();
-    const chevronBox = menuChevron.getBoundingClientRect();
-    const picker = container!
-      .querySelector('[aria-label="All terminals"] svg')!
-      .getBoundingClientRect();
-    const innerGap = chevronBox.left - plusBox.right;
-    expect(innerGap).toBeLessThanOrEqual(4);
-    expect(plusBox.left - picker.right).toBeGreaterThan(innerGap * 2);
-    expect(getComputedStyle(menuChevron).color).not.toBe(getComputedStyle(plus).color);
-    expect(chevronBox.height).toBeLessThan(picker.height);
+    await page.getByRole("button", { name: "New terminal", exact: true }).click();
+    await page
+      .getByRole("dialog", { name: "New terminal" })
+      .getByRole("button", { name: /Command Prompt/ })
+      .click();
+    const control = container!.querySelector<HTMLElement>(".session-new-terminal")!;
+    expect(control.querySelectorAll("svg")).toHaveLength(1);
+    await vi.waitFor(() => {
+      const tabs = container!.querySelectorAll<HTMLElement>(".session-tabs .session-tab-wrap");
+      expect(tabs).toHaveLength(2);
+      expect(control.getBoundingClientRect().left).toBeCloseTo(
+        tabs[1].getBoundingClientRect().right,
+        0,
+      );
+    });
+    const allTerminals = container!.querySelector<HTMLElement>('[aria-label="All terminals"]')!;
+    expect(allTerminals.querySelector<HTMLElement>("[data-count]")!.dataset.count).toBe("2");
+    expect(allTerminals.getBoundingClientRect().right).toBeCloseTo(
+      container!.querySelector(".session-tabs .session-tab-wrap")!.getBoundingClientRect().left,
+      0,
+    );
   });
   it("anchors the Scratchpad popup over the terminal without reflowing the action strip", async () => {
     await page.viewport(1200, 640);

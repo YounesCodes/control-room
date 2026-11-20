@@ -829,9 +829,9 @@ describe("Local Terminal", () => {
       expect(openTabs()).toEqual(["Close prod-web Workspace", "Close prod-web 2 Workspace"]);
       expect(
         document
-          .querySelector(".session-tab-list")
+          .querySelector(".session-tab-trailing")
           ?.contains(screen.getByRole("button", { name: "New terminal" })),
-      ).toBe(false);
+      ).toBe(true);
     });
 
     it("is available before any compatible Workspace exists", async () => {

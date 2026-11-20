@@ -114,7 +114,8 @@ in `two-pane` and on a side-by-side plus stacked group in `three-pane`. At compa
 `three-pane` is wider than the window and scrolls within the terminal area. Tabs
 opens ten local and remote terminals with one disconnected, one ringing the bell,
 and one running a command, so the tab row overflows at every viewport; `overflow`
-shows the row and `overflow-menu` opens All terminals. Loading
+shows the row, `overflow-menu` opens All terminals, and `focus-menu` opens it in
+Focus Mode. Loading
 holds one first read open so its skeleton stays on screen: the Systemd unit
 inspector in `systemd-inspector`, `windows-services`, the remote shell picker
 in `shell-picker`, `history`, Logs source discovery in `logs`, the Docker graph

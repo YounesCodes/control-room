@@ -15,12 +15,10 @@ The status circle becomes a rotating ring while connecting, running a command, o
   <a href={terminalScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={terminalScreenshot.src}
-      alt="Complete terminal tabs and the All terminals menu listing full names with the selected group marked."
+      alt="Focus Mode tab row with All terminals open, listing local shells and connections by full name with the selected terminal marked."
     />
   </a>
-  <figcaption>
-    All terminals lists every tab and group by its full name. Example data shown.
-  </figcaption>
+  <figcaption>All terminals lists every terminal by its full name. Example data shown.</figcaption>
 </figure>
 
 **Local terminal** starts the shell directly when only one is enabled in Settings. With several enabled, it opens a chooser. Administrator setup guidance appears only for enabled shells that support it and need Windows sudo setup. Git Bash does not need that setup.
@@ -39,7 +37,7 @@ Terminal menus stay beside their buttons and within the window. Use the arrow ke
   <figcaption>Choose a saved connection or local shell. Example data shown.</figcaption>
 </figure>
 
-Tabs shrink to fit within readable limits. A number after a tab's name, such as the 2 in "Example host 2", stays visible when the name is cut off. When there are more tabs than fit, each arrow control shows how many tabs are hidden on its side, with a dot when one of them has disconnected, failed, or rung the bell. The arrows and the mouse wheel move one page of complete tabs at a time. The down arrow beside those controls opens **All terminals**, which lists local shells and connections separately, marks the selected terminal, and shows a status only when a terminal is not simply running. Terminals hidden from the tab row show an arrow pointing to their side. Choose any entry to reveal its tab. Type to filter the list, and press Delete or select the cross on a row to close that terminal. **New terminal** stays visible. Hover over a tab or focus it with the keyboard to show **Rename** and **Close**.
+Tabs shrink to fit within readable limits. A number after a tab's name, such as the 2 in "Example host 2", stays visible when the name is cut off. **All terminals**, at the start of the tab row, shows how many terminals are open. When there are more tabs than fit, a soft edge marks the side with more tabs, the mouse wheel moves one page of complete tabs at a time, and a dot on **All terminals** means a terminal outside the tab row has disconnected, failed, or rung the bell. **All terminals** lists local shells and connections separately, marks the selected terminal, and shows a status only when a terminal is not simply running. Terminals outside the tab row show an arrow pointing to their side. Choose any entry to reveal its tab. Type to filter the list, and press Delete or select the cross on a row to close that terminal; the list stays open until you choose a terminal, press Escape, or click elsewhere. **New terminal** follows the last tab. Hover over a tab or focus it with the keyboard to show **Rename** and **Close**.
 
 When a shell reports a running program, its name can appear beside the shell or
 host name. Manual names stay fixed. Change this under **Terminal → Tabs & naming**
