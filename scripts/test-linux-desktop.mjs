@@ -206,7 +206,16 @@ try {
   await waitFor("window moved by the titlebar", () => geometry().X > beforeDrag.X);
 
   await click("Focus terminal");
-  await click("New terminal");
+  // Openbox can deliver a late resize after the titlebar drag, which dismisses the menu.
+  await waitFor("Split right, side by side", async () => {
+    const menuOpen = await execute(
+      "return document.querySelector('button[aria-label=\"New terminal\"]')?.getAttribute('aria-expanded') === 'true'",
+    );
+    if (!menuOpen) await click("New terminal");
+    return execute(
+      "return !!document.querySelector('button[aria-label=\"Split right, side by side\"]:not([disabled])')?.offsetWidth",
+    );
+  });
   await click("Split right, side by side");
   await click("New local terminal: Bash");
   await waitFor("two visible terminal panes", () =>
