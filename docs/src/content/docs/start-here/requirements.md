@@ -3,7 +3,7 @@ title: Requirements
 description: What you need on your computer and on the SSH host.
 ---
 
-- **Windows 11 x64.** Enable the OpenSSH Client optional feature. Local terminals use installed PowerShell 7, Windows PowerShell, Command Prompt, or Git Bash.
+- **Windows 11 x64.** Enable the OpenSSH Client optional feature. Local terminals use installed PowerShell 7, Windows PowerShell, Command Prompt, Git Bash, or WSL distributions.
 - **Ubuntu 24.04 LTS x86_64.** Install `openssh-client` for SSH and `xdg-utils` for opening links. The Debian package installs these and the WebKitGTK 4.1 runtime as dependencies. The app uses your login shell and offers installed Bash, zsh, fish, and `sh` profiles.
 
 The macOS preview runs on Intel and Apple Silicon Macs with macOS 12 or newer. It uses the included OpenSSH client and installed zsh, Bash, or fish shells. See [Install and update](/control-room/start-here/installation/#macos-preview).

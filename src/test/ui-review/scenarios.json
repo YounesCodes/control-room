@@ -775,7 +775,7 @@
       }
     },
     "tabs": {
-      "states": ["overflow", "overflow-menu", "focus-menu"],
+      "states": ["overflow", "overflow-menu", "focus-menu", "new-terminal", "local-shells"],
       "ready": ".app-shell",
       "prepare": {
         "overflow-menu": [
@@ -793,12 +793,40 @@
             "role": "button",
             "name": "All terminals"
           }
+        ],
+        "new-terminal": [
+          {
+            "role": "button",
+            "name": "New terminal"
+          }
+        ],
+        "local-shells": [
+          {
+            "role": "button",
+            "name": "Open Settings"
+          },
+          {
+            "selector": ".settings-navigation button:has-text('Terminal')",
+            "optional": true
+          },
+          {
+            "role": "combobox",
+            "name": "Settings category",
+            "option": "terminal",
+            "optional": true
+          },
+          {
+            "role": "tab",
+            "name": "Local shells"
+          }
         ]
       },
       "settled": {
         "overflow": ".session-tab-scroll-region .session-tab-wrap.active",
         "overflow-menu": ".session-tab-overflow-menu [aria-current='page']",
-        "focus-menu": ".app-shell.terminal-focus-mode .session-tab-overflow-menu [aria-current='page']"
+        "focus-menu": ".app-shell.terminal-focus-mode .session-tab-overflow-menu [aria-current='page']",
+        "new-terminal": ".new-terminal-menu button:has-text('WSL: Ubuntu-24.04')",
+        "local-shells": ".local-shell-toggle-group"
       }
     }
   }

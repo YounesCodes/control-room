@@ -134,7 +134,12 @@
     {
       "name": "Settings > Terminal > Local shells",
       "docs": "reference/settings.mdx#local-terminal",
-      "capture": null,
+      "capture": [
+        {
+          "scenario": "tabs",
+          "states": ["local-shells"]
+        }
+      ],
       "entryPoints": [
         {
           "kind": "settings",
@@ -443,7 +448,12 @@
     {
       "name": "New terminal",
       "docs": "local-terminals.md",
-      "capture": null,
+      "capture": [
+        {
+          "scenario": "tabs",
+          "states": ["new-terminal"]
+        }
+      ],
       "entryPoints": [
         {
           "kind": "tabs",
@@ -459,7 +469,12 @@
     {
       "name": "Local terminals",
       "docs": "local-terminals.md",
-      "capture": null,
+      "capture": [
+        {
+          "scenario": "tabs",
+          "states": ["new-terminal"]
+        }
+      ],
       "entryPoints": [
         {
           "kind": "menu",

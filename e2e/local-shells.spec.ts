@@ -12,6 +12,11 @@ describe("Installed local shells", () => {
     for (const [index, shell] of shells.entries()) {
       await openLocal(shell.label);
       await terminalCommand(`echo SHELL_${index}_READY`, `SHELL_${index}_READY`);
+      if (shell.kind === "wsl")
+        await terminalCommand(
+          '[ "$PWD" = "$HOME" ] && echo "WSL_$(uname -s)_HOME"',
+          "WSL_Linux_HOME",
+        );
       expect((await runtime()).sessionIds).toHaveLength(index + 1);
     }
   });

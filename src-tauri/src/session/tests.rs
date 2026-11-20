@@ -816,8 +816,8 @@ fn a_startup_log_line_splits_preparation_pty_spawn_and_stage_time() {
         spawned_at: requested_at + Duration::from_millis(52),
     };
     let local = SessionMode::Local {
-        label: "Command Prompt",
-        shell_id: "cmd",
+        label: "Command Prompt".into(),
+        shell_id: "cmd".into(),
     };
 
     assert_eq!(
@@ -841,8 +841,8 @@ fn a_startup_log_line_splits_preparation_pty_spawn_and_stage_time() {
 #[test]
 fn a_local_start_failure_names_the_shell_without_pty_internals() {
     let local = SessionMode::Local {
-        label: "PowerShell 7",
-        shell_id: "pwsh",
+        label: "PowerShell 7".into(),
+        shell_id: "pwsh".into(),
     };
     let remote = SessionMode::ssh("11111111-1111-4111-8111-111111111111");
 
@@ -994,7 +994,7 @@ fn a_resolved_local_shell_runs_and_stops_under_conpty() {
         None,
         status.success(),
         status.exit_code(),
-        shell.label(),
+        &shell.label(),
     );
     assert_eq!(
         (state, category),

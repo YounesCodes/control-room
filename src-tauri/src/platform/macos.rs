@@ -105,7 +105,8 @@ fn resolve(
             | LocalShellKind::CommandPrompt
             | LocalShellKind::GitBash
             | LocalShellKind::Sh
-            | LocalShellKind::LoginShell => return None,
+            | LocalShellKind::LoginShell
+            | LocalShellKind::Wsl => return None,
         },
         working_directory: environment.home.clone(),
     })
@@ -121,7 +122,8 @@ fn candidate_programs(kind: LocalShellKind, environment: &Environment) -> Vec<Pa
         | LocalShellKind::CommandPrompt
         | LocalShellKind::GitBash
         | LocalShellKind::Sh
-        | LocalShellKind::LoginShell => return Vec::new(),
+        | LocalShellKind::LoginShell
+        | LocalShellKind::Wsl => return Vec::new(),
     };
     names
         .iter()

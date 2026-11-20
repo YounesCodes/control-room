@@ -9,7 +9,7 @@ description: Fix common SSH, inspection, Docker, and local shell problems.
 
 **Docker is unavailable.** Open Docker to read the failure reason. The daemon may be missing or your account may lack access. Containers with incomplete Compose labels appear under **Ungrouped**.
 
-**A local shell is missing.** Install the shell, then check **Settings → Local terminal**. Use **Show all** if you hid it earlier. Git Bash means Git for Windows, not the Windows WSL launcher.
+**A local shell is missing.** Install the shell, then check **Settings → Local terminal**. Use **Show all** if you hid it earlier. Git Bash means Git for Windows, not the Windows WSL launcher. Each installed WSL distribution has its own **WSL:** entry.
 
 **A tab did not connect after restart.** The app starts fresh sessions for restored tabs. If a start fails, read the error, then use **Reconnect** for SSH or **Restart** for a local shell to try again.
 

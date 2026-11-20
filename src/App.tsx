@@ -1540,7 +1540,7 @@ export function App() {
       options: standardLocalShells.map((shell) => ({
         id: shell.id,
         label: shell.label,
-        icon: <LocalShellIcon kind={shell.kind} elevated={shell.elevated} />,
+        icon: <LocalShellIcon kind={shell.kind} profileId={shell.id} elevated={shell.elevated} />,
         onSelect: () => splitWithNewWorkspace(createLocalWorkspace(shell)),
       })),
     },
@@ -1549,7 +1549,7 @@ export function App() {
       options: administratorLocalShells.map((shell) => ({
         id: shell.id,
         label: shell.label,
-        icon: <LocalShellIcon kind={shell.kind} elevated={shell.elevated} />,
+        icon: <LocalShellIcon kind={shell.kind} profileId={shell.id} elevated={shell.elevated} />,
         onSelect: () => splitWithNewWorkspace(createLocalWorkspace(shell)),
       })),
     },
@@ -1650,7 +1650,7 @@ export function App() {
       options: standardLocalShells.map((shell) => ({
         id: shell.id,
         label: shell.label,
-        icon: <LocalShellIcon kind={shell.kind} elevated={shell.elevated} />,
+        icon: <LocalShellIcon kind={shell.kind} profileId={shell.id} elevated={shell.elevated} />,
         onSelect: () => {
           setNewTerminalMenuOpen(false);
           openLocalShell(shell);
@@ -1662,7 +1662,7 @@ export function App() {
       options: administratorLocalShells.map((shell) => ({
         id: shell.id,
         label: shell.label,
-        icon: <LocalShellIcon kind={shell.kind} elevated={shell.elevated} />,
+        icon: <LocalShellIcon kind={shell.kind} profileId={shell.id} elevated={shell.elevated} />,
         onSelect: () => {
           setNewTerminalMenuOpen(false);
           openLocalShell(shell);
@@ -1956,7 +1956,11 @@ export function App() {
     if (isContainerWorkspace(workspace))
       return <ContainerTerminalMark image={workspace.container.image} />;
     return isLocalWorkspace(workspace) ? (
-      <LocalShellIcon kind={workspace.shell.kind} elevated={workspace.shell.elevated} />
+      <LocalShellIcon
+        kind={workspace.shell.kind}
+        profileId={workspace.shell.id}
+        elevated={workspace.shell.elevated}
+      />
     ) : (
       <HostOsIcon
         osId={hostCapabilities[workspace.connectionId]?.osId}

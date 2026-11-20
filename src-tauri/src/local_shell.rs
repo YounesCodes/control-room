@@ -1,6 +1,6 @@
-use crate::models::LocalShellKind;
 #[cfg(not(windows))]
 use crate::models::{AdministratorTerminalStatus, LocalShellCatalog};
+use crate::models::{LocalShellKind, wsl_profile_id, wsl_profile_label};
 use portable_pty::CommandBuilder;
 #[cfg(test)]
 use std::path::Path;
@@ -19,25 +19,34 @@ pub struct ResolvedLocalShell {
     arguments: &'static [&'static str],
     working_directory: Option<PathBuf>,
     administrator_launcher: Option<PathBuf>,
+    wsl_distribution: Option<String>,
 }
 
 impl ResolvedLocalShell {
-    pub fn label(&self) -> &'static str {
+    pub fn label(&self) -> String {
+        if let Some(distribution) = &self.wsl_distribution {
+            return wsl_profile_label(distribution);
+        }
         match (self.kind, self.is_elevated()) {
             (LocalShellKind::PowerShell7, true) => "PowerShell 7 (Administrator)",
             (LocalShellKind::WindowsPowerShell, true) => "Windows PowerShell (Administrator)",
             (LocalShellKind::CommandPrompt, true) => "Command Prompt (Administrator)",
             _ => self.kind.label(),
         }
+        .into()
     }
 
-    pub fn id(&self) -> &'static str {
+    pub fn id(&self) -> String {
+        if let Some(distribution) = &self.wsl_distribution {
+            return wsl_profile_id(distribution);
+        }
         if self.is_elevated() {
             self.kind
                 .administrator_id()
                 .expect("only administrator-capable shells can be elevated")
+                .into()
         } else {
-            self.kind.id()
+            self.kind.id().into()
         }
     }
 
@@ -67,6 +76,9 @@ pub fn command_for(shell: &ResolvedLocalShell) -> CommandBuilder {
         CommandBuilder::new(&shell.program)
     };
     command.args(shell.arguments);
+    if let Some(distribution) = &shell.wsl_distribution {
+        command.args(["--distribution", distribution.as_str(), "--cd", "~"]);
+    }
     #[cfg(windows)]
     windows::configure_terminal_environment(&mut command, shell.kind);
     if shell.kind.uses_terminal_type() {
@@ -96,5 +108,6 @@ pub fn resolve_installed(shell_id: &str) -> Result<ResolvedLocalShell, String> {
         arguments: shell.arguments,
         working_directory: shell.working_directory,
         administrator_launcher: None,
+        wsl_distribution: None,
     })
 }

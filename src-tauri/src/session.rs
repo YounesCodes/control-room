@@ -47,10 +47,7 @@ struct ManagedSession {
 
 enum SessionMode {
     Ssh(RemoteSessionState),
-    Local {
-        label: &'static str,
-        shell_id: &'static str,
-    },
+    Local { label: String, shell_id: String },
 }
 
 struct RemoteSessionState {
@@ -273,15 +270,15 @@ impl SessionManager {
             rows,
             output,
             SessionMode::Local {
-                label: shell.label(),
-                shell_id: shell.id(),
+                label: shell.label().to_string(),
+                shell_id: shell.id().to_string(),
             },
             requested_at,
         )?;
 
         Ok(LocalSessionStarted {
             session_id,
-            shell_id: shell.id().into(),
+            shell_id: shell.id().to_string(),
         })
     }
 

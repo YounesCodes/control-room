@@ -1,5 +1,9 @@
 use super::*;
-use crate::models::{AdministratorTerminalStatus, LocalShellCatalog, LocalShellProfile};
+use crate::models::{
+    AdministratorTerminalStatus, LocalShellCatalog, LocalShellProfile,
+    is_offered_wsl_distribution_name, wsl_distribution_from_profile_id, wsl_profile_id,
+    wsl_profile_label,
+};
 use std::{
     env,
     path::{Path, PathBuf},
@@ -13,6 +17,48 @@ pub struct ShellEnvironment {
     pub local_app_data: Option<PathBuf>,
     pub path_entries: Vec<PathBuf>,
     pub user_profile: Option<PathBuf>,
+    pub wsl_distributions: Vec<String>,
+}
+
+/// One distribution under the current user's Lxss registry key. Reading the
+/// registry, as Windows Terminal does, lists distributions without starting WSL.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WslRegistration {
+    pub key: String,
+    pub name: String,
+    pub state: Option<u32>,
+}
+
+const WSL_INSTALLED_STATE: u32 = 1;
+const WSL_TOOLING_DISTRIBUTION_PREFIXES: [&str; 2] = ["docker-desktop", "rancher-desktop"];
+
+/// The distributions offered as local shells: installed, with a name a profile
+/// id can carry, without container tooling distributions, default first.
+pub fn offered_wsl_distributions(
+    registrations: Vec<WslRegistration>,
+    default_key: Option<&str>,
+) -> Vec<String> {
+    let mut offered = Vec::<(bool, String)>::new();
+    for registration in registrations {
+        let lowercase = registration.name.to_ascii_lowercase();
+        if registration
+            .state
+            .is_some_and(|state| state != WSL_INSTALLED_STATE)
+            || !is_offered_wsl_distribution_name(&registration.name)
+            || WSL_TOOLING_DISTRIBUTION_PREFIXES
+                .iter()
+                .any(|prefix| lowercase.starts_with(prefix))
+            || offered
+                .iter()
+                .any(|(_, name)| name.eq_ignore_ascii_case(&registration.name))
+        {
+            continue;
+        }
+        let is_default = default_key.is_some_and(|key| key.eq_ignore_ascii_case(&registration.key));
+        offered.push((is_default, registration.name));
+    }
+    offered.sort_by_key(|(is_default, _)| !is_default);
+    offered.into_iter().map(|(_, name)| name).collect()
 }
 
 impl ShellEnvironment {
@@ -33,6 +79,10 @@ impl ShellEnvironment {
                 .map(|paths| env::split_paths(&paths).collect())
                 .unwrap_or_default(),
             user_profile: env::var_os("USERPROFILE").map(PathBuf::from),
+            wsl_distributions: {
+                let (registrations, default_key) = read_wsl_registrations();
+                offered_wsl_distributions(registrations, default_key.as_deref())
+            },
         }
     }
 }
@@ -40,7 +90,7 @@ impl ShellEnvironment {
 fn fixed_arguments(kind: LocalShellKind) -> &'static [&'static str] {
     match kind {
         LocalShellKind::PowerShell7 | LocalShellKind::WindowsPowerShell => &["-NoLogo"],
-        LocalShellKind::CommandPrompt => &[],
+        LocalShellKind::CommandPrompt | LocalShellKind::Wsl => &[],
         LocalShellKind::GitBash => &["--login", "-i"],
         LocalShellKind::Zsh
         | LocalShellKind::Bash
@@ -123,6 +173,11 @@ fn candidate_programs(kind: LocalShellKind, environment: &ShellEnvironment) -> V
                 }
             }
         }
+        LocalShellKind::Wsl => {
+            if let Some(system_root) = &environment.system_root {
+                candidates.push(system_root.join("System32").join("wsl.exe"));
+            }
+        }
         LocalShellKind::Zsh
         | LocalShellKind::Bash
         | LocalShellKind::Fish
@@ -152,7 +207,23 @@ pub fn resolve(
             .filter(|profile| exists(profile) || profile.is_dir())
             .cloned(),
         administrator_launcher: None,
+        wsl_distribution: None,
     })
+}
+
+/// Resolves a WSL profile only for a distribution that is installed right now.
+pub fn resolve_wsl(
+    distribution: &str,
+    environment: &ShellEnvironment,
+    exists: &dyn Fn(&Path) -> bool,
+) -> Option<ResolvedLocalShell> {
+    let installed = environment
+        .wsl_distributions
+        .iter()
+        .find(|name| name.eq_ignore_ascii_case(distribution))?;
+    let mut shell = resolve(LocalShellKind::Wsl, environment, exists)?;
+    shell.wsl_distribution = Some(installed.clone());
+    Some(shell)
 }
 
 /// The profiles that are actually available. An uninstalled shell is left out
@@ -161,7 +232,7 @@ pub fn discover(
     environment: &ShellEnvironment,
     exists: &dyn Fn(&Path) -> bool,
 ) -> Vec<LocalShellProfile> {
-    LocalShellKind::ALL
+    let mut profiles = LocalShellKind::ALL
         .iter()
         .filter(|kind| resolve(**kind, environment, exists).is_some())
         .map(|kind| LocalShellProfile {
@@ -170,7 +241,18 @@ pub fn discover(
             kind: *kind,
             elevated: false,
         })
-        .collect()
+        .collect::<Vec<_>>();
+    if resolve(LocalShellKind::Wsl, environment, exists).is_some() {
+        profiles.extend(environment.wsl_distributions.iter().map(|distribution| {
+            LocalShellProfile {
+                id: wsl_profile_id(distribution),
+                label: wsl_profile_label(distribution),
+                kind: LocalShellKind::Wsl,
+                elevated: false,
+            }
+        }));
+    }
+    profiles
 }
 
 pub fn installed_shells() -> LocalShellCatalog {
@@ -214,6 +296,14 @@ pub fn resolve_installed(shell_id: &str) -> Result<ResolvedLocalShell, String> {
         LocalShellKind::from_profile_id(shell_id).ok_or("Unknown local shell")?;
     let environment = ShellEnvironment::from_process_env();
     let exists = |path: &Path| path.is_file();
+    if let Some(distribution) = wsl_distribution_from_profile_id(shell_id) {
+        return resolve_wsl(distribution, &environment, &exists).ok_or_else(|| {
+            format!(
+                "{} is no longer available.",
+                wsl_profile_label(distribution)
+            )
+        });
+    }
     let mut shell = resolve(kind, &environment, &exists)
         .ok_or_else(|| format!("{} is no longer available.", kind.label()))?;
     if elevated {
@@ -293,6 +383,130 @@ fn read_sudo_mode(_policy: bool) -> Option<u32> {
     None
 }
 
+#[cfg(windows)]
+fn read_wsl_registrations() -> (Vec<WslRegistration>, Option<String>) {
+    use std::ptr;
+    use windows_sys::Win32::System::Registry::{
+        HKEY, HKEY_CURRENT_USER, KEY_READ, RegCloseKey, RegEnumKeyExW, RegOpenKeyExW,
+    };
+
+    let path = wide("Software\\Microsoft\\Windows\\CurrentVersion\\Lxss");
+    let mut lxss: HKEY = ptr::null_mut();
+    if unsafe { RegOpenKeyExW(HKEY_CURRENT_USER, path.as_ptr(), 0, KEY_READ, &mut lxss) } != 0 {
+        return (Vec::new(), None);
+    }
+    let default_key = read_registry_string(lxss, None, "DefaultDistribution");
+    let mut registrations = Vec::new();
+    for index in 0.. {
+        let mut name = [0_u16; 256];
+        let mut length = name.len() as u32;
+        let result = unsafe {
+            RegEnumKeyExW(
+                lxss,
+                index,
+                name.as_mut_ptr(),
+                &mut length,
+                ptr::null(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut(),
+            )
+        };
+        if result != 0 {
+            break;
+        }
+        let key = String::from_utf16_lossy(&name[..length as usize]);
+        let Some(distribution) = read_registry_string(lxss, Some(&key), "DistributionName") else {
+            continue;
+        };
+        registrations.push(WslRegistration {
+            state: read_registry_dword(lxss, Some(&key), "State"),
+            key,
+            name: distribution,
+        });
+    }
+    unsafe { RegCloseKey(lxss) };
+    (registrations, default_key)
+}
+
+#[cfg(not(windows))]
+fn read_wsl_registrations() -> (Vec<WslRegistration>, Option<String>) {
+    (Vec::new(), None)
+}
+
+#[cfg(windows)]
+fn wide(value: &str) -> Vec<u16> {
+    value.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+#[cfg(windows)]
+fn read_registry_string(
+    key: windows_sys::Win32::System::Registry::HKEY,
+    subkey: Option<&str>,
+    value: &str,
+) -> Option<String> {
+    use std::{ffi::c_void, ptr};
+    use windows_sys::Win32::System::Registry::{RRF_RT_REG_SZ, RegGetValueW};
+
+    let subkey = subkey.map(wide);
+    let subkey = subkey
+        .as_ref()
+        .map_or(ptr::null(), |subkey| subkey.as_ptr());
+    let value = wide(value);
+    let mut buffer = [0_u16; 512];
+    let mut size = std::mem::size_of_val(&buffer) as u32;
+    let result = unsafe {
+        RegGetValueW(
+            key,
+            subkey,
+            value.as_ptr(),
+            RRF_RT_REG_SZ,
+            ptr::null_mut(),
+            buffer.as_mut_ptr().cast::<c_void>(),
+            &mut size,
+        )
+    };
+    if result != 0 {
+        return None;
+    }
+    let text = &buffer[..(size as usize / 2).min(buffer.len())];
+    let end = text
+        .iter()
+        .position(|unit| *unit == 0)
+        .unwrap_or(text.len());
+    Some(String::from_utf16_lossy(&text[..end]))
+}
+
+#[cfg(windows)]
+fn read_registry_dword(
+    key: windows_sys::Win32::System::Registry::HKEY,
+    subkey: Option<&str>,
+    value: &str,
+) -> Option<u32> {
+    use std::{ffi::c_void, ptr};
+    use windows_sys::Win32::System::Registry::{RRF_RT_REG_DWORD, RegGetValueW};
+
+    let subkey = subkey.map(wide);
+    let subkey = subkey
+        .as_ref()
+        .map_or(ptr::null(), |subkey| subkey.as_ptr());
+    let value = wide(value);
+    let mut data = 0_u32;
+    let mut size = std::mem::size_of::<u32>() as u32;
+    let result = unsafe {
+        RegGetValueW(
+            key,
+            subkey,
+            value.as_ptr(),
+            RRF_RT_REG_DWORD,
+            ptr::null_mut(),
+            (&mut data as *mut u32).cast::<c_void>(),
+            &mut size,
+        )
+    };
+    (result == 0).then_some(data)
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
@@ -309,7 +523,134 @@ mod tests {
             local_app_data: Some(PathBuf::from(r"C:\Users\dev\AppData\Local")),
             path_entries: vec![PathBuf::from(r"C:\Program Files\Git\cmd")],
             user_profile: Some(PathBuf::from(r"C:\Users\dev")),
+            wsl_distributions: Vec::new(),
         }
+    }
+
+    fn registration(key: &str, name: &str, state: Option<u32>) -> WslRegistration {
+        WslRegistration {
+            key: key.into(),
+            name: name.into(),
+            state,
+        }
+    }
+
+    fn with_distributions(names: &[&str]) -> ShellEnvironment {
+        ShellEnvironment {
+            wsl_distributions: names.iter().map(|name| name.to_string()).collect(),
+            ..environment()
+        }
+    }
+
+    #[test]
+    fn installed_distributions_are_offered_with_the_default_first() {
+        let offered = offered_wsl_distributions(
+            vec![
+                registration("{a}", "Debian", Some(1)),
+                registration("{b}", "Ubuntu-24.04", Some(1)),
+                registration("{c}", "Installing", Some(3)),
+                registration("{d}", "docker-desktop", Some(1)),
+                registration("{e}", "Docker-Desktop-Data", Some(1)),
+                registration("{f}", "rancher-desktop", Some(1)),
+                registration("{g}", "Has Space", Some(1)),
+                registration("{h}", "debian", Some(1)),
+                registration("{i}", "OracleLinux_9_1", None),
+            ],
+            Some("{B}"),
+        );
+
+        assert_eq!(offered, vec!["Ubuntu-24.04", "Debian", "OracleLinux_9_1"]);
+    }
+
+    #[test]
+    fn each_installed_distribution_is_its_own_local_shell() {
+        let exists = installed(&[
+            r"C:\Windows\System32\cmd.exe",
+            r"C:\Windows\System32\wsl.exe",
+        ]);
+
+        let discovered = discover(&with_distributions(&["Ubuntu", "Debian"]), &exists);
+
+        assert_eq!(
+            discovered
+                .iter()
+                .map(|profile| (profile.id.as_str(), profile.label.as_str(), profile.kind))
+                .collect::<Vec<_>>(),
+            vec![
+                (
+                    "command-prompt",
+                    "Command Prompt",
+                    LocalShellKind::CommandPrompt
+                ),
+                ("wsl:Ubuntu", "WSL: Ubuntu", LocalShellKind::Wsl),
+                ("wsl:Debian", "WSL: Debian", LocalShellKind::Wsl),
+            ]
+        );
+    }
+
+    #[test]
+    fn wsl_is_not_offered_without_a_distribution_or_its_launcher() {
+        let launcher = installed(&[r"C:\Windows\System32\wsl.exe"]);
+        let no_launcher = installed(&[]);
+
+        assert!(discover(&with_distributions(&[]), &launcher).is_empty());
+        assert!(discover(&with_distributions(&["Ubuntu"]), &no_launcher).is_empty());
+        assert!(resolve_wsl("Ubuntu", &with_distributions(&["Ubuntu"]), &no_launcher).is_none());
+    }
+
+    #[test]
+    fn a_wsl_shell_starts_its_distribution_in_the_linux_home() {
+        let exists = installed(&[r"C:\Windows\System32\wsl.exe"]);
+
+        let shell = resolve_wsl("ubuntu", &with_distributions(&["Ubuntu"]), &exists).unwrap();
+        let argv = command_for(&shell)
+            .get_argv()
+            .iter()
+            .map(|argument| argument.to_string_lossy().to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            argv,
+            vec![
+                r"C:\Windows\System32\wsl.exe",
+                "--distribution",
+                "Ubuntu",
+                "--cd",
+                "~"
+            ]
+        );
+        assert_eq!(shell.id(), "wsl:Ubuntu");
+        assert_eq!(shell.label(), "WSL: Ubuntu");
+        assert!(!shell.is_elevated());
+    }
+
+    #[test]
+    fn a_distribution_that_is_not_installed_does_not_resolve() {
+        let exists = installed(&[r"C:\Windows\System32\wsl.exe"]);
+
+        assert!(resolve_wsl("Debian", &with_distributions(&["Ubuntu"]), &exists).is_none());
+    }
+
+    #[test]
+    fn wsl_profile_ids_cannot_carry_arguments_or_paths() {
+        assert_eq!(
+            LocalShellKind::from_profile_id("wsl:Ubuntu-24.04"),
+            Some((LocalShellKind::Wsl, false))
+        );
+        for id in [
+            "wsl",
+            "wsl:",
+            "wsl:Ubuntu --exec calc.exe",
+            "wsl:..\\..\\evil",
+            "wsl:Ubuntu\"",
+            "wsl:Ubuntu-administrator ",
+            "wsl-administrator",
+        ] {
+            assert_eq!(LocalShellKind::from_profile_id(id), None, "{id}");
+            assert!(resolve_installed(id).is_err(), "{id}");
+        }
+        assert_eq!(LocalShellKind::from_id("wsl"), None);
+        assert_eq!(LocalShellKind::Wsl.administrator_id(), None);
     }
 
     fn installed(paths: &[&str]) -> impl Fn(&Path) -> bool + use<> {

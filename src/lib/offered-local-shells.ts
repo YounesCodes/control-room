@@ -1,4 +1,10 @@
-import type { AdministratorTerminalStatus, LocalShellProfile } from "../types";
+import type { AdministratorTerminalStatus, LocalShellKind, LocalShellProfile } from "../types";
+
+const ADMINISTRATOR_CAPABLE_KINDS: ReadonlySet<LocalShellKind> = new Set([
+  "powershell-7",
+  "windows-powershell",
+  "command-prompt",
+]);
 
 export function offeredLocalShells(
   profiles: LocalShellProfile[],
@@ -26,7 +32,7 @@ export function needsAdministratorSetup(
   return offeredLocalShells(profiles, hiddenIds).some(
     (profile) =>
       !profile.elevated &&
-      profile.kind !== "git-bash" &&
+      ADMINISTRATOR_CAPABLE_KINDS.has(profile.kind) &&
       !hiddenIds.includes(profile.id + "-administrator"),
   );
 }

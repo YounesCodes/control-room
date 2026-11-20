@@ -1080,6 +1080,35 @@ fn hidden_local_terminals_round_trip() {
 }
 
 #[test]
+fn wsl_distributions_can_be_hidden_or_made_the_default_local_terminal() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let settings = AppSettings {
+        hidden_local_shells: vec!["wsl:docker-tools".into(), "wsl:Debian".into()],
+        default_local_shell_id: Some("wsl:Ubuntu-24.04".into()),
+        ..AppSettings::default()
+    };
+
+    database.save_settings(&settings).unwrap();
+
+    let loaded = database.get_settings().unwrap();
+    assert_eq!(loaded.hidden_local_shells, settings.hidden_local_shells);
+    assert_eq!(
+        loaded.default_local_shell_id,
+        settings.default_local_shell_id
+    );
+    assert_eq!(
+        database
+            .save_settings(&AppSettings {
+                default_local_shell_id: Some("wsl:Ubuntu --exec calc.exe".into()),
+                ..AppSettings::default()
+            })
+            .unwrap_err(),
+        "Unknown default local terminal profile: wsl:Ubuntu --exec calc.exe"
+    );
+}
+
+#[test]
 fn a_local_terminal_id_the_frontend_made_up_is_refused_when_saving_settings() {
     let directory = tempfile::tempdir().unwrap();
     let database = Database::open(&directory.path().join("control-room.db")).unwrap();
@@ -1235,6 +1264,42 @@ fn panel_sizes_survive_database_reopen_and_reset() {
             .unwrap()
             .panel_sizes
             .is_empty()
+    );
+}
+
+#[test]
+fn a_wsl_tab_is_restored_with_its_distribution() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = Database::open(&directory.path().join("control-room.db")).unwrap();
+    let workspace = |shell_id: &str| crate::models::PersistedWorkspace {
+        id: Uuid::new_v4().to_string(),
+        label: None,
+        connection_id: None,
+        local_shell_id: Some(shell_id.into()),
+        remote_shell: None,
+        container: None,
+        view: "terminal".into(),
+        history_paused: false,
+    };
+    let state = PersistedWorkspaceState {
+        workspaces: vec![workspace("wsl:Ubuntu")],
+        ..Default::default()
+    };
+
+    database.save_workspace_state(&state).unwrap();
+
+    assert_eq!(
+        database.get_workspace_state().unwrap().workspaces,
+        state.workspaces
+    );
+    assert_eq!(
+        database
+            .save_workspace_state(&PersistedWorkspaceState {
+                workspaces: vec![workspace("wsl:../Ubuntu")],
+                ..Default::default()
+            })
+            .unwrap_err(),
+        "Workspace state names an unknown local shell"
     );
 }
 
