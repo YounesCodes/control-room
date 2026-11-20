@@ -220,6 +220,7 @@ describe("Settings actions", () => {
     const enabled = screen.getByRole("checkbox", { name: "Show host metrics in header" });
     expect((enabled as HTMLInputElement).checked).toBe(false);
     await userEvent.click(enabled);
+    expect(screen.queryByRole("checkbox", { name: "Uptime" })).toBeNull();
     await userEvent.click(screen.getByRole("checkbox", { name: "GPU" }));
     const refresh = screen.getByRole("slider", { name: "Host metrics refresh interval (seconds)" });
     expect(refresh.getAttribute("aria-valuetext")).toBe("Every 5 seconds");
@@ -229,7 +230,7 @@ describe("Settings actions", () => {
     expect(api.saveSettings).toHaveBeenCalledWith({
       ...settings,
       hostMetricsEnabled: true,
-      hostMetrics: ["cpu", "ram", "diskIo", "uptime"],
+      hostMetrics: ["cpu", "ram", "diskIo"],
       hostMetricsIntervalSeconds: 10,
     });
   });

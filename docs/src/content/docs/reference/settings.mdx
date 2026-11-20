@@ -70,13 +70,13 @@ On macOS, installed catalog fonts are saved in `~/Library/Fonts`. The default te
 
 ## Host metrics
 
-Enable **Show host metrics in header** to see CPU, RAM, GPU, Disk I/O, and uptime for the active tab. It is off by default. Choose individual **Displayed metrics** and set **Host metrics refresh interval** to every 2, 5, 10, or 30 seconds. The default interval is 5 seconds. Selecting no metrics hides the strip. Existing saved selections are preserved, except the removed Storage metric; select **Disk I/O** to add it.
+Enable **Show host metrics in header** to see CPU, RAM, GPU, and Disk I/O for the active tab. It is off by default. Choose individual **Displayed metrics** and set **Host metrics refresh interval** to every 2, 5, 10, or 30 seconds. The default interval is 5 seconds. Selecting no metrics hides the strip. Existing saved selections are preserved, except the removed Storage metric; select **Disk I/O** to add it.
 
 **Disk I/O** shows read and write speeds across disks in B/s, KiB/s, MiB/s, or GiB/s. The header abbreviates Read and Write as **R** and **W**.
 
 On macOS, CPU, RAM, and uptime are available. GPU and Disk I/O readings currently show unavailable.
 
-The title bar shows the current values and gives CPU and RAM priority when space is tight. Click the reading status, such as **Live**, to open a chart for each metric and see when the readings were last updated. Choose **1m**, **2m**, or **10m** to set how far back the charts go. Each chart labels its peak for that range. CPU, RAM, and GPU use a 0–100% scale. The Disk I/O chart draws write speed as a solid line and read speed as a dashed line on one scale. Uptime is shown at the bottom.
+The title bar shows the current values and gives CPU and RAM priority when space is tight. Click the reading status, such as **Live**, to open a chart for each metric and see when the readings were last updated. Choose **1m**, **2m**, or **10m** to set how far back the charts go. Each chart labels its peak for that range. CPU, RAM, and GPU use a 0–100% scale. The Disk I/O chart draws write speed as a solid line and read speed as a dashed line on one scale. The host's uptime is always shown at the bottom.
 
 A missing reading leaves a gap in the chart, for example while the host is unreachable or while the window is hidden. When the app has fewer readings than the range covers, the status line says how much history it has. History is kept in memory for up to 10 minutes, is cleared when you change hosts, and is not saved. The refresh button beside the close button reads the host again, and **Customize in Settings** opens these options.
 

@@ -91,7 +91,7 @@ fn header_preferences_persist_and_invalid_intervals_are_rejected() {
     assert_eq!(loaded.host_metrics, settings.host_metrics);
     assert_eq!(loaded.host_metrics_interval_seconds, 10);
     settings.host_metrics = AppSettings::default().host_metrics;
-    assert_eq!(settings.host_metrics.len(), 5);
+    assert_eq!(settings.host_metrics.len(), 4);
     database.save_settings(&settings).unwrap();
     assert_eq!(
         database.get_settings().unwrap().host_metrics,
@@ -103,7 +103,7 @@ fn header_preferences_persist_and_invalid_intervals_are_rejected() {
     database.save_settings(&settings).unwrap();
     assert_eq!(
         database.get_settings().unwrap().host_metrics.len(),
-        4,
+        3,
         "existing selections stay unchanged"
     );
     settings.host_metrics = vec![

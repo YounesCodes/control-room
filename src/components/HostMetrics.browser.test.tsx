@@ -51,7 +51,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it("smooths host percentages, rates, and uptime while keeping evidence exact and resetting for a new host", async () => {
+it("smooths host percentages and rates while keeping evidence exact and resetting for a new host", async () => {
   await page.viewport(900, 650);
   let now = 0,
     id = 0;
@@ -74,12 +74,13 @@ it("smooths host percentages, rates, and uptime while keeping evidence exact and
     <HostMetrics
       target={target}
       name={target}
-      metrics={["cpu", "ram", "gpu", "diskIo", "uptime"]}
+      metrics={["cpu", "ram", "gpu", "diskIo"]}
       seconds={5}
       onSettings={vi.fn()}
     />
   );
   const view = render(pane());
+  expect(document.querySelector('[data-metric="uptime"]')).toBeNull();
   const cell = (metric: string) =>
     document.querySelector<HTMLElement>(`[data-metric="${metric}"]`)!;
   const visual = (metric: string) => cell(metric).querySelector<HTMLElement>(".host-metric-value")!;
@@ -107,7 +108,6 @@ it("smooths host percentages, rates, and uptime while keeping evidence exact and
     ["cpu", 10, 90],
     ["ram", 50, 90],
     ["gpu", 20, 80],
-    ["uptime", 30, 50],
   ] as const) {
     const value = parseFloat(visual(metric).textContent!);
     expect(value).toBeGreaterThan(min);
@@ -121,7 +121,7 @@ it("smooths host percentages, rates, and uptime while keeping evidence exact and
   tick(duration / 2);
   expect(visual("cpu").textContent).toBe("90%");
   expect(visual("diskIo").textContent).toBe("R 4.0 KiB/s W 2.0 KiB/s");
-  expect(visual("uptime").textContent).toBe("50s");
+  expect(document.querySelector(".host-metrics-uptime")!.textContent).toBe("Up 50s");
   expect(frames.size).toBe(0);
   expect(
     visual("cpu").querySelector(".animated-number > span")!.hasAttribute("data-tauri-drag-region"),
@@ -159,7 +159,7 @@ it("anchors rate labels, neighboring values, and percent signs across animated u
     <HostMetrics
       target="rates"
       name="rates"
-      metrics={["cpu", "ram", "gpu", "diskIo", "uptime"]}
+      metrics={["cpu", "ram", "gpu", "diskIo"]}
       seconds={5}
       onSettings={vi.fn()}
     />
@@ -173,7 +173,6 @@ it("anchors rate labels, neighboring values, and percent signs across animated u
   const fixed = [
     cell.querySelectorAll(".host-metric-direction")[1],
     cell.querySelectorAll(".animated-number")[1],
-    document.querySelector('[data-metric="uptime"]')!,
     rates.querySelectorAll(".host-metric-direction")[1],
     rates.querySelectorAll(".animated-number")[1],
     document.querySelector('[data-metric="gpu"]')!,

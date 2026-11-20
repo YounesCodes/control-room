@@ -442,7 +442,6 @@ impl Default for AppSettings {
                 HeaderMetric::Ram,
                 HeaderMetric::Gpu,
                 HeaderMetric::DiskIo,
-                HeaderMetric::Uptime,
             ],
             host_metrics_interval_seconds: 5,
             terminal_font_family: if cfg!(target_os = "linux") {
