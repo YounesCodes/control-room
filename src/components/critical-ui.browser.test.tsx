@@ -182,6 +182,9 @@ function SettingsFixture() {
         environment={environment}
         appVersion="0.8.2"
         onCheckForUpdates={async () => ({ outcome: "current" })}
+        updateState={{ status: "idle" }}
+        onDownloadUpdate={() => undefined}
+        onRestartToUpdate={() => undefined}
         onSaved={() => undefined}
         onClose={() => true}
         onDirtyChange={() => undefined}

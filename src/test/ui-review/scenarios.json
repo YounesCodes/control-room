@@ -21,6 +21,7 @@
         "logs",
         "diagnostics",
         "update-failed",
+        "update-available",
         "save-failed",
         "linux-package",
         "linux-font"
@@ -98,6 +99,27 @@
             "name": "Check for updates"
           }
         ],
+        "update-available": [
+          {
+            "role": "button",
+            "name": "Open Settings"
+          },
+          {
+            "role": "button",
+            "name": "App & Diagnostics",
+            "optional": true
+          },
+          {
+            "role": "combobox",
+            "name": "Settings category",
+            "option": "app",
+            "optional": true
+          },
+          {
+            "role": "button",
+            "name": "Check for updates"
+          }
+        ],
         "save-failed": [
           {
             "role": "button",
@@ -140,6 +162,7 @@
         "logs": ".settings-page",
         "diagnostics": ".settings-ssh",
         "update-failed": ".settings-update-error",
+        "update-available": ".settings-page button:has-text('Update now')",
         "save-failed": ".settings-status.failed",
         "linux-package": ".settings-page button:has-text('Open releases')",
         "linux-font": ".settings-page .terminal-appearance-controls input[type='number']"

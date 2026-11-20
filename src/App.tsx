@@ -3310,6 +3310,9 @@ export function App() {
             environment={environment}
             appVersion={updater.currentVersion}
             onCheckForUpdates={updater.checkNow}
+            updateState={updater.state}
+            onDownloadUpdate={() => void updater.download()}
+            onRestartToUpdate={requestUpdateInstall}
             onSaved={(saved) => {
               setSettingsContract({ ...settingsContract, current: saved });
               setSettingsDirty(false);

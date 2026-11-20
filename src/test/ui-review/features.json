@@ -259,7 +259,7 @@
       "capture": [
         {
           "scenario": "settings",
-          "states": ["update-failed", "linux-package"]
+          "states": ["update-failed", "update-available", "linux-package"]
         }
       ],
       "entryPoints": [

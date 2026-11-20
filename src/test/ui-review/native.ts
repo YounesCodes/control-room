@@ -472,7 +472,15 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
     case "check_for_update":
       if (state === "update-failed")
         throw new Error("Could not reach the update server: connection timed out");
-      result = null;
+      result =
+        state === "update-available"
+          ? {
+              currentVersion: "0.0.0-example",
+              version: "0.0.1-example",
+              notes: null,
+              publishedAt: null,
+            }
+          : null;
       break;
     case "get_cached_capabilities":
     case "refresh_capabilities":

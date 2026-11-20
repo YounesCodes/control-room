@@ -93,7 +93,8 @@ lands. Captures show the current branch's layout without scaling or hiding its
 clipping. Settings starts on General & Monitoring; `monitoring` turns host
 metrics on, `logs` opens Logs & History where the window shows that
 category, `diagnostics` opens App & Diagnostics at SSH environment,
-`update-failed` fails Check for updates, and `save-failed` fails Save. Terminal
+`update-failed` fails Check for updates, `update-available` finds a newer
+version to update to, and `save-failed` fails Save. Terminal
 opens Find in terminal empty in `find`, with matches in `find-matches`, and
 with no match in `find-none`; `notice-error` shows a refused paste and
 `notice-ended` a closed session with Reconnect. Pages shows Docker, Logs, and History with
