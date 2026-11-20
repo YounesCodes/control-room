@@ -44,6 +44,11 @@ export function LocalShellIcon({
       ) : (
         <SquareTerminal size={17} strokeWidth={1.8} />
       )}
+      {kind === "wsl" && (
+        <svg className="local-shell-platform" viewBox="0 0 24 24">
+          <path d="M2 3h9v8H2zM13 3h9v8h-9zM2 13h9v8H2zM13 13h9v8h-9z" />
+        </svg>
+      )}
       {elevated && <Shield className="local-shell-elevation" strokeWidth={2} />}
     </span>
   );

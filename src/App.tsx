@@ -2224,7 +2224,9 @@ export function App() {
             .join(" ")}
           type="button"
           title={
-            hostContext ? `${activityLabel(workspace)} on ${hostContext}` : activityLabel(workspace)
+            hostContext
+              ? `${activityLabel(workspace)} on ${hostContext}`
+              : `${activityLabel(workspace)} · ${isLocalWorkspace(workspace) ? "Local terminal" : "SSH"}`
           }
           aria-current={workspace.id === activeWorkspaceId && !settingsOpen ? "page" : undefined}
           aria-describedby={`workspace-session-${workspace.id}`}
