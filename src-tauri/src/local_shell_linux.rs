@@ -28,6 +28,10 @@ impl ResolvedLocalShell {
     pub fn id(&self) -> &'static str {
         self.kind.id()
     }
+
+    pub fn input_after_resize(&self) -> Option<&'static [u8]> {
+        None
+    }
 }
 
 const SHELLS: [(LocalShellKind, &str); 4] = [
