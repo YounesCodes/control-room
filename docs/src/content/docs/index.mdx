@@ -1,18 +1,18 @@
 ---
 title: Control Room docs
-description: Connect to Linux, Windows, and macOS SSH hosts from Windows and macOS.
+description: Connect to Linux, Windows, and macOS hosts over SSH, and see what is running on them.
 ---
 
 import { LinkButton } from "@astrojs/starlight/components";
-import terminalScreenshot from "../../assets/screenshots/terminal.png";
+import homeScreenshot from "../../assets/screenshots/terminal.png";
 
 <div class="docs-home">
 
 <div class="docs-home-intro">
 
 <p class="docs-home-lede">
-  Save your SSH hosts in one place. Open a terminal and check services, ports, containers, and logs
-  without switching apps.
+  Keep your SSH hosts in one window. Open a terminal on any of them, and see their services, ports,
+  containers, and logs without typing commands.
 </p>
 
 <div class="docs-home-actions">
@@ -28,22 +28,21 @@ import terminalScreenshot from "../../assets/screenshots/terminal.png";
 </div>
 
 <figure class="docs-screenshot docs-home-screenshot">
-  <a href={terminalScreenshot.src} target="_blank" rel="noreferrer">
+  <a href={homeScreenshot.src} target="_blank" rel="noreferrer">
     <img
-      src={terminalScreenshot.src}
-      alt="Control Room with a saved Web server connection and its Terminal view."
+      src={homeScreenshot.src}
+      alt="Control Room with saved hosts in the sidebar and a terminal open on one of them."
     />
   </a>
-  <figcaption>Connections, terminals, and host views in one window. Example data shown.</figcaption>
+  <figcaption>Saved hosts on the left, a terminal on the right. Example data shown.</figcaption>
 </figure>
 
 ## What you can do
 
-- Save a host once, with an optional SSH port or key path, and open it by name.
-- Use SSH and [local terminals](/control-room/local-terminals/) in tabs or split panes.
-- Read host details, services, ports, Docker containers, and logs where supported. These views do not change the host.
-- Keep several tabs open for the same host, each with its own terminal.
+- Save a host once, then open it by name.
+- Open SSH and [local terminals](/control-room/local-terminals/) in tabs or side by side.
+- See a host's services, ports, Docker containers, and logs. These views only read. They never change the host.
 
-[Quick start](/control-room/start-here/quick-start/) shows how to install the app and open your first host.
+Control Room runs on Windows 11 and Ubuntu 24.04. A macOS preview is in testing.
 
 </div>

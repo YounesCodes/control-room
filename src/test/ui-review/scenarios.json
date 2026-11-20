@@ -450,10 +450,22 @@
       }
     },
     "ports": {
-      "states": ["warnings"],
+      "states": ["populated", "warnings"],
       "ready": ".app-shell",
       "settled": {
-        "warnings": "[role='region'][aria-label='Ports reading warnings']"
+        "warnings": "[role='region'][aria-label='Ports reading warnings']",
+        "populated": "#port-inspector"
+      },
+      "prepare": {
+        "populated": [
+          {
+            "selector": ".arch-viewport .arch-chip >> nth=0",
+            "wait": true
+          },
+          {
+            "selector": ".arch-viewport .arch-chip >> nth=0"
+          }
+        ]
       }
     },
     "systemd": {

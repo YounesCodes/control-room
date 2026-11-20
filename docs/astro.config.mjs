@@ -9,10 +9,19 @@ export default defineConfig({
   site: "https://younescodes.github.io",
   base: "/control-room",
   markdown: { processor: satteri({ hastPlugins: [wrapTables] }) },
+  redirects: {
+    "/start-here/introduction": "/control-room/",
+    "/start-here/requirements": "/control-room/start-here/installation/#what-the-host-needs",
+    "/inspection/overview": "/control-room/inspection/services/",
+    "/workspaces": "/control-room/terminal/",
+    "/tools/scratchpad": "/control-room/tools/history/#scratchpad",
+    "/help/faq": "/control-room/reference/security/",
+  },
   integrations: [
     starlight({
       title: "Control Room",
-      description: "Documentation for the Windows SSH client with read-only Linux host inspection.",
+      description:
+        "Documentation for Control Room, a desktop SSH client that shows what is running on your hosts.",
       // The shipped app tile carries its own near-black fill and border, which
       // reads as a floating button in the nav and as the heaviest object on the
       // page in light mode. The header gets the bare glyph instead; the tile

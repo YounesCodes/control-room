@@ -4,35 +4,25 @@ description: Install the app and open your first SSH host.
 ---
 
 import connectionScreenshot from "../../../assets/screenshots/connection-editor.png";
-import terminalScreenshot from "../../../assets/screenshots/terminal.png";
 
-Select **Documentation**, the question-mark icon beside Settings, to open this
-website in your default browser. It is also available in Settings. Exit terminal
-Focus Mode to show the icon.
-
-You need a Linux, macOS, or Windows host and an SSH account for it. Windows hosts require OpenSSH Server and key or agent authentication for shell detection. See [Connections](/control-room/connections/) for host setup and the remote shell picker.
+You need an account on a Linux, macOS, or Windows computer that you can reach over SSH. In these docs, that computer is called the host.
 
 1. [Install Control Room](/control-room/start-here/installation/).
-2. Select **Add connection**. Enter a name, SSH address, and username. Add a port or key file only if your SSH setup needs one.
-3. Select **Test structured access** if you want to use the host inspection views. These reads need SSH access without a password prompt. A password login can still work in the terminal.
-4. Save the connection and select it in the left sidebar to open a terminal.
+2. Select **Add connection** at the bottom of the sidebar.
+3. Type a name, the host's address, and your username. Leave **Port** and **Private key** empty unless your SSH setup needs them.
+4. Select **Test structured access**. It checks that Control Room can sign in with an SSH key or ssh-agent, without a password prompt. The host views, such as **Systemd** and **Ports**, need that. The terminal still works with a password.
+5. Select **Add connection** to save the host.
 
 <figure class="docs-screenshot">
   <a href={connectionScreenshot.src} target="_blank" rel="noreferrer">
-    <img src={connectionScreenshot.src} alt="The Add connection form." />
+    <img
+      src={connectionScreenshot.src}
+      alt="The Add connection form with a display name, SSH destination, and username filled in."
+    />
   </a>
-  <figcaption>Add an SSH host. Example data shown.</figcaption>
+  <figcaption>The Add connection form. Example data shown.</figcaption>
 </figure>
 
-Open **Systemd** for services or **Ports** for listeners. These views read information from the host; use the terminal when you want to run commands.
+Select the host in the sidebar to open a terminal. Then pick a view under it, such as **Systemd** for services or **Ports** for open ports.
 
-<figure class="docs-screenshot">
-  <a href={terminalScreenshot.src} target="_blank" rel="noreferrer">
-    <img src={terminalScreenshot.src} alt="The Terminal view for a connected host." />
-  </a>
-  <figcaption>Terminal for an SSH host. Example data shown.</figcaption>
-</figure>
-
-Your tabs return after an app restart and open fresh terminal sessions. If a start fails, use **Reconnect** for SSH or **Restart** for a local shell in the tab strip.
-
-For connection fields and SSH access, see [Connections](/control-room/connections/). For tabs and splits, see [Terminal](/control-room/terminal/).
+Select the question-mark icon beside Settings to open these docs from the app.

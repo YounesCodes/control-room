@@ -133,7 +133,7 @@
     },
     {
       "name": "Settings > Terminal > Local shells",
-      "docs": "reference/settings.mdx#local-terminal",
+      "docs": "reference/settings.mdx#local-terminals",
       "capture": [
         {
           "scenario": "tabs",
@@ -191,7 +191,7 @@
     },
     {
       "name": "Settings > Connections & Permissions",
-      "docs": "reference/settings.mdx#elevated-reads",
+      "docs": "reference/settings.mdx#connections--permissions",
       "capture": null,
       "entryPoints": [
         {
@@ -213,7 +213,7 @@
     },
     {
       "name": "Settings > App & Diagnostics",
-      "docs": "reference/settings.mdx#ssh-environment",
+      "docs": "reference/settings.mdx#app--diagnostics",
       "capture": [
         {
           "scenario": "settings",
@@ -347,7 +347,7 @@
     },
     {
       "name": "Compact navigation",
-      "docs": "workspaces.mdx",
+      "docs": "terminal.mdx#panel-sizes",
       "capture": [
         {
           "scenario": "pages",
@@ -365,7 +365,7 @@
     },
     {
       "name": "Focus Mode",
-      "docs": "terminal.mdx#splits-and-focus-mode",
+      "docs": "terminal.mdx#split-panes",
       "capture": [
         {
           "scenario": "splits",
@@ -401,7 +401,7 @@
     },
     {
       "name": "Workspace tabs",
-      "docs": "workspaces.mdx",
+      "docs": "terminal.mdx#tabs",
       "capture": [
         {
           "scenario": "terminal",
@@ -426,7 +426,7 @@
     },
     {
       "name": "Rename workspace",
-      "docs": "workspaces.mdx",
+      "docs": "terminal.mdx#tabs",
       "capture": [
         {
           "scenario": "dialogs",
@@ -447,7 +447,7 @@
     },
     {
       "name": "New terminal",
-      "docs": "local-terminals.md",
+      "docs": "terminal.mdx",
       "capture": [
         {
           "scenario": "tabs",
@@ -495,7 +495,7 @@
     },
     {
       "name": "Terminal splits",
-      "docs": "terminal.mdx#splits-and-focus-mode",
+      "docs": "terminal.mdx#split-panes",
       "capture": [
         {
           "scenario": "splits",
@@ -545,7 +545,7 @@
     },
     {
       "name": "Terminal groups",
-      "docs": "terminal.mdx#splits-and-focus-mode",
+      "docs": "terminal.mdx#split-panes",
       "capture": [
         {
           "scenario": "splits",
@@ -624,7 +624,7 @@
     },
     {
       "name": "Copy and paste",
-      "docs": "terminal.mdx#reconnect-and-copy",
+      "docs": "terminal.mdx#copy-paste-and-search",
       "capture": [
         {
           "scenario": "terminal",
@@ -662,7 +662,7 @@
     },
     {
       "name": "Reconnect",
-      "docs": "terminal.mdx#reconnect-and-copy",
+      "docs": "terminal.mdx#when-a-session-ends",
       "capture": [
         {
           "scenario": "terminal",
@@ -683,7 +683,7 @@
     },
     {
       "name": "Scratchpad",
-      "docs": "tools/scratchpad.mdx",
+      "docs": "tools/history.mdx#scratchpad",
       "capture": [
         {
           "scenario": "scratchpad",
@@ -769,7 +769,7 @@
           "open": [
             {
               "role": "button",
-              "name": "worker example-worker running \u00b7 example"
+              "name": "worker example-worker running · example"
             }
           ]
         }
@@ -802,7 +802,7 @@
     },
     {
       "name": "Windows services",
-      "docs": "inspection/services.mdx#windows-services",
+      "docs": "inspection/services.mdx#windows-and-mac-hosts",
       "capture": [
         {
           "scenario": "loading",
@@ -864,7 +864,7 @@
       "capture": [
         {
           "scenario": "ports",
-          "states": ["warnings"]
+          "states": ["populated", "warnings"]
         },
         {
           "scenario": "loading",
@@ -931,7 +931,7 @@
     },
     {
       "name": "Remote shell picker",
-      "docs": "connections.mdx#windows-10-and-11-hosts",
+      "docs": "connections.mdx#windows-and-mac-hosts",
       "capture": [
         {
           "scenario": "loading",
@@ -1043,7 +1043,7 @@
     },
     {
       "name": "Panel layout",
-      "docs": "workspaces.mdx",
+      "docs": "terminal.mdx#panel-sizes",
       "capture": null,
       "entryPoints": [
         {

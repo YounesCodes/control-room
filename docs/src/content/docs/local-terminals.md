@@ -1,34 +1,35 @@
 ---
 title: Local terminals
-description: Open installed Windows, Linux, or macOS shells in tabs and splits.
+description: Open shells on your own computer in tabs and splits.
 ---
 
-Select **New terminal** next to the workspace tabs, then choose a shell under **Local terminals**. The same launcher is available before you open your first tab and in Focus Mode. Local tabs use the same terminal settings and splits as SSH tabs, but have no Linux inspection views.
+A local terminal runs a shell on your own computer instead of on a host. Select **New terminal** and choose a shell under **Local terminals**. Local tabs work like SSH tabs, with splits and search, but they have no host views.
 
-On Windows, Control Room offers installed PowerShell 7, Windows PowerShell, Command Prompt, Git Bash from Git for Windows, and each installed WSL distribution. On Linux, it puts your login shell first, then offers Bash, zsh, fish, and `sh` where installed. You can hide a shell in [Settings](/control-room/reference/settings/#local-terminal). A shell already running stays open.
+| Computer | Shells offered when installed                                       |
+| -------- | ------------------------------------------------------------------- |
+| Windows  | PowerShell 7, Windows PowerShell, Command Prompt, Git Bash, and WSL |
+| Linux    | Your login shell first, then Bash, zsh, fish, and `sh`              |
+| macOS    | zsh, Bash, and fish                                                 |
 
-A WSL terminal such as **WSL: Ubuntu** starts that distribution in your Linux home directory, with your default distribution listed first. Distributions that Docker Desktop and Rancher Desktop install for their own use are not listed. The first WSL terminal after Windows starts can take a few seconds while WSL boots. Install a distribution, for example with `wsl --install`, then reopen the **New terminal** menu to see it.
+To hide a shell from the list, use [Settings](/control-room/reference/settings/#local-terminals). To start in a local terminal every time the app opens, turn on **Local Terminal Mode** there.
 
-In Git Bash, OpenCode and other OpenTUI apps use the main terminal screen by default. This avoids a Windows console issue that can break terminal input when they quit. Control Room sets `OTUI_USE_ALTERNATE_SCREEN=0` for new Git Bash sessions unless you already set that variable in your Windows environment. Other terminal apps keep their usual screen behavior.
+## WSL
 
-Enable **Local Terminal Mode** in [Settings](/control-room/reference/settings/#local-terminal) to start your default local terminal in Focus Mode when Control Room opens. Startup uses an enabled standard shell without administrator elevation. The Connections sidebar is hidden in Focus Mode. Exit focus to show it again.
+Each installed WSL distribution, such as **WSL: Ubuntu**, gets its own entry. It starts in your Linux home folder. The first one after Windows starts can take a few seconds. If you install a new distribution, for example with `wsl --install`, reopen the **New terminal** menu to see it.
 
-On macOS, the launcher offers installed zsh, Bash, and fish. Shells start in your home directory as login shells. Local Terminal Mode, tabs, splits, search, and saved terminal layouts work on every platform.
+## Git Bash
 
-## Administrator shells on Windows
+In Git Bash, Control Room sets `OTUI_USE_ALTERNATE_SCREEN=0`. This stops OpenCode and other OpenTUI apps from breaking the terminal's input when they quit. If you set this variable yourself in Windows, your value is used.
 
-**Run as administrator** is available for PowerShell 7, Windows PowerShell, and Command Prompt. Windows asks for UAC confirmation each time.
+## Administrator terminals on Windows
 
-Administrator terminals need a one-time Windows setup:
+PowerShell 7, Windows PowerShell, and Command Prompt can run as administrator. Windows asks you to confirm each time. Git Bash and WSL can't.
+
+This needs Windows 11 version 24H2 or newer and a one-time setup:
 
 1. Press `Windows + I` to open Windows Settings.
-2. Select **System**, then **Advanced**.
-3. Turn on **Enable sudo**.
-4. Choose **Inline**.
-5. Return to Control Room and reopen the **New terminal** menu.
+2. Go to **System > Advanced**.
+3. Turn on **Enable sudo** and choose **Inline**.
+4. Reopen the **New terminal** menu in Control Room.
 
-Windows 11 version 24H2 or later provides this setting. **Inline** keeps the administrator shell inside Control Room. It also lets the app send input to that elevated shell, so enable it only when you trust the app and programs running under your account. [Security](/control-room/reference/security/#administrator-local-terminals) explains this access.
-
-Expand **Run as administrator** in the menu for setup instructions. This section appears only when an enabled shell supports administrator mode and needs that setup. Git Bash alone does not trigger it.
-
-Git Bash and WSL have no administrator option. Local shells do not record Enhanced History. After an app restart, restored local tabs start fresh shells.
+**Inline** keeps the administrator shell inside Control Room. It also lets the app type into that shell, so turn it on only if you trust the programs running under your account. See [Security](/control-room/reference/security/#administrator-terminals).

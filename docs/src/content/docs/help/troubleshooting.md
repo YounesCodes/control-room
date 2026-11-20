@@ -1,20 +1,20 @@
 ---
 title: Troubleshooting
-description: Fix common SSH, inspection, Docker, and local shell problems.
+description: Fix common SSH, host view, Docker, and local shell problems.
 ---
 
-**The terminal connects, but host views fail.** Open **Edit connection** and run **Test structured access**. The views need SSH access without a password prompt. A terminal password login can still work. Set up an SSH key or agent if you want the views.
+**The terminal works, but the host views fail.** The views can't type a password. Set up an SSH key or ssh-agent for the host. Then open **Edit connection** and select **Test structured access** to check.
 
-**A view needs permission.** Some Docker, port, and firewall reads need more access. Allow passwordless sudo for that host or use the one-time retry offered by the view. The view marks missing information instead of showing it as zero.
+**SSH is missing.** On Windows, turn on **OpenSSH Client** in Windows optional features. On Ubuntu, install `openssh-client`. Then restart Control Room.
 
-**Docker is unavailable.** Open Docker to read the failure reason. The daemon may be missing or your account may lack access. Containers with incomplete Compose labels appear under **Ungrouped**.
+**A view says it needs permission.** Some Docker, port, and firewall details need more access. Use **Retry with sudo** in the view, or allow sudo for that host in Settings. See [Security](/control-room/reference/security/#sudo).
 
-**A local shell is missing.** Install the shell, then check **Settings → Local terminal**. Use **Show all** if you hid it earlier. Git Bash means Git for Windows, not the Windows WSL launcher. Each installed WSL distribution has its own **WSL:** entry.
+**Docker is unavailable.** Open Docker to read why. Docker may not be installed or running, or your account may not be allowed to use it.
 
-**A tab did not connect after restart.** The app starts fresh sessions for restored tabs. If a start fails, read the error, then use **Reconnect** for SSH or **Restart** for a local shell to try again.
+**Some information is missing.** A tool may be missing on the host, or the account may not have access. The view says which. See [What the host needs](/control-room/start-here/installation/#what-the-host-needs).
 
-**A view shows partial results.** A command may be unavailable, access may be limited, or a result may have reached its size limit. The view labels that condition. Use the terminal if you need a broader check.
+**A local shell is missing.** Install it, then check **Settings > Terminal > Local shells** in case you hid it. Git Bash comes from Git for Windows.
 
-**The window shows an error.** Read the message and select **Reload**. This restarts the app session; saved connections, settings, and notes stay on disk.
+**A tab didn't reconnect after a restart.** Read the error, then select **Reconnect** for an SSH tab or **Restart** for a local shell.
 
-**OpenSSH is missing.** Install or enable the OpenSSH Client optional feature on Windows. On Ubuntu, install the openssh-client package. Restart Control Room after installation.
+**The window shows an error.** Select **Reload**. Your saved hosts, settings, and notes are kept.

@@ -5,24 +5,35 @@ const pages = [
   "connections/",
   "terminal/",
   "local-terminals/",
-  "workspaces/",
-  "start-here/introduction/",
-  "start-here/requirements/",
   "start-here/quick-start/",
   "reference/security/",
   "start-here/installation/",
   "reference/keyboard-shortcuts/",
   "inspection/docker/",
   "inspection/logs/",
-  "inspection/overview/",
   "inspection/ports/",
   "inspection/services/",
   "tools/history/",
-  "tools/scratchpad/",
   "reference/settings/",
-  "help/faq/",
   "help/troubleshooting/",
 ];
+
+const movedPages = {
+  "start-here/introduction/": "/control-room/",
+  "start-here/requirements/": "/control-room/start-here/installation/",
+  "inspection/overview/": "/control-room/inspection/services/",
+  "workspaces/": "/control-room/terminal/",
+  "tools/scratchpad/": "/control-room/tools/history/",
+  "help/faq/": "/control-room/reference/security/",
+};
+
+for (const [route, target] of Object.entries(movedPages)) {
+  test(`${route}: an old page URL redirects to its new page`, async ({ page }) => {
+    await page.goto(route);
+    await expect(page).toHaveURL((url) => url.pathname === target);
+    await expect(page.locator("h1")).toBeVisible();
+  });
+}
 
 for (const route of pages) {
   test(`${route || "home"}: documentation links and section targets resolve`, async ({ page }) => {
