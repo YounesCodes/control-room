@@ -467,44 +467,34 @@ export function HostMetrics({
                   <dd className="host-metric-figure">
                     {waiting ? (
                       <span className="skeleton-bone" data-shape="title" style={bone("56%")} />
-                    ) : (
-                      <strong data-unavailable={unavailable || undefined}>
-                        {metric === "diskIo" ? (
-                          <>
+                    ) : metric === "diskIo" && reading.sample && !unavailable ? (
+                      <div className="host-metric-rates">
+                        {(
+                          [
+                            ["read", "Read", readRate],
+                            ["main", "Write", writeRate],
+                          ] as const
+                        ).map(([trace, label, rate]) => (
+                          <span className="host-metric-rate" key={trace}>
+                            <span className="host-metric-direction" data-trace={trace}>
+                              {label}
+                            </span>
                             <AnimatedNumber
-                              value={
-                                unavailable || !reading.sample ? null : writeRate(reading.sample)
-                              }
+                              value={rate(reading.sample!)}
                               format={formatByteRate}
                               animate={animate}
                             />
-                            {!unavailable && (
-                              <span className="host-metric-direction" data-trace="main">
-                                Write
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <MetricValue metric={metric} sample={reading.sample} animate={animate} />
-                        )}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <strong data-unavailable={unavailable || undefined}>
+                        <MetricValue metric={metric} sample={reading.sample} animate={animate} />
                       </strong>
                     )}
-                    <small>
-                      {metric === "diskIo" && reading.sample && !unavailable ? (
-                        <>
-                          <span className="host-metric-direction" data-trace="read">
-                            Read
-                          </span>
-                          <AnimatedNumber
-                            value={readRate(reading.sample)}
-                            format={formatByteRate}
-                            animate={animate}
-                          />
-                        </>
-                      ) : (
-                        (detail ?? " ")
-                      )}
-                    </small>
+                    {(metric !== "diskIo" || unavailable || !reading.sample) && (
+                      <small>{detail ?? " "}</small>
+                    )}
                   </dd>
                   <dd className="host-metric-chart">
                     <MetricChart
