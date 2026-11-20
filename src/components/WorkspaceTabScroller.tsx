@@ -416,15 +416,9 @@ export function WorkspaceTabScroller({
       filterRef.current.focus();
       return;
     }
-    const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
-    if (!keys.includes(event.key) || rows.length === 0) return;
+    if (!["ArrowDown", "ArrowUp"].includes(event.key) || rows.length === 0) return;
     event.preventDefault();
-    const next =
-      event.key === "Home"
-        ? 0
-        : event.key === "End"
-          ? rows.length - 1
-          : (current + (event.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length;
+    const next = (current + (event.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length;
     if (rows[next]) focusMenuRow(rows[next]);
   }
 

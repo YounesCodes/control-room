@@ -58,7 +58,7 @@ export function TerminalTargetMenu({
       onCloseRef.current();
       return;
     }
-    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
 
     const targets = [
       ...(menuRef.current?.querySelectorAll<HTMLButtonElement>("[data-terminal-target]") ?? []),
@@ -66,12 +66,7 @@ export function TerminalTargetMenu({
     if (!targets.length) return;
     event.preventDefault();
     const step = event.key === "ArrowDown" ? 1 : -1;
-    const next =
-      event.key === "Home"
-        ? 0
-        : event.key === "End"
-          ? targets.length - 1
-          : (activeIndex + step + targets.length) % targets.length;
+    const next = (activeIndex + step + targets.length) % targets.length;
     targets[next].focus();
     setActiveIndex(next);
     setKeyboardNav(true);

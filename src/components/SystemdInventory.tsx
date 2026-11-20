@@ -132,29 +132,24 @@ export function SystemdInventory({
       }}
       onKeyDown={(event) => {
         if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-        if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) || !units.length) return;
+        if (!["ArrowDown", "ArrowUp"].includes(event.key) || !units.length) return;
         event.preventDefault();
         event.stopPropagation();
         const focused = units.findIndex(
           (unit) => rows.current.get(unit.id) === document.activeElement,
         );
         const current = focused >= 0 ? focused : units.findIndex((unit) => unit.id === selectedId);
-        const next =
-          event.key === "Home"
-            ? 0
-            : event.key === "End"
-              ? units.length - 1
-              : Math.max(
-                  0,
-                  Math.min(
-                    units.length - 1,
-                    current < 0
-                      ? event.key === "ArrowDown"
-                        ? 0
-                        : units.length - 1
-                      : current + (event.key === "ArrowDown" ? 1 : -1),
-                  ),
-                );
+        const next = Math.max(
+          0,
+          Math.min(
+            units.length - 1,
+            current < 0
+              ? event.key === "ArrowDown"
+                ? 0
+                : units.length - 1
+              : current + (event.key === "ArrowDown" ? 1 : -1),
+          ),
+        );
         focus(next, event.key === "ArrowUp" || event.key === "ArrowDown");
       }}
     >

@@ -11,7 +11,6 @@ description: Keys for terminals, logs, and host views.
 | `Ctrl+F`       | Search the lines loaded in Logs.                                                |
 | `Up` / `Down`  | Move to the next unit in Systemd.                                               |
 | Arrow keys     | Move between items in the Systemd, Ports, and Docker graphs.                    |
-| `Home` / `End` | Go to the first or last item.                                                   |
 | `Escape`       | Close the details panel, menu, or search.                                       |
 
 On macOS, use `Cmd` in place of `Ctrl` to copy and paste in the terminal. `Ctrl` keys then go to the program in the terminal.

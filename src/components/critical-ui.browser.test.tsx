@@ -585,7 +585,7 @@ describe("critical UI in Chromium", () => {
     expect(menu.element().querySelectorAll('[role="menuitem"]')).toHaveLength(20);
     const active = menu.getByRole("menuitem", { name: /^Terminal 20 / });
     await expect.element(active).toHaveFocus();
-    await userEvent.keyboard("{Home}{Enter}");
+    await userEvent.keyboard("{ArrowDown}{Enter}");
     await expect.element(menu).not.toBeInTheDocument();
     await expect
       .element(page.getByRole("button", { name: /^Terminal 1 production/ }))
@@ -602,7 +602,7 @@ describe("critical UI in Chromium", () => {
       .element(page.getByRole("button", { name: /^Terminal 1 production/ }))
       .toBeVisible();
     await picker.click();
-    await userEvent.keyboard("{End}");
+    await userEvent.keyboard("{ArrowDown}".repeat(19));
     await expect.poll(() => getComputedStyle(menu.element()).opacity).toBe("1");
     const popover = menu.element().closest<HTMLElement>(".session-tab-overflow-menu")!;
     const bounds = popover.getBoundingClientRect();
@@ -646,14 +646,14 @@ describe("critical UI in Chromium", () => {
     const menu = page.getByRole("menu", { name: "All terminals menu" });
 
     await picker.click();
-    await userEvent.keyboard("{Home}{Enter}");
+    await userEvent.keyboard("{ArrowDown}{Enter}");
     expect(document.querySelectorAll('[aria-label="All terminals"]')).toHaveLength(1);
     await picker.click();
     await expect.element(menu).toBeVisible();
     expect(document.querySelectorAll('[aria-label="All terminals"]')).toHaveLength(1);
 
     await expect.element(menu.getByRole("menuitem", { name: /^Terminal 1 / })).toHaveFocus();
-    await userEvent.keyboard("{End}");
+    await userEvent.keyboard("{ArrowDown}".repeat(19));
     await expect.element(menu.getByRole("menuitem", { name: /^Terminal 20 / })).toHaveFocus();
     await userEvent.keyboard("{Escape}");
     await expect.element(picker).toHaveFocus();
@@ -950,12 +950,12 @@ describe("critical UI in Chromium", () => {
       .toHaveFocus();
     await userEvent.keyboard("{ArrowUp}");
     await expect.element(size).toHaveValue(19);
-    await userEvent.keyboard("{End}");
+    await userEvent.keyboard("{ArrowDown}{ArrowDown}{ArrowDown}");
     const app = page.getByRole("button", { name: "App & Diagnostics", exact: true });
     await expect.element(app).toHaveFocus();
     await userEvent.keyboard("{ArrowDown}");
     await expect.element(app).toHaveFocus();
-    await userEvent.keyboard("{Home}{ArrowUp}");
+    await userEvent.keyboard("{ArrowUp}{ArrowUp}{ArrowUp}{ArrowUp}{ArrowUp}");
     await expect.element(general).toHaveFocus();
     expect(container!.querySelectorAll('.settings-navigation button[tabindex="0"]')).toHaveLength(
       1,
@@ -1018,7 +1018,7 @@ describe("critical UI in Chromium", () => {
       .element(tabs.getByRole("tab", { name: "Tabs & naming", exact: true }))
       .toHaveFocus();
     await expect.element(page.getByRole("spinbutton", { name: "Scrollback lines" })).toBeVisible();
-    await userEvent.keyboard("{End}");
+    await userEvent.keyboard("{ArrowRight}");
     await expect
       .element(tabs.getByRole("tab", { name: "Local shells", exact: true }))
       .toHaveFocus();
@@ -1028,7 +1028,7 @@ describe("critical UI in Chromium", () => {
     await expect
       .element(tabs.getByRole("tab", { name: "Local shells", exact: true }))
       .toHaveFocus();
-    await userEvent.keyboard("{Home}");
+    await userEvent.keyboard("{ArrowRight}");
     await expect.element(appearance).toHaveFocus();
     await page.getByRole("searchbox", { name: "Search settings" }).fill("terminal");
     await expect

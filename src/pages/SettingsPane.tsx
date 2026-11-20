@@ -436,11 +436,7 @@ export function SettingsPane({
                     ? Math.min(index + 1, categories.length - 1)
                     : event.key === "ArrowUp"
                       ? Math.max(index - 1, 0)
-                      : event.key === "Home"
-                        ? 0
-                        : event.key === "End"
-                          ? categories.length - 1
-                          : null;
+                      : null;
                 if (next === null) return;
                 event.preventDefault();
                 const button =
@@ -491,11 +487,7 @@ export function SettingsPane({
                         ? (index + 1) % terminalTabs.length
                         : event.key === "ArrowLeft"
                           ? (index + terminalTabs.length - 1) % terminalTabs.length
-                          : event.key === "Home"
-                            ? 0
-                            : event.key === "End"
-                              ? terminalTabs.length - 1
-                              : null;
+                          : null;
                     if (next === null) return;
                     event.preventDefault();
                     const buttons =
