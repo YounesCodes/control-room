@@ -3336,8 +3336,12 @@ export function App() {
             ) : (
               <p>
                 {connections.length
-                  ? "Choose a saved connection from the sidebar to open it."
-                  : "Use Add connection in the sidebar to save an SSH destination."}
+                  ? offeredShells.length
+                    ? "Choose a saved connection from the sidebar, or open a local terminal from New terminal in the header."
+                    : "Choose a saved connection from the sidebar to open it."
+                  : offeredShells.length
+                    ? "Use Add connection in the sidebar to save an SSH destination, or open a local terminal from New terminal in the header."
+                    : "Use Add connection in the sidebar to save an SSH destination."}
               </p>
             )}
             {!connections.length && (
