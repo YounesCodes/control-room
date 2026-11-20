@@ -129,7 +129,7 @@
     border-bottom-color var(--motion-fast) var(--ease);
 }
 
-.session-tab-scroll-region.dragging-out .session-tab-dragged {
+.session-tab-scroll-region:is(.dragging-out, .dragging-away) .session-tab-dragged {
   opacity: 0.55;
   box-shadow: none;
 }
