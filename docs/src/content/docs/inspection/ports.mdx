@@ -5,7 +5,7 @@ description: See which ports are open on a host and what is using them.
 
 import portsScreenshot from "../../../assets/screenshots/ports.png";
 
-**Ports** shows which TCP and UDP ports are open on the host and which service, container, or program is listening on each one. It is a snapshot. Select the refresh button to read it again.
+**Ports** shows which TCP and UDP ports are open on the host and which service, container, or program is listening on each one. It is a snapshot.
 
 <figure class="docs-screenshot">
   <a href={portsScreenshot.src} target="_blank" rel="noreferrer">
@@ -18,10 +18,8 @@ import portsScreenshot from "../../../assets/screenshots/ports.png";
 
 Select a port to see how it is bound, its open connections, the firewall policy, and the program behind it. If it belongs to a container or service, you can jump there with **Open container** or **Open unit**.
 
-- **Find ports** searches by port number, owner, or address.
 - **Filter ports** shows only listeners or only outgoing connections. **Loopback only** shows ports that only this computer can reach.
 - **Show established connections** adds open connections that aren't listeners. They have a dashed outline.
-- Drag to move around, use the wheel to zoom, and select **Fit to view** to see everything.
 
 ## Can other computers reach this port?
 

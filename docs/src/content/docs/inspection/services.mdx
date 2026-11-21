@@ -18,9 +18,8 @@ On a Linux host, **Systemd** lists the host's services, timers, sockets, and oth
 
 - **Focused** hides routine system units. Choose **All units** to see everything.
 - Select the failed count to show only failed units.
-- **Find units** searches by name. **Filter and sort units** filters by state and type.
 
-Select a unit to see its details. Use **Up** and **Down** to move to the next unit. Expand **Configuration** to read the unit file, or **Advanced** for everything else systemd reports. Values that systemd doesn't report show as **Unavailable**. An open service refreshes its memory and runtime details every three seconds.
+Select a unit to see its details. Expand **Configuration** to read the unit file, or **Advanced** for everything else systemd reports. Values that systemd doesn't report show as **Unavailable**. An open service refreshes its memory and runtime details every three seconds.
 
 ## Find out why a unit failed
 
@@ -34,7 +33,7 @@ Choose **Dependency graph** beside **Explorer** to see how a unit relates to oth
 - **Ordering.** Units that start before or after this one. Arrows point from first to last.
 - **Activation.** Units that start this one, such as a socket that starts a service.
 
-Drag to move around and use the wheel to zoom. Double-click a unit to center the graph on it. Use **Expand** to load its neighbors, and **Fit to view** to see the whole graph again. The graph shows up to 25 units.
+Double-click a unit to center the graph on it. Use **Expand** to load its neighbors. The graph shows up to 25 units.
 
 Systemd shows system units only, not user units. It uses `systemctl` on the host.
 

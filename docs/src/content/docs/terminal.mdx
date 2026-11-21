@@ -21,25 +21,21 @@ Each tab holds one terminal. Select a host in the sidebar to open its terminal. 
 
 ## Tabs
 
-- Drag a tab left or right to change the order. Press **Escape** while dragging to cancel.
-- Point at a tab to show **Rename** and **Close**.
-- When tabs don't fit, **All terminals** at the start of the tab row lists them all. Type to filter the list. A dot on it means a hidden terminal disconnected, failed, or rang the bell.
+- When tabs don't fit, **All terminals** at the start of the tab row lists them all. A dot on it means a hidden terminal disconnected, failed, or rang the bell.
 - A tab can show the program running in it, such as `vim` or `npm`. Names you type yourself never change. Turn this off in [Settings](/control-room/reference/settings/#terminal).
-- The circle on a tab spins while the terminal connects or runs a command.
 
 Control Room remembers your tabs. When you restart the app, each tab starts a new session. Old terminal output is not kept.
 
-## Copy, paste, and search
+## Copy and paste
 
 - **Copy.** Select text, then use **Copy**, `Ctrl+C`, or right-click. With nothing selected, `Ctrl+C` goes to the program, as usual.
 - **Paste.** Use **Paste**, `Ctrl+Shift+V`, or right-click at a shell prompt.
-- **Search.** Select the magnifier button above the terminal.
 
 Some programs, such as Vim and tmux, use the mouse themselves. To select text in them, hold Shift while you drag, or Option on macOS. On macOS, use `Cmd` in place of `Ctrl` for copy and paste.
 
 ## Split panes
 
-Select **Focus terminal** at the top right to hide the sidebar and give the terminal the whole window. Select **Exit terminal focus** to go back.
+Select **Focus terminal** at the top right to hide the sidebar and give the terminal the whole window.
 
 In focus mode, open **New terminal**, choose **Split right** or **Split down**, then pick a terminal. You can also drag a tab onto the terminal and drop it near an edge. One group can mix hosts and local shells.
 
@@ -51,17 +47,12 @@ In focus mode, open **New terminal**, choose **Split right** or **Split down**, 
   label="Selecting Focus terminal, then using New terminal with Split right and Split down to arrange three terminals in one group."
 />
 
-- A group shows as one tab. Click a pane to type in it.
-- Drag the line between panes to resize them. Double-click the line to make them equal again.
+- Double-click the line between panes to make them equal again.
 - Drag the six dots in a pane's corner onto another pane to swap or move it. Click the dots for **Arrange**, a small map of the group.
-- Closing a pane closes only that terminal. **Ungroup** on the group tab turns the panes back into tabs.
-
-## When a session ends
-
-If an SSH session ends, select **Reconnect**. If a local shell exits, select **Restart**. If a terminal fails to start, the error stays until you try again.
+- **Ungroup** on the group tab turns the panes back into tabs.
 
 ## Panel sizes
 
-Drag the edge of the sidebar or of a host view to resize it. Double-click an edge to reset it. **Reset layout**, beside the **Connections** heading, resets every panel size and keeps your tabs. Control Room remembers the sizes you choose.
+Double-click the edge of the sidebar or a host view to reset its size. **Reset layout**, beside the **Connections** heading, resets every panel size and keeps your tabs.
 
 In a small window, select **Connections and views** in the title bar to open the sidebar.

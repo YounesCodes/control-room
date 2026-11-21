@@ -3,7 +3,13 @@ title: Install and update
 description: Install Control Room, check what your computer and hosts need, and keep the app up to date.
 ---
 
-Download Control Room from the [latest GitHub release](https://github.com/YounesCodes/control-room/releases/latest). To have an AI agent do the setup for you, see [Set up with an AI agent](#set-up-with-an-ai-agent).
+Your agent can install Control Room for you. Give it the following prompt:
+
+```text wrap
+Install Control Room on this computer by following https://younescodes.github.io/control-room/start-here/installation/
+```
+
+_Agents can read all of these docs as plain text at [llms-full.txt](https://younescodes.github.io/control-room/llms-full.txt), or start from the index at [llms.txt](https://younescodes.github.io/control-room/llms.txt)._
 
 ## Windows
 
@@ -17,12 +23,8 @@ The installer is not signed, so Windows may warn about an unknown publisher. Sel
 
 ## Linux
 
-Control Room is built and tested for Ubuntu 24.04 LTS on x86_64. Other distributions may work, but they are not tested.
-
 - **Debian package.** Run `sudo apt install ./<filename>.deb` in the folder where you saved it. This also installs what the app needs. Open Control Room from your applications menu.
 - **AppImage.** Install `libfuse2t64`, `openssh-client`, and `xdg-utils` if you don't have them. Run `chmod +x <filename>.AppImage`, then `./<filename>.AppImage`. Keep the file in a folder you can write to, so the app can update itself.
-
-If you can't drag the window by its edges, use your window manager's move or resize shortcut.
 
 ## macOS preview
 
@@ -63,24 +65,6 @@ On Linux, each host view needs a tool on the host. If a tool is missing, only th
 Control Room recognizes Debian, Ubuntu, Rocky Linux, AlmaLinux, Oracle Linux, CentOS Stream, Amazon Linux 2023, Fedora Server, openSUSE Leap, Arch Linux, and Alpine Linux. Alpine uses OpenRC instead of systemd, so it has no Systemd view.
 
 Windows and macOS hosts use tools that come with the system. On Windows, Docker needs `docker.exe` and a running Docker engine the SSH account can use. Docker that runs only inside WSL is not shown.
-
-## Set up with an AI agent
-
-A coding agent, such as Claude Code or Codex, can do these steps for you. Paste a prompt into the agent on the computer where you'll run Control Room.
-
-To install the app:
-
-```text wrap
-Install Control Room on this computer by following https://younescodes.github.io/control-room/start-here/installation/
-```
-
-To set up a host, put in its address and your username:
-
-```text wrap
-Set up SSH key sign-in from this computer to <username>@<address> for Control Room, and check what the host views need, by following https://younescodes.github.io/control-room/start-here/installation/#what-the-host-needs
-```
-
-Agents can read all of these docs as plain text at [llms-full.txt](https://younescodes.github.io/control-room/llms-full.txt), or start from the index at [llms.txt](https://younescodes.github.io/control-room/llms.txt).
 
 ## Updates
 

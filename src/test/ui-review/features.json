@@ -624,7 +624,7 @@
     },
     {
       "name": "Copy and paste",
-      "docs": "terminal.mdx#copy-paste-and-search",
+      "docs": "terminal.mdx#copy-and-paste",
       "capture": [
         {
           "scenario": "terminal",
@@ -662,7 +662,7 @@
     },
     {
       "name": "Reconnect",
-      "docs": "terminal.mdx#when-a-session-ends",
+      "docs": "terminal.mdx",
       "capture": [
         {
           "scenario": "terminal",

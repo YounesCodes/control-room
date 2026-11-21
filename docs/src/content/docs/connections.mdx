@@ -9,9 +9,7 @@ A connection saves a host's SSH address and username so you can open it by name.
 
 ## Connection fields
 
-- **Display name** is the name shown in the sidebar.
 - **SSH destination** is the host's address or a host name from your `~/.ssh/config`.
-- **Username** is the account you sign in with.
 - **Port** and **Private key** are optional. Leave them empty to use your SSH defaults. Control Room uses the key where it is and never copies it.
 
 **Test structured access** checks that the host views can sign in without a password prompt. It does not save anything.
@@ -22,7 +20,7 @@ If you change the address, username, port, or key, Control Room forgets what it 
 
 ## Windows and Mac hosts
 
-On Windows and Mac hosts, you choose a shell before the terminal opens. Pick one from the list and select **Connect**.
+On Windows and Mac hosts, you choose a shell before the terminal opens.
 
 <figure class="docs-screenshot">
   <a href={shellPickerScreenshot.src} target="_blank" rel="noreferrer">
@@ -48,7 +46,7 @@ The host views always read the host itself. A WSL terminal on a Windows host sti
 
 ## Organize and remove hosts
 
-Put a host in a group and give it up to five tags. Search in the sidebar finds names, addresses, groups, and tags. Groups and tags are saved only on your computer.
+Put a host in a group and give it up to five tags. Groups and tags are saved only on your computer.
 
 **Delete connection** also closes that host's tabs and deletes its saved command history.
 

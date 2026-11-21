@@ -15,6 +15,4 @@ description: Fix common SSH, host view, Docker, and local shell problems.
 
 **A local shell is missing.** Install it, then check **Settings > Terminal > Local shells** in case you hid it. Git Bash comes from Git for Windows.
 
-**A tab didn't reconnect after a restart.** Read the error, then select **Reconnect** for an SSH tab or **Restart** for a local shell.
-
 **The window shows an error.** Select **Reload**. Your saved hosts, settings, and notes are kept.

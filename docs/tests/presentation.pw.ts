@@ -204,7 +204,7 @@ test("each agent prompt copies in full", async ({ page, context }) => {
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto("start-here/installation/");
   const prompts = page.locator(".expressive-code").filter({ hasText: "younescodes.github.io" });
-  await expect(prompts).toHaveCount(2);
+  await expect(prompts).toHaveCount(1);
   for (const prompt of await prompts.all()) {
     await prompt.hover();
     await prompt.getByRole("button", { name: /copy/i }).click();

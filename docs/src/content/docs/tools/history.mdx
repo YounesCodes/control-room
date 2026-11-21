@@ -26,7 +26,7 @@ To turn it on:
 
 Turning it on adds a small marked block to `~/.bashrc` on the host, and to `~/.zshrc` on macOS. It also adds a script under `~/.local/share/control-room/`. To undo this, open **More actions** and choose **Remove from remote Bash**, or **Remove from remote shells** on macOS. This affects every connection that uses the same account on that host.
 
-You can search, copy, or delete saved commands. **Paste** puts a command in the terminal without running it. **Pause** stops saving for the current tab. **Clear saved history** deletes the commands saved on your computer for this host.
+**Paste** puts a command in the terminal without running it. **Pause** stops saving for the current tab. **Clear saved history** deletes the commands saved on your computer for this host.
 
 Commands that start with a space are skipped if Bash is set to ignore them (`HISTCONTROL=ignorespace`). Commands can contain passwords or keys, and history is saved without encryption. Turn it on only if that is acceptable. The global switch is in [Settings](/control-room/reference/settings/#logs--history).
 
@@ -43,6 +43,6 @@ Commands that start with a space are skipped if Bash is set to ignore them (`HIS
   </a>
 </figure>
 
-Open it with the **Scratchpad** button above the terminal. **Paste into terminal** puts the note in the terminal without running it. Select part of the note to copy or paste only that part. With nothing selected, `Ctrl+C` or a right-click copies the current line.
+Open it with the **Scratchpad** button above the terminal. **Paste into terminal** puts the note in the terminal without running it. With nothing selected, `Ctrl+C` or a right-click copies the current line.
 
 If the text has several lines and the shell would run each one, Control Room asks first. Notes are saved on your computer without encryption.
