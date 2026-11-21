@@ -174,3 +174,42 @@ for (const motion of ["no-preference", "reduce"] as const) {
     );
   });
 }
+
+test("llms.txt lists every page and llms-full.txt holds each page as plain Markdown", async ({
+  request,
+}) => {
+  const index = await request.get("llms.txt");
+  expect(index.headers()["content-type"]).toContain("text/plain");
+  const indexText = await index.text();
+  const full = await (await request.get("llms-full.txt")).text();
+  for (const route of pages) {
+    const url = `https://younescodes.github.io/control-room/${route}`;
+    expect(indexText).toContain(`(${url})`);
+    expect(full).toContain(`Source: ${url}\n`);
+  }
+  for (const leftover of [
+    "import ",
+    "<figure",
+    "<DemoVideo",
+    "<LinkButton",
+    "<div",
+    "](/control-room",
+    "](#",
+  ]) {
+    expect(full).not.toContain(leftover);
+  }
+});
+
+test("each agent prompt copies in full", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("start-here/installation/");
+  const prompts = page.locator(".expressive-code").filter({ hasText: "younescodes.github.io" });
+  await expect(prompts).toHaveCount(2);
+  for (const prompt of await prompts.all()) {
+    await prompt.hover();
+    await prompt.getByRole("button", { name: /copy/i }).click();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toBe((await prompt.locator("pre").innerText()).trim());
+    expect(copied).toContain("https://younescodes.github.io/control-room/start-here/installation/");
+  }
+});
