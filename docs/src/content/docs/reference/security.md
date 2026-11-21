@@ -1,30 +1,43 @@
 ---
-title: Security
-description: What host reads can do and what the app saves.
+title: Security and storage
+description: What Control Room can change on a host, and what it saves on your computer.
 ---
 
-Control Room uses your system OpenSSH client. Commands you type in the terminal run with your SSH account's permissions. The inspection views run separate, limited reads for the information they show.
+Control Room uses the OpenSSH client on your computer. Commands you type in a terminal run with your SSH account's permissions, like in any SSH client.
 
-## Host inspection
+## Host views only read
 
-The host views read services, logs, Docker, ports, and filesystems using the host's native tools. They do not edit files or manage services and containers. Optional header resource reads pause while Settings is open, Focus Mode is active, or the window is hidden. An open terminal keeps its SSH session until you close it. **Open terminal** in Docker starts a shell inside a running container. Like any terminal, commands you type there can change that container.
+Systemd, Ports, Docker, and Logs only read from the host. They never edit files, change firewall rules, or start or stop services and containers.
 
-## Elevated reads
+Two features do change things on the host:
 
-Sudo is off by default. You can allow passwordless sudo reads for one host or all hosts. The app uses sudo only when the account can run that read without a password; otherwise it reads what it can and shows the limitation.
+- **Open terminal** in Docker opens a shell inside a container. Commands you type there can change the container.
+- **History** adds a small block to your shell startup file on the host. See [Command history](/control-room/tools/history/).
 
-Some views offer a one-time retry that asks for a sudo password. Control Room uses that password for the retry and discards it. It does not save the password or add it to a command line. Sudo does not give the inspection views write controls. Mac Docker reads always retain the SSH account's Docker context instead of using root's configuration.
+## Sudo
 
-A container terminal on a Linux host where sudo is allowed runs `docker exec` through sudo when the account cannot reach Docker directly. Sudo then asks for the password in that terminal, and Control Room never sees it.
+Sudo is off by default. In Settings, you can let the host views use sudo on one host or on all hosts. They use it only when the account can run sudo without a password. Otherwise they show what they can read and say what is missing.
 
-## Administrator local terminals
+Some views offer a one-time **Retry with sudo** that asks for your sudo password. Control Room uses the password for that one read, then forgets it. It never saves the password or puts it in a command line.
 
-Administrator local shells use Windows Sudo in inline mode and require UAC approval. Inline mode lets Control Room send input to the elevated shell. Commands you type there can change this Windows machine, so use this option only when you trust the app and programs running under your account. This is separate from sudo on an SSH host.
+If a container terminal needs sudo to reach Docker, sudo asks for your password inside that terminal. Control Room never sees it.
+
+## Administrator terminals
+
+Administrator terminals on Windows use Windows sudo in **Inline** mode, and Windows asks you to confirm each one. Inline mode lets Control Room type into the administrator shell. Commands there can change your Windows computer, so turn it on only if you trust the programs running under your account.
 
 ## Stored locally
 
-Control Room saves connections, groups and tags, settings, tab layout, your Scratchpad notes, cached host details, and optional shell command history in a local SQLite database.
+Control Room keeps one database file on your computer. It holds your connections, groups and tags, settings, tab layout, Scratchpad notes, saved details about each host, and command history if you turned it on.
+
+| Computer | Database file                                                           |
+| -------- | ----------------------------------------------------------------------- |
+| Windows  | `%APPDATA%\app.controlroom.desktop\control-room.db`                     |
+| Linux    | `~/.local/share/app.controlroom.desktop/control-room.db`                |
+| macOS    | `~/Library/Application Support/app.controlroom.desktop/control-room.db` |
+
+The database is not encrypted. Don't put passwords or keys in notes, and keep in mind that saved commands can contain them.
 
 ## Never stored
 
-It does not save SSH or sudo passwords, private key contents, terminal output, fetched logs, or update installer bytes. A key path can be saved, but the key stays where it is. Notes and saved command history are local data, not encrypted secret storage.
+Control Room never saves SSH or sudo passwords, the contents of your private keys, terminal output, or logs. It can save the path to a key, but the key stays where it is.

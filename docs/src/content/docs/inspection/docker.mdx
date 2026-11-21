@@ -1,45 +1,28 @@
 ---
 title: Docker
-description: Find containers and inspect their current state.
+description: See a host's containers and open a shell in one.
 ---
 
 import dockerScreenshot from "../../../assets/screenshots/docker.png";
 
-Docker shows the host's containers, including stopped ones, in a graph grouped by Docker Compose project. Select a container to zoom to it and open its details.
-
-Known image repositories show a bundled logo, with brand colors on hover, keyboard focus, or selection. Unknown and custom images keep the generic container icon. Logos identify images, not container health.
+**Docker** shows every container on the host, including stopped ones. Containers from the same Docker Compose project are grouped together.
 
 <figure class="docs-screenshot">
   <a href={dockerScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={dockerScreenshot.src}
-      alt="The Control Room Docker graph with Compose project branches and a selected container inspector."
+      alt="The Docker graph with containers grouped by Compose project and one container's details open."
     />
   </a>
-  <figcaption>Container graph and details. Example data shown.</figcaption>
 </figure>
 
-Use **Find containers** to search by project, service, name, image, or container ID. **Filter containers** offers **Container state** and **Group by**. Choose **None** to give each container its own branch. A container appears under **Ungrouped** when its Compose labels are missing or invalid.
+Each container shows its state, health, image, ports, networks, and mounts, with links to its [ports](/control-room/inspection/ports/) and [logs](/control-room/inspection/logs/). **Open terminal** opens a shell inside a running container. Closing the tab ends the shell, not the container.
 
-Drag the canvas to pan, use the wheel or zoom buttons to zoom, and select **Fit to view** to frame the graph. Hover or focus **Containers** for counts and collection time. Close details with **Close details**, Escape, another press on the selected container, or a click on empty canvas. Dragging keeps details open.
+The view does not show environment variables or where mounts come from on the host.
 
-Details can include:
+## Access
 
-- name, image reference, and content ID
-- running, paused, restarting, OOM-killed, and dead state
-- exit code and lifecycle timestamps
-- health status and failing streak
-- restart policy and maximum retries
-- published port summaries and network addresses
-- mount destinations
-- validated Compose project, service, number, and one-off facts
+The SSH account needs access to Docker on the host. On Linux, if Docker needs sudo, the view can offer a [sudo retry](/control-room/reference/security/#sudo).
 
-Select a published binding to open its endpoint in [Ports](/control-room/inspection/ports/), including binding, connection, and firewall evidence. If the publication is absent from the Ports snapshot, the view reports it instead of selecting another listener.
-
-To work inside a running container, select **Open terminal** in its details. A new tab opens a shell in the container, using bash when the image has it and sh otherwise. The tab shows the container's name with the host beside it, and the container appears under its host in the sidebar. Select it there to return to the shell, or select the host to return to Docker. Opening the same container again brings back its terminal. Closing the tab ends the shell; the container keeps running. Container terminals reopen with the app but do not record [History](/control-room/tools/history/).
-
-The view does not show environment variables or host mount sources. Select a container's logs to read them in [Logs](/control-room/inspection/logs/). On Linux, if Docker access needs sudo, the view can offer a [read-only retry](/control-room/reference/security/#elevated-reads).
-
-On Windows hosts, **Docker** has its own sidebar entry, alongside **Ports**, and **Logs** offers container logs. These views stay visible even when Docker is unavailable. They use the Windows Docker CLI and that account's Docker context. The daemon must already be running and accessible to the SSH account. If Docker is missing or access fails, the view reports the error. Check Docker and account permissions, then retry. Docker installed only inside WSL is not included. **Open terminal** expects a Linux container with sh.
-
-On macOS, Docker uses the SSH account's CLI configuration and selected context. The view shows the context and endpoint. Docker Desktop is one option; an SSH or TCP context can point to another Docker host. Its containers and published ports belong to that daemon. Automatic sudo allowances do not change the account used for Mac Docker reads.
+- **Windows hosts.** Docker must already be running, and `docker.exe` must be installed. Docker that runs only inside WSL is not shown.
+- **Mac hosts.** The view uses the SSH account's current Docker context and shows which one. A context can point to another computer. Then you see that computer's containers.

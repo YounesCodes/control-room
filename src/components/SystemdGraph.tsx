@@ -482,10 +482,6 @@ export function SystemdGraph({
                       navigateSelection(event.key, id);
                       return;
                     }
-                    if (!["Home", "End"].includes(event.key)) return;
-                    event.preventDefault();
-                    const next = event.key === "Home" ? 0 : ids.length - 1;
-                    nodes.current.get(ids[next])?.focus();
                   }}
                 >
                   <span className="arch-chip-title">

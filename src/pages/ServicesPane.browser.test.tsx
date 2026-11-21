@@ -999,7 +999,7 @@ it("follows filtered sort order and scrolls through virtual rows during repeated
   );
   const list = screen.getByRole("region", { name: "Systemd units" });
   list.focus();
-  await userEvent.keyboard("{End}{ArrowUp}{ArrowUp}");
+  await userEvent.keyboard("{ArrowUp}{ArrowUp}{ArrowUp}");
   expect(screen.getByRole("heading", { name: "unit-0997.service" })).toBeTruthy();
   const row = list.querySelector<HTMLElement>(".selected-row")!;
   expect(document.activeElement).toBe(row);
@@ -1700,9 +1700,8 @@ it("keeps a large inventory bounded, keyboard navigable and searchable from the 
   expect(screen.queryByRole("complementary")).toBeNull();
   const list = screen.getByRole("region", { name: "Systemd units" });
   list.focus();
-  await userEvent.keyboard("{End}");
+  await userEvent.keyboard("{ArrowUp}");
   await waitFor(() => expect(document.activeElement?.textContent).toContain("unit-3999.service"));
-  await userEvent.keyboard("{Enter}");
   expect(screen.getByRole("heading", { name: "unit-3999.service" })).toBeTruthy();
   await page.getByRole("button", { name: "Close details" }).click();
   await page.getByRole("button", { name: "Find units", exact: true }).click();

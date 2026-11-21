@@ -690,7 +690,7 @@ export function HistoryPane({
                     else searchInputRef.current?.focus();
                     return;
                   }
-                  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+                  if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
                   event.preventDefault();
                   const buttons = [
                     ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
@@ -700,12 +700,8 @@ export function HistoryPane({
                   if (!buttons.length) return;
                   const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
                   const next =
-                    event.key === "Home"
-                      ? 0
-                      : event.key === "End"
-                        ? buttons.length - 1
-                        : (current + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) %
-                          buttons.length;
+                    (current + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) %
+                    buttons.length;
                   buttons[next]?.focus();
                 }}
                 style={menuPosition ?? undefined}

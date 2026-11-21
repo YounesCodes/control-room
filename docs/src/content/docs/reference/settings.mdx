@@ -1,117 +1,61 @@
 ---
 title: Settings
-description: Choose host metrics, terminal appearance, local shells, logs, and updates.
+description: Change terminal appearance, local shells, host metrics, logs, and updates.
 ---
 
 import settingsScreenshot from "../../../assets/screenshots/settings.png";
 import metricsScreenshot from "../../../assets/screenshots/live-metrics.png";
 
-Open **Settings** from the top bar. Select **Save settings** to apply changes. Catalog fonts have their own **Install and use** action.
-
-Choose a category on the left, or use the category dropdown in a narrow window.
-**Search settings** finds controls across categories. Switching categories keeps
-your unsaved changes; leaving Settings asks before discarding them.
+Changes apply when you select **Save settings**.
 
 <figure class="docs-screenshot">
   <a href={settingsScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={settingsScreenshot.src}
-      alt="Settings with category navigation, search, and the compact Terminal appearance editor beside its live preview."
+      alt="Settings with the category list on the left and terminal appearance options with a live preview."
     />
   </a>
-  <figcaption>Terminal appearance in the Terminal category. Example data shown.</figcaption>
 </figure>
 
 ## Terminal
 
-Select **Appearance**, **Tabs & naming**, or **Local shells** to show that panel.
-The selected tab stays highlighted, and switching tabs keeps unsaved edits.
+**Appearance** sets the font, text size, colors, and how many lines each terminal keeps.
 
-Choose a font, size (9–32), and scrollback limit (100–100,000 lines). You can change the text and ANSI colors for both SSH and local terminals; the cursor follows the text color. Defaults use the classic CGA bright ANSI colors with gray text on black. Each color choice also applies to its bright variant. Shells decide which colors to use in their prompts. The preview shows your chosen colors. **Reset colors** restores the defaults. See [Terminal](/control-room/terminal/#reconnect-and-copy) for right-click behavior.
+On Windows, **Font family** can search free monospace fonts. **Install and use** installs one for your account, without administrator access. On Linux, type the name of a font you already installed.
 
-Under **Tabs & naming**, **Show current command/process in terminal tab titles**
-is on by default. A command that keeps running, such as `npm run dev`, `vim`, or
-`claude`, shows its program name beside the shell or host name. This works in
-local shells and over SSH. Arguments and paths stay out of the title.
-Manual tab names take priority. Completion, prompt return, and disconnect restore
-the normal name. Commands that finish quickly, such as `cd`, never change the
-title. Titles that programs set for their own windows are not used; Control Room
-does not poll for processes. Turn the preference off to keep all automatic names
-unchanged.
+**Tabs & naming** controls whether a tab shows the program running in it, such as `vim` or `npm run dev`.
 
-On Linux, enter an installed font or a fallback list in **Font family**, then select **Save settings**. Install new fonts through your desktop first.
+## Local terminals
 
-On Windows, use **Font family** to search open-source monospace fonts from Fontsource. Clicking the current value selects it, so you can start typing immediately.
-Each suggestion shows its name in that font. Typing or using the arrow keys
-updates the preview without installing anything. **Keep current font** or Escape
-ends the preview and restores the current value. Choose a suggestion by clicking
-it, or use the arrow keys and Enter. Choosing a suggestion does not install it.
+**Local shells** sets which shells the **New terminal** menu offers.
 
-To use an installed font or a fallback list, type it in **Font family** and choose
-**Use typed font**, or press Enter without selecting a suggestion. Then use
-**Save settings** to apply it. Search text is never saved automatically.
-
-Select **Install and use** to download and install the regular font and bold
-weight when available for your account. The app shows download and
-installation progress, then applies and saves the font for all terminals. Other
-unsaved settings still need **Save settings**. Installation needs no administrator
-access and the font remains installed when Control Room closes.
-
-If the new font is not visible after installation, restart Control Room.
-
-If a download, installation, or save fails, the current terminal font stays in
-use. If the system installed the font but saving or applying it failed, the app says so. Choose **Retry apply font** to apply it without reinstalling. Otherwise, choose **Retry install and use**. **Retry preview** and
-**Retry catalog** retry their own requests. When the catalog is unavailable,
-you can keep using installed fonts through **Font family**, including a list of
-fallbacks such as `"JetBrains Mono", Consolas, monospace`. Cached catalog names
-remain available during the current app session.
-
-On macOS, installed catalog fonts are saved in `~/Library/Fonts`. The default terminal font is Menlo.
+Turn on **Local Terminal Mode** to open your **Default local terminal** in focus mode every time Control Room starts.
 
 ## Host metrics
 
-Enable **Show host metrics in header** to see CPU, RAM, GPU, and Disk I/O for the active tab. It is off by default. Choose individual **Displayed metrics** and set **Host metrics refresh interval** to every 2, 5, 10, or 30 seconds. The default interval is 5 seconds. Selecting no metrics hides the strip. Existing saved selections are preserved, except the removed Storage metric; select **Disk I/O** to add it.
-
-**Disk I/O** shows read and write speeds across disks in B/s, KiB/s, MiB/s, or GiB/s. The header abbreviates Read and Write as **R** and **W**.
-
-On macOS, CPU, RAM, and uptime are available. GPU and Disk I/O readings currently show unavailable.
-
-The title bar shows the current values and gives CPU and RAM priority when space is tight. Click the reading status, such as **Live**, to open a chart for each metric and see when the readings were last updated. Choose **1m**, **2m**, or **10m** to set how far back the charts go. Each chart labels its peak for that range. CPU, RAM, and GPU use a 0–100% scale. The Disk I/O chart draws write speed as a solid line and read speed as a dashed line on one scale. The host's uptime is always shown at the bottom.
-
-A missing reading leaves a gap in the chart, for example while the host is unreachable or while the window is hidden. When the app has fewer readings than the range covers, the status line says how much history it has. History is kept in memory for up to 10 minutes, is cleared when you change hosts, and is not saved. The refresh button beside the close button reads the host again, and **Customize in Settings** opens these options.
+**Show host metrics in header** shows CPU, RAM, GPU, and disk activity for the current host in the title bar. It is off by default. You choose which readings to show and how often they refresh.
 
 <figure class="docs-screenshot">
   <a href={metricsScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={metricsScreenshot.src}
-      alt="Live header readings and the open readings panel with CPU, RAM, GPU, and Disk I/O charts, peak labels, and the range switch."
+      alt="Host metrics in the title bar with the details panel open, showing CPU, RAM, GPU, and disk charts."
     />
   </a>
-  <figcaption>Read and write activity is separate from space used. Example data shown.</figcaption>
 </figure>
 
-GPU shows the busiest reported engine or device. Windows needs GPU performance counters; Linux uses NVIDIA's `nvidia-smi` with `timeout`, or AMD's `gpu_busy_percent` when available. Other drivers may show **Unavailable**. Missing readings appear as a dash in the header and are explained in the details. WSL terminals on Windows connections show Windows readings.
+Charts cover the last 1, 2, or 10 minutes and are kept only while the app is open. Readings pause while Settings or focus mode is open, or the window is hidden.
 
-Monitoring pauses while Settings is open, Focus Mode is active, or the window is hidden. A failed refresh keeps the last values and marks them **Stale**. Readings use no sudo and are not saved as history.
-
-## Local terminal
-
-Enable **Local Terminal Mode** to start **Default local terminal** in Focus Mode whenever Control Room opens. The Connections sidebar is hidden in Focus Mode. Exit focus to show it again. An existing tab for that shell is reused at startup. If the default is disabled or unavailable, the first enabled standard terminal starts. With none enabled, Local Terminal Mode opens no terminal. This mode is off by default.
-
-Choose which installed shells appear in **New terminal**, for new tabs and splits. Hiding one does not uninstall it or close a running tab.
+GPU readings need performance counters on Windows, or `nvidia-smi` or an AMD driver on Linux. Mac hosts show CPU, RAM, and uptime only. A reading that isn't available shows a dash.
 
 ## Logs & History
 
-Choose the default log length: 50, 100, 200, 500, or 1000 lines. The global History switch allows command capture on connections where you have enabled Bash integration. Turning it off stops capture and keeps saved entries. See [Command history](/control-room/tools/history/) to enable it for a host.
+Choose how many log lines load by default. The History switch turns command saving on or off for every host. Turning it off keeps the commands already saved. See [Command history](/control-room/tools/history/).
 
-## Elevated reads
+## Connections & Permissions
 
-Allow passwordless sudo reads for all hosts, or set the allowance on one connection. This setting does not ask for or save a sudo password. See [Security](/control-room/reference/security/#elevated-reads).
+**Elevated commands** lets the host views use sudo without a password, on every host or on one host. See [Security](/control-room/reference/security/#sudo).
 
-## Control Room updates
+## App & Diagnostics
 
-See the installed version in **App & Diagnostics**. The Windows installer and Linux AppImage offer automatic checks and **Check for updates**. The Debian package offers **Open releases** for manual updates. [Install and update](/control-room/start-here/installation/#updates) explains the restart.
-
-## SSH environment
-
-Settings shows the detected OpenSSH path, your SSH config path, and whether ssh-agent has an available identity. Your OpenSSH configuration still controls SSH behavior.
+This shows the app version, update options, and the SSH setup Control Room found: which `ssh` it uses, your SSH config file, and whether ssh-agent has a key. See [Updates](/control-room/start-here/installation/#updates).

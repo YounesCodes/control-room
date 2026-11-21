@@ -1,0 +1,38 @@
+---
+interface Props {
+  src: string;
+  poster: ImageMetadata;
+  label: string;
+  width: number;
+  height: number;
+}
+
+const { src, poster, label, width, height } = Astro.props;
+---
+
+<figure class="docs-screenshot docs-demo">
+  <video
+    src={src}
+    poster={poster.src}
+    width={width}
+    height={height}
+    aria-label={label}
+    autoplay
+    loop
+    muted
+    playsinline
+    preload="auto"></video>
+</figure>
+
+<script>
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const applyMotionPreference = () => {
+    for (const video of document.querySelectorAll<HTMLVideoElement>(".docs-demo video")) {
+      video.controls = reducedMotion.matches;
+      if (reducedMotion.matches) video.pause();
+      else void video.play().catch(() => {});
+    }
+  };
+  applyMotionPreference();
+  reducedMotion.addEventListener("change", applyMotionPreference);
+</script>

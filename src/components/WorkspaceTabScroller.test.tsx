@@ -580,7 +580,7 @@ describe("WorkspaceTabScroller overflow", () => {
     expect(container.querySelector(".session-tab-menu-check")).toBeNull();
   });
 
-  it("navigates the menu with arrows, Home and End, and returns focus on Escape", () => {
+  it("navigates the menu with wrapping arrows and returns focus on Escape", () => {
     const { container } = render(<OverflowStrip terminals={terminals} initialActive={5} />);
     openMenu(container);
     const items = menuItems(container);
@@ -595,12 +595,8 @@ describe("WorkspaceTabScroller overflow", () => {
     expect(document.activeElement).toBe(items[5]);
     fireEvent.keyDown(items[5], { key: "ArrowDown" });
     expect(document.activeElement).toBe(items[0]);
-    fireEvent.keyDown(items[0], { key: "ArrowUp" });
-    expect(document.activeElement).toBe(items[5]);
-    fireEvent.keyDown(items[5], { key: "Home" });
-    expect(document.activeElement).toBe(items[0]);
     scrollIntoView.mockClear();
-    fireEvent.keyDown(items[0], { key: "End" });
+    fireEvent.keyDown(items[0], { key: "ArrowUp" });
     expect(document.activeElement).toBe(items[5]);
     expect(scrollIntoView.mock.contexts).toEqual([items[5]]);
     expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
@@ -631,7 +627,7 @@ describe("WorkspaceTabScroller overflow", () => {
     );
     openMenu(container);
     const items = menuItems(container);
-    fireEvent.keyDown(items[5], { key: "Home" });
+    fireEvent.keyDown(items[5], { key: "ArrowDown" });
     fireEvent.keyDown(items[0], { key: "Delete" });
     expect(onClose).toHaveBeenCalledWith("Git Bash");
     const remaining = menuItems(container);
