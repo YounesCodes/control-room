@@ -48,6 +48,7 @@ if (preflight.error || preflight.status !== 0) {
 }
 
 const tests = [
+  "transfers::tests::live_file_round_trip",
   "history::tests::live_history_install_is_reversible_in_an_isolated_home",
   "remote::tests::live_fixture_supports_structured_features",
   "session::tests::native_pty_hosts_ssh_against_live_fixture",

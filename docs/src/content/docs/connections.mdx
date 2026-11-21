@@ -24,6 +24,16 @@ On Linux and macOS, the inspection views reuse one SSH connection per target and
 
 Changing a connection's destination, username, port, or key clears its cached host facts and inspection results. Open terminals keep their existing sessions until you reconnect. A remote shell selected for the previous target is cleared.
 
+## Transfer files
+
+Open a saved host and select **Files** in the sidebar. The browser starts in the SSH account's home folder. Open a folder to browse it, or use **Parent folder** and **Home folder** to go back. Enable **Show hidden files** to see names beginning with a dot.
+
+Select **Upload files** to choose one or more local files, or drop them into the open folder. Dropping files on a host terminal uploads them to that account's home folder, including when the terminal is in a split. To download, select a file in **Files** and choose a folder on your computer.
+
+**Transfers** shows progress, speed, and a cancel button. You can switch views while files copy. When a file already exists, select **Review** to replace it or keep the existing copy.
+
+Transfers use SFTP with your saved SSH connection. The host must enable SFTP and accept your key or SSH agent without a password prompt. Choose individual files for transfer. On Windows hosts, a path such as `/C:/Users/Lee` refers to the account's Windows files.
+
 ## Windows 10 and 11 hosts
 
 Enable the Windows OpenSSH Server and save the host as a normal SSH connection. Shell detection needs an accepted host key and key or agent authentication that works without a prompt.
@@ -34,13 +44,13 @@ Installed Windows Terminal profiles that launch a supported shell also appear in
 
 Reconnect and restored tabs reuse their chosen shell. **New terminal** lets you choose another shell on the same host. If a selected shell was removed, open a new terminal and choose an available one.
 
-Windows hosts offer Terminal, Services, Ports, Docker, and container Logs. Scratchpad opens from the terminal toolbar. Docker has its own sidebar entry, as on Linux hosts. Docker and Logs require the Windows Docker CLI and daemon access for the SSH account; their views report when either is unavailable. Optional header metrics show Windows resource readings. Inspection always reads Windows itself, including when the terminal runs WSL. WSL uses the distribution's default user and shell. Enhanced History is unavailable on these connections.
+Windows hosts offer Terminal, Files, Services, Ports, Docker, and container Logs. Scratchpad opens from the terminal toolbar. Docker has its own sidebar entry, as on Linux hosts. Docker and Logs require the Windows Docker CLI and daemon access for the SSH account; their views report when either is unavailable. Optional header metrics show Windows resource readings. Inspection always reads Windows itself, including when the terminal runs WSL. WSL uses the distribution's default user and shell. Enhanced History is unavailable on these connections.
 
 ## macOS hosts
 
 Enable **Remote Login** in macOS System Settings and allow your SSH account. Save the Mac like any other SSH host. Shell discovery and inspection require an accepted host key and key or agent authentication that works without a prompt.
 
-Choose zsh, Bash, or an installed fish shell, then select **Connect**. Once the Mac's details are saved, the picker opens with the saved shell list and checks for changes in the background. Reconnect and restored tabs retain the selected shell. Mac hosts offer Overview, Terminal, Services, Ports, Docker, Boot, Logs, Baselines, History, and Scratchpad. Inspection reads macOS even when another shell is selected.
+Choose zsh, Bash, or an installed fish shell, then select **Connect**. Once the Mac's details are saved, the picker opens with the saved shell list and checks for changes in the background. Reconnect and restored tabs retain the selected shell. Mac hosts offer Terminal, Files, Services, Ports, Docker, Logs, History, and Scratchpad. Inspection reads macOS even when another shell is selected.
 
 The SSH account can inspect its own launchd agent domains and the system service inventory. Reading other processes, protected logs, or Packet Filter rules may need sudo. Docker requires an installed CLI and an accessible daemon in the account's selected Docker context.
 

@@ -142,7 +142,7 @@ describe("Workspace restoration", () => {
     saved.workspaces[0].view = "scratchpad";
     expect(restoreWorkspaceState([connection("host")], saved).workspaces[0].view).toBe("terminal");
   });
-  it.each(["services", "ports", "docker", "logs"] as const)(
+  it.each(["files", "services", "ports", "docker", "logs"] as const)(
     "preserves the supported Windows %s view",
     (view) => {
       const workspace = createRemoteWorkspace(connection("windows-host"), {

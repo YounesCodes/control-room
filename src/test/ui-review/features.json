@@ -5,6 +5,25 @@
   },
   "features": [
     {
+      "name": "File transfers",
+      "docs": "connections.mdx#transfer-files",
+      "capture": [
+        {
+          "scenario": "files",
+          "states": ["idle", "in-progress", "error", "overwrite-prompt", "loading", "empty"]
+        }
+      ],
+      "entryPoints": [
+        { "kind": "sidebar", "role": "button", "name": "Files" },
+        {
+          "kind": "page",
+          "role": "button",
+          "name": "Upload files",
+          "fixture": { "scenario": "files", "state": "idle" }
+        }
+      ]
+    },
+    {
       "name": "Settings",
       "docs": "reference/settings.mdx",
       "capture": [

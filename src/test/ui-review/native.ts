@@ -47,6 +47,7 @@ if (state === "overflow") {
   units[0].description = "Synthetic long description. ".repeat(15);
 }
 const workspaceView = {
+  files: "files",
   systemd: "services",
   sidebar: "services",
   scratchpad: "terminal",
@@ -69,7 +70,8 @@ const workspaceView = {
     ports: "ports",
     "ports-discovering": "ports",
   }[state],
-}[scenario] as "services" | "terminal" | "ports" | "docker" | "logs" | "history" | undefined;
+}[scenario] as
+  "files" | "services" | "terminal" | "ports" | "docker" | "logs" | "history" | undefined;
 const containers = [
   {
     ...container,
@@ -342,12 +344,42 @@ export const getCurrentWindow = () => ({
   minimize: async () => undefined,
   toggleMaximize: async () => undefined,
 });
+export const getCurrentWebview = () => ({ onDragDropEvent: async () => () => undefined });
 export const open = async () => null;
 export const save = async () => null;
 
 export async function invoke<T>(command: string, args: Record<string, any> = {}): Promise<T> {
   let result: unknown;
   switch (command) {
+    case "choose_transfer_paths":
+      result = args.direction === "upload" ? ["/example/release.tar.gz"] : ["/example/downloads"];
+      break;
+    case "list_transfer_folder":
+      if (state === "loading") return pending();
+      if (state === "error")
+        throw new Error("Permission denied. Check the SSH key or agent for this host.");
+      result = {
+        path: args.folder ?? "/home/fixture",
+        entries:
+          state === "empty"
+            ? []
+            : [
+                { name: "backups", kind: "folder", size: null },
+                { name: "projects", kind: "folder", size: null },
+                { name: "reports", kind: "folder", size: null },
+                { name: "deploy.log", kind: "file", size: 162408 },
+                { name: "release.tar.gz", kind: "file", size: 78643200 },
+                { name: ".profile", kind: "file", size: 768 },
+              ],
+      };
+      break;
+    case "transfer_file":
+      if (state === "in-progress") {
+        args.progress.onmessage({ bytes: 28311552, total: 78643200, bytesPerSecond: 5242880 });
+        return pending();
+      }
+      result = state === "overwrite-prompt" && !args.spec.replace ? "exists" : "complete";
+      break;
     case "get_environment_info":
       if (loading === "ssh-diagnostics") return pending();
       result = {

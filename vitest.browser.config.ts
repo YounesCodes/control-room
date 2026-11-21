@@ -5,7 +5,13 @@ import { playwright } from "@vitest/browser-playwright";
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
-    include: ["@tauri-apps/api/event", "@xterm/addon-fit", "@xterm/addon-search", "@xterm/xterm"],
+    include: [
+      "@tauri-apps/api/event",
+      "@tauri-apps/api/webview",
+      "@xterm/addon-fit",
+      "@xterm/addon-search",
+      "@xterm/xterm",
+    ],
   },
   test: {
     include: ["src/**/*.browser.test.tsx"],

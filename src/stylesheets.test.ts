@@ -14,6 +14,7 @@ import {
 const tokensSheet = "./styles/tokens.css";
 
 const featureSheetOwners: Record<string, RegExp> = {
+  "./styles/features/files.css": /^files?-/,
   "./styles/features/metrics.css": /^(host-metric|step-slider)/,
   "./styles/features/update.css": /^(update-|release-notes)/,
   "./styles/features/terminal.css":

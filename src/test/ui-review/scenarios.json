@@ -14,6 +14,25 @@
     }
   },
   "scenarios": {
+    "files": {
+      "states": ["idle", "in-progress", "error", "overwrite-prompt", "loading", "empty"],
+      "ready": ".files-page",
+      "prepare": {
+        "in-progress": [{ "role": "button", "name": "Upload files" }],
+        "overwrite-prompt": [
+          { "role": "button", "name": "Upload files" },
+          { "role": "button", "name": "Review" }
+        ]
+      },
+      "settled": {
+        "idle": ".file-list",
+        "error": ".files-page .inline-error",
+        "in-progress": ".file-job progress",
+        "overwrite-prompt": ".modal",
+        "loading": ".files-page .skeleton",
+        "empty": ".files-empty"
+      }
+    },
     "settings": {
       "states": [
         "populated",
