@@ -18,7 +18,7 @@ Download from [GitHub Releases](https://github.com/YounesCodes/control-room/rele
 - **Linux.** See the [Linux install steps](https://younescodes.github.io/control-room/start-here/installation/#linux).
 - **macOS.** See the [macOS preview steps](https://younescodes.github.io/control-room/start-here/installation/#macos-preview).
 
-Or paste this into an AI coding agent, such as Claude Code or Codex:
+Or give this prompt to your agent:
 
 ```text
 Install Control Room on this computer by following https://younescodes.github.io/control-room/start-here/installation/
