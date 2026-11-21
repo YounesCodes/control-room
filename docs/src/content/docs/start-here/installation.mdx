@@ -33,7 +33,7 @@ If your window manager does not support dragging the undecorated window from its
 
 ## macOS preview
 
-The macOS port supports Intel and Apple Silicon. Download the DMG for your Mac from a release that includes one: `aarch64` for Apple Silicon, `x64` for Intel. Open it and drag Control Room to Applications. You can also use the matching test bundle from the [macOS workflow](https://github.com/YounesCodes/control-room/actions/workflows/macos.yml), or build it with Node.js 22.22.2 or newer, Rust stable, and Xcode Command Line Tools. Run `npm ci`, then `npm run tauri build`, and open `src-tauri/target/release/bundle/macos/Control Room.app`. macOS includes the OpenSSH client.
+The macOS port supports Intel and Apple Silicon. Download the DMG for your Mac from a release that includes one: `aarch64` for Apple Silicon, `x64` for Intel. Open it and drag Control Room to Applications. You can also use the matching test bundle from the [macOS workflow](https://github.com/YounesCodes/control-room/actions/workflows/macos.yml), or build it with Node.js 24.22.1 or a newer LTS release, Rust stable, and Xcode Command Line Tools. Run `npm ci`, then `npm run tauri build`, and open `src-tauri/target/release/bundle/macos/Control Room.app`. macOS includes the OpenSSH client.
 
 Mac builds are signed ad-hoc and not notarized by Apple, so macOS blocks the first launch with a warning that it could not verify the app. To open it once:
 

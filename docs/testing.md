@@ -26,7 +26,7 @@ Development builds use `%APPDATA%\app.controlroom.desktop\development\control-ro
 
 ## macOS client validation
 
-Install Node.js 22.22.2 or newer, Rust stable, and Xcode Command Line Tools. Use `npm run check:rust`, `npm run test:desktop:build`, and `npm run test:desktop`. The Mac runner uses an embedded WebDriver available only in debug `desktop-e2e` builds. Production bundles include no automation server. The same desktop suite tests real zsh sessions, saved settings, tabs, splits, Unicode input, and native process cleanup. Windows keeps its external WebView2 driver. Run Mac desktop tests in an unlocked graphical login. The runner holds a temporary keep-awake assertion until it exits; a locked or sleeping VM can suspend WebKit rendering even while SSH works.
+Install Node.js 24.22.1 or a newer LTS release, Rust stable, and Xcode Command Line Tools. Use `npm run check:rust`, `npm run test:desktop:build`, and `npm run test:desktop`. The Mac runner uses an embedded WebDriver available only in debug `desktop-e2e` builds. Production bundles include no automation server. The same desktop suite tests real zsh sessions, saved settings, tabs, splits, Unicode input, and native process cleanup. Windows keeps its external WebView2 driver. Run Mac desktop tests in an unlocked graphical login. The runner holds a temporary keep-awake assertion until it exits; a locked or sleeping VM can suspend WebKit rendering even while SSH works.
 
 For real Linux SSH integration, `npm run test:live-ssh` works on either client with pinned host keys and key authentication. `npm run test:local-lab` reads the ignored checkout-local fixture configuration on either platform. A Mac VM needs its own test key; do not copy a Windows private key to it.
 

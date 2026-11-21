@@ -22,7 +22,7 @@ Download the latest installer:
 
 See [Install and update](https://younescodes.github.io/control-room/start-here/installation/) for dependencies and update instructions.
 
-The macOS port supports Intel and Apple Silicon and is awaiting hands-on testing before release. Build it on a Mac with Node.js 22.22.2 or newer, Rust stable, and the Xcode Command Line Tools:
+The macOS port supports Intel and Apple Silicon and is awaiting hands-on testing before release. Build it on a Mac with Node.js 24.22.1 or a newer LTS release, Rust stable, and the Xcode Command Line Tools:
 
 ```sh
 npm ci
