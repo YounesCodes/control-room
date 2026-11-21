@@ -15,8 +15,14 @@ Save your Linux, macOS, and Windows hosts once and open a terminal on any of the
 Download from [GitHub Releases](https://github.com/YounesCodes/control-room/releases/latest).
 
 - **Windows 11 x64.** Run the `.exe` installer. Windows may warn that the publisher is unknown.
-- **Ubuntu 24.04 x86_64.** Run `sudo apt install ./<filename>.deb`, or make the AppImage executable and run it.
-- **macOS.** No download yet. You can [build the preview](https://younescodes.github.io/control-room/start-here/installation/#macos-preview) yourself.
+- **Linux.** See the [Linux install steps](https://younescodes.github.io/control-room/start-here/installation/#linux).
+- **macOS.** See the [macOS preview steps](https://younescodes.github.io/control-room/start-here/installation/#macos-preview).
+
+Or paste this into an AI coding agent, such as Claude Code or Codex:
+
+```text
+Install Control Room on this computer by following https://younescodes.github.io/control-room/start-here/installation/
+```
 
 ## Documentation
 
