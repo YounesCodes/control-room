@@ -12,3 +12,5 @@ description: Keys for terminals, logs, and host views.
 | Arrow keys     | Move between items in the Systemd, Ports, and Docker graphs.                    |
 
 On macOS, use `Cmd` in place of `Ctrl` to copy and paste in the terminal. `Ctrl` keys then go to the program in the terminal.
+
+Programs such as Vim and tmux use the mouse themselves. To select text in them, hold Shift while you drag, or Option on macOS.

@@ -6,7 +6,7 @@ description: Change terminal appearance, local shells, host metrics, logs, and u
 import settingsScreenshot from "../../../assets/screenshots/settings.png";
 import metricsScreenshot from "../../../assets/screenshots/live-metrics.png";
 
-Open **Settings** with the gear icon in the title bar. Make your changes, then select **Save settings**.
+Changes apply when you select **Save settings**.
 
 <figure class="docs-screenshot">
   <a href={settingsScreenshot.src} target="_blank" rel="noreferrer">
@@ -21,19 +21,19 @@ Open **Settings** with the gear icon in the title bar. Make your changes, then s
 
 **Appearance** sets the font, text size, colors, and how many lines each terminal keeps.
 
-On Windows, **Font family** can search free monospace fonts. Select **Install and use** to install one for your account and use it right away. You don't need administrator access. On Linux, type the name of a font you already installed.
+On Windows, **Font family** can search free monospace fonts. **Install and use** installs one for your account, without administrator access. On Linux, type the name of a font you already installed.
 
 **Tabs & naming** controls whether a tab shows the program running in it, such as `vim` or `npm run dev`.
 
 ## Local terminals
 
-Under **Local shells**, choose which shells appear in the **New terminal** menu.
+**Local shells** sets which shells the **New terminal** menu offers.
 
 Turn on **Local Terminal Mode** to open your **Default local terminal** in focus mode every time Control Room starts.
 
 ## Host metrics
 
-Turn on **Show host metrics in header** to see CPU, RAM, GPU, and disk activity for the current host in the title bar. Choose which ones to show and how often they refresh. It is off by default.
+**Show host metrics in header** shows CPU, RAM, GPU, and disk activity for the current host in the title bar. It is off by default. You choose which readings to show and how often they refresh.
 
 <figure class="docs-screenshot">
   <a href={metricsScreenshot.src} target="_blank" rel="noreferrer">
@@ -44,7 +44,7 @@ Turn on **Show host metrics in header** to see CPU, RAM, GPU, and disk activity 
   </a>
 </figure>
 
-Select the readings to see charts of the last 1, 2, or 10 minutes. Charts are kept only while the app is open. Readings pause while Settings or focus mode is open, or the window is hidden.
+Charts cover the last 1, 2, or 10 minutes and are kept only while the app is open. Readings pause while Settings or focus mode is open, or the window is hidden.
 
 GPU readings need performance counters on Windows, or `nvidia-smi` or an AMD driver on Linux. Mac hosts show CPU, RAM, and uptime only. A reading that isn't available shows a dash.
 

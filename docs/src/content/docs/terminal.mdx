@@ -8,7 +8,7 @@ import DemoVideo from "../../components/DemoVideo.astro";
 import splitPanesDemo from "../../assets/videos/split-panes.mp4";
 import splitPanesPoster from "../../assets/videos/split-panes-poster.png";
 
-Each tab holds one terminal. Select a host in the sidebar to open its terminal. To open another, select **New terminal**, the plus button beside the tabs, and pick a saved host or a [local shell](/control-room/local-terminals/). Opening the same host twice gives you two separate sessions.
+Each tab holds a terminal on a saved host or a [local shell](/control-room/local-terminals/). Opening the same host twice gives you two separate sessions.
 
 <figure class="docs-screenshot">
   <a href={terminalMenuScreenshot.src} target="_blank" rel="noreferrer">
@@ -19,25 +19,13 @@ Each tab holds one terminal. Select a host in the sidebar to open its terminal. 
   </a>
 </figure>
 
-## Tabs
-
-- When tabs don't fit, **All terminals** at the start of the tab row lists them all. A dot on it means a hidden terminal disconnected, failed, or rang the bell.
-- A tab can show the program running in it, such as `vim` or `npm`. Names you type yourself never change. Turn this off in [Settings](/control-room/reference/settings/#terminal).
-
 Control Room remembers your tabs. When you restart the app, each tab starts a new session. Old terminal output is not kept.
 
-## Copy and paste
-
-- **Copy.** Select text, then use **Copy**, `Ctrl+C`, or right-click. With nothing selected, `Ctrl+C` goes to the program, as usual.
-- **Paste.** Use **Paste**, `Ctrl+Shift+V`, or right-click at a shell prompt.
-
-Some programs, such as Vim and tmux, use the mouse themselves. To select text in them, hold Shift while you drag, or Option on macOS. On macOS, use `Cmd` in place of `Ctrl` for copy and paste.
+A tab can show the program running in it, such as `vim` or `npm`. Names you type yourself never change. Turn this off in [Settings](/control-room/reference/settings/#terminal).
 
 ## Split panes
 
-Select **Focus terminal** at the top right to hide the sidebar and give the terminal the whole window.
-
-In focus mode, open **New terminal**, choose **Split right** or **Split down**, then pick a terminal. You can also drag a tab onto the terminal and drop it near an edge. One group can mix hosts and local shells.
+One tab can hold several terminals side by side, and a group can mix hosts and local shells. Splits are made in focus mode, which gives the terminal the whole window.
 
 <DemoVideo
   src={splitPanesDemo}
@@ -46,13 +34,3 @@ In focus mode, open **New terminal**, choose **Split right** or **Split down**, 
   height={900}
   label="Selecting Focus terminal, then using New terminal with Split right and Split down to arrange three terminals in one group."
 />
-
-- Double-click the line between panes to make them equal again.
-- Drag the six dots in a pane's corner onto another pane to swap or move it. Click the dots for **Arrange**, a small map of the group.
-- **Ungroup** on the group tab turns the panes back into tabs.
-
-## Panel sizes
-
-Double-click the edge of the sidebar or a host view to reset its size. **Reset layout**, beside the **Connections** heading, resets every panel size and keeps your tabs.
-
-In a small window, select **Connections and views** in the title bar to open the sidebar.

@@ -347,7 +347,7 @@
     },
     {
       "name": "Compact navigation",
-      "docs": "terminal.mdx#panel-sizes",
+      "docs": "terminal.mdx",
       "capture": [
         {
           "scenario": "pages",
@@ -401,7 +401,7 @@
     },
     {
       "name": "Workspace tabs",
-      "docs": "terminal.mdx#tabs",
+      "docs": "terminal.mdx",
       "capture": [
         {
           "scenario": "terminal",
@@ -426,7 +426,7 @@
     },
     {
       "name": "Rename workspace",
-      "docs": "terminal.mdx#tabs",
+      "docs": "terminal.mdx",
       "capture": [
         {
           "scenario": "dialogs",
@@ -624,7 +624,7 @@
     },
     {
       "name": "Copy and paste",
-      "docs": "terminal.mdx#copy-and-paste",
+      "docs": "reference/keyboard-shortcuts.md",
       "capture": [
         {
           "scenario": "terminal",
@@ -1007,7 +1007,7 @@
     },
     {
       "name": "Delete connection",
-      "docs": "connections.mdx#organize-and-remove-hosts",
+      "docs": "connections.mdx#groups-tags-and-deleting",
       "capture": null,
       "entryPoints": [
         {
@@ -1026,7 +1026,7 @@
     },
     {
       "name": "Groups and tags",
-      "docs": "connections.mdx#organize-and-remove-hosts",
+      "docs": "connections.mdx#groups-tags-and-deleting",
       "capture": [
         {
           "scenario": "dialogs",
@@ -1043,7 +1043,7 @@
     },
     {
       "name": "Panel layout",
-      "docs": "terminal.mdx#panel-sizes",
+      "docs": "terminal.mdx",
       "capture": null,
       "entryPoints": [
         {

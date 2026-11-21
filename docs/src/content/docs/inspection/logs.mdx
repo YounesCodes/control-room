@@ -7,7 +7,7 @@ import DemoVideo from "../../../components/DemoVideo.astro";
 import logsDemo from "../../../assets/videos/logs.mp4";
 import logsPoster from "../../../assets/videos/logs-poster.png";
 
-In **Logs**, choose a service or container, choose how many recent lines to load, then select **Start**. Turn on **Receive new lines** to keep reading as new lines arrive.
+**Logs** reads recent lines from a service or container, and can keep following new ones.
 
 <DemoVideo
   src={logsDemo}
@@ -17,8 +17,7 @@ In **Logs**, choose a service or container, choose how many recent lines to load
   label="Selecting Start to load a service log, switching between the Warnings, Errors, and All filters, then searching for batch 4813."
 />
 
-- **Warnings** and **Errors** show only those lines. Control Room spots them by words such as `warning`, `error`, or `failed`, or by a level written in the line, such as `level=error`.
-- Press `Ctrl+F` to search the loaded lines.
+The **Warnings** and **Errors** filters find lines by words such as `warning`, `error`, or `failed`, or by a level written in the line, such as `level=error`.
 
 The view keeps the newest 10,000 lines. Logs are never saved. Closing the view stops the stream.
 
@@ -28,4 +27,4 @@ The view keeps the newest 10,000 lines. Logs are never saved. Closing the view s
 - **Windows.** Container logs only. Windows event logs are not shown.
 - **macOS.** Choose **Unified log** for the system log, or pick a launchd service.
 
-If the account can't read the journal, Logs says so. Select **Retry with sudo**, or add the account to the `systemd-journal` group on the host.
+If the account can't read the journal, use **Retry with sudo**, or add the account to the `systemd-journal` group on the host.

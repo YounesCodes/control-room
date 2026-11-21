@@ -5,14 +5,9 @@ description: Save SSH hosts and choose how to connect.
 
 import shellPickerScreenshot from "../../assets/screenshots/shell-picker.png";
 
-A connection saves a host's SSH address and username so you can open it by name. To add one, select **Add connection** in the sidebar. To change one, open its menu and choose **Edit connection**.
+A connection saves a host's SSH address and username, and optionally a port and a private key. The address can also be a host name from your `~/.ssh/config`. Control Room uses the key where it is and never copies it.
 
-## Connection fields
-
-- **SSH destination** is the host's address or a host name from your `~/.ssh/config`.
-- **Port** and **Private key** are optional. Leave them empty to use your SSH defaults. Control Room uses the key where it is and never copies it.
-
-**Test structured access** checks that the host views can sign in without a password prompt. It does not save anything.
+**Test structured access** checks that the host views can sign in without a password prompt.
 
 Control Room uses the OpenSSH client on your computer, so your keys, `~/.ssh/config`, and ssh-agent work as usual. On Linux and macOS, the host views share one SSH connection and close it after a minute of no use. This replaces any `ControlMaster` setting in your SSH config for those views. Terminals always open their own connection.
 
@@ -34,7 +29,7 @@ On Windows and Mac hosts, you choose a shell before the terminal opens.
 - **Windows** lists Windows PowerShell, Command Prompt, PowerShell 7, Git Bash, other shells it finds, your Windows Terminal profiles, and each WSL distribution.
 - **macOS** lists zsh, Bash, and fish if it is installed.
 
-The list needs the host key accepted and an SSH key or ssh-agent login. Control Room remembers the list, so it opens at once next time. Select **Refresh available shells** to check again. Reconnecting or restarting the app keeps the shell you picked.
+Listing the shells needs an SSH key or ssh-agent login. Control Room remembers the list and the shell you picked.
 
 The host views always read the host itself. A WSL terminal on a Windows host still shows Windows services and ports.
 
@@ -44,7 +39,7 @@ The host views always read the host itself. A WSL terminal on a Windows host sti
 | macOS   | Terminal, Docker, Services, Logs, Ports, History     |
 | Windows | Terminal, Docker, Services, Logs (containers), Ports |
 
-## Organize and remove hosts
+## Groups, tags, and deleting
 
 Put a host in a group and give it up to five tags. Groups and tags are saved only on your computer.
 
