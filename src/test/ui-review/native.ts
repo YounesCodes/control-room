@@ -344,7 +344,6 @@ export const getCurrentWindow = () => ({
   minimize: async () => undefined,
   toggleMaximize: async () => undefined,
 });
-export const getCurrentWebview = () => ({ onDragDropEvent: async () => () => undefined });
 export const open = async () => null;
 export const save = async () => null;
 

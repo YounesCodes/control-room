@@ -1,4 +1,5 @@
-import { Channel, invoke } from "@tauri-apps/api/core";
+import { Channel } from "@tauri-apps/api/core";
+import { api } from "./api";
 import { connectionTargetKey } from "./connection-validation";
 import type { SavedConnection } from "../types";
 
@@ -7,11 +8,8 @@ export interface RemoteFolder {
   entries: { name: string; kind: "folder" | "file" | "other"; size: number | null }[];
 }
 
-export const listFolder = (connectionId: string, folder: string | null) =>
-  invoke<RemoteFolder>("list_transfer_folder", { connectionId, folder });
-
 type Direction = "upload" | "download";
-interface Progress {
+export interface TransferProgress {
   bytes: number;
   total: number;
   bytesPerSecond: number;
@@ -25,7 +23,7 @@ export interface FileJob {
   remotePath: string;
   direction: Direction;
   status: "queued" | "active" | "canceling" | "exists" | "complete" | "failed" | "canceled";
-  progress?: Progress;
+  progress?: TransferProgress;
   error?: string;
   replace: boolean;
 }
@@ -69,25 +67,13 @@ function pump() {
 }
 async function run(job: FileJob) {
   try {
-    const progress = new Channel<Progress>();
+    const progress = new Channel<TransferProgress>();
     progress.onmessage = (value) => {
       const current = jobs.find((item) => item.id === job.id);
       if (current?.status === "active") update(job.id, { progress: value });
       if (current?.status === "canceling") void requestCancel(job.id);
     };
-    const { destination, username, port, identityFile } = job.connection;
-    const outcome = await invoke<"complete" | "exists">("transfer_file", {
-      connectionId: job.connection.id,
-      expectedTarget: [destination, username, port, identityFile],
-      spec: {
-        id: job.id,
-        direction: job.direction,
-        remotePath: job.remotePath,
-        localPath: job.localPath,
-        replace: job.replace,
-      },
-      progress,
-    });
+    const outcome = await api.transferFile(job, progress);
     update(job.id, {
       status:
         outcome === "exists" && jobs.find((item) => item.id === job.id)?.status === "canceling"
@@ -135,9 +121,10 @@ export function uploadFiles(connection: SavedConnection, folder: string, paths: 
 }
 async function requestCancel(id: string) {
   try {
-    await invoke("cancel_transfer", { id });
+    await api.cancelTransfer(id);
   } catch (error) {
-    update(id, { status: "active", error: String(error) });
+    if (jobs.find((job) => job.id === id)?.status === "canceling")
+      update(id, { status: "active", error: String(error) });
   }
 }
 export function cancelJob(id: string) {

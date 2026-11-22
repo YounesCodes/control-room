@@ -142,7 +142,6 @@ ${JSON.stringify(registry, null, 2)}`);
             "@tauri-apps/api/core",
             "@tauri-apps/api/event",
             "@tauri-apps/api/window",
-            "@tauri-apps/api/webview",
             "@tauri-apps/plugin-dialog",
           ].map((name) => [name, path.join(root, "src/test/ui-review/native.ts")]),
         ),

@@ -4,6 +4,7 @@ description: Save SSH hosts and choose how to connect.
 ---
 
 import connectionScreenshot from "../../assets/screenshots/connection-editor.png";
+import filesScreenshot from "../../assets/screenshots/file-transfers.png";
 
 A connection saves the SSH address and username for a Linux, Windows, or macOS host. Select it in the sidebar to open a terminal. The first time, the terminal starts while Control Room detects the host's platform. A Linux shell appears as soon as either finishes. Windows and Mac hosts then show the shell picker, and the shell you pick replaces that first terminal.
 
@@ -31,6 +32,13 @@ Open a saved host and select **Files** in the sidebar. The browser starts in the
 Select **Upload files** to choose one or more local files, or drop them into the open folder. Dropping files on a host terminal uploads them to that account's home folder, including when the terminal is in a split. To download, select a file in **Files** and choose a folder on your computer.
 
 **Transfers** shows progress, speed, and a cancel button. You can switch views while files copy. When a file already exists, select **Review** to replace it or keep the existing copy.
+
+<figure class="docs-screenshot">
+  <a href={filesScreenshot.src} target="_blank" rel="noreferrer">
+    <img src={filesScreenshot.src} alt="Files showing an upload above the remote home folder." />
+  </a>
+  <figcaption>An upload in progress. Example host and files.</figcaption>
+</figure>
 
 Transfers use SFTP with your saved SSH connection. The host must enable SFTP and accept your key or SSH agent without a password prompt. Choose individual files for transfer. On Windows hosts, a path such as `/C:/Users/Lee` refers to the account's Windows files.
 

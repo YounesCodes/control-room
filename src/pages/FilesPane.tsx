@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { api } from "../lib/api";
 import {
   ArrowDownToLine,
   ArrowUp,
@@ -21,7 +21,6 @@ import {
   clearFinished,
   enqueue,
   fileJobs,
-  listFolder,
   replaceJob,
   subscribeFileJobs,
   uploadFiles,
@@ -175,7 +174,8 @@ export function FilesPane({
     let current = true;
     setBusy(true);
     setError("");
-    void listFolder(connection.id, request.path)
+    void api
+      .listTransferFolder(connection.id, request.path)
       .then(
         (result) => {
           if (current) {
@@ -199,9 +199,7 @@ export function FilesPane({
   async function pick(name?: string) {
     if (!folder) return;
     try {
-      const picked = await invoke<string[]>("choose_transfer_paths", {
-        direction: name ? "download" : "upload",
-      });
+      const picked = await api.chooseTransferPaths(name ? "download" : "upload");
       if (!picked.length || !alive.current) return;
       if (name)
         enqueue(connection, "download", [
