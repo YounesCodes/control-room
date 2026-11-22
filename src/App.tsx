@@ -816,16 +816,21 @@ export function App() {
     ? (connections.find((connection) => connection.id === activeRemoteWorkspace.connectionId) ??
       null)
     : null;
-  useFileDrop((id, folder, paths) => {
-    const workspace = workspaces.find((item) => item.id === id);
-    if (!workspace || !isRemoteWorkspace(workspace) || workspace.container || settingsOpen) return;
-    uploadFiles(workspace.connectionSnapshot, folder, paths);
-    if (workspace.view !== "files") {
-      exitTerminalFocus();
-      setActiveWorkspaceId(id);
-      updateRemoteWorkspace(id, { view: "files" });
-    }
-  }, setActionError);
+  useFileDrop(
+    workspaces.some(isRemoteWorkspace),
+    (id, folder, paths) => {
+      const workspace = workspaces.find((item) => item.id === id);
+      if (!workspace || !isRemoteWorkspace(workspace) || workspace.container || settingsOpen)
+        return;
+      uploadFiles(workspace.connectionSnapshot, folder, paths);
+      if (workspace.view !== "files") {
+        exitTerminalFocus();
+        setActiveWorkspaceId(id);
+        updateRemoteWorkspace(id, { view: "files" });
+      }
+    },
+    setActionError,
+  );
   const offeredShells = offeredLocalShells(
     localShells,
     settingsContract?.current.hiddenLocalShells ?? [],

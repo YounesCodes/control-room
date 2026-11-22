@@ -12,11 +12,13 @@ export function fileDropTarget(position: { x: number; y: number }) {
 }
 
 export function useFileDrop(
+  enabled: boolean,
   onDrop: (workspace: string, folder: string, paths: string[]) => void,
   onError: (message: string) => void,
 ) {
   const handlers = useLatestHandlers({ onDrop, onError });
   useEffect(() => {
+    if (!enabled) return;
     let disposed = false;
     let highlighted: HTMLElement | null = null;
     function highlight(element: HTMLElement | null) {
@@ -59,5 +61,5 @@ export function useFileDrop(
       highlight(null);
       for (const subscription of subscriptions) void subscription.then((unlisten) => unlisten?.());
     };
-  }, [handlers]);
+  }, [enabled, handlers]);
 }
