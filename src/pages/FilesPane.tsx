@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { api } from "../lib/api";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { api, errorMessage } from "../lib/api";
 import {
   ArrowDownToLine,
   ArrowUp,
@@ -153,9 +153,9 @@ export function FilesPane({
   const jobs = useSyncExternalStore(subscribeFileJobs, fileJobs).filter((job) =>
     belongsTo(job, connection),
   );
-  const latestUpload = jobs
-    .filter((job) => job.direction === "upload" && job.status === "complete")
-    .at(-1)?.id;
+  const completedUploads = jobs.filter(
+    (job) => job.direction === "upload" && job.status === "complete",
+  ).length;
   const [request, setRequest] = useState<{ path: string | null }>({ path: null });
   const [folder, setFolder] = useState<RemoteFolder | null>(null);
   const [busy, setBusy] = useState(true);
@@ -163,6 +163,7 @@ export function FilesPane({
   const [filter, setFilter] = useState("");
   const [visibleCount, setVisibleCount] = useState(100);
   const [hidden, setHidden] = useState(false);
+  const displayedPath = useRef<string | null>(null);
   const alive = useRef(false);
   useEffect(() => {
     alive.current = true;
@@ -180,12 +181,15 @@ export function FilesPane({
         (result) => {
           if (current) {
             setFolder(result);
-            setFilter("");
-            setVisibleCount(100);
+            if (displayedPath.current !== result.path) {
+              displayedPath.current = result.path;
+              setFilter("");
+              setVisibleCount(100);
+            }
           }
         },
         (reason) => {
-          if (current) setError(String(reason));
+          if (current) setError(errorMessage(reason));
         },
       )
       .finally(() => {
@@ -194,7 +198,7 @@ export function FilesPane({
     return () => {
       current = false;
     };
-  }, [connection.id, request, latestUpload]);
+  }, [connection.id, request, completedUploads]);
 
   async function pick(name?: string) {
     if (!folder) return;
@@ -207,15 +211,18 @@ export function FilesPane({
         ]);
       else uploadFiles(connection, folder.path, picked);
     } catch (reason) {
-      if (alive.current) setError(String(reason));
+      if (alive.current) setError(errorMessage(reason));
     }
   }
-  const entries =
-    folder?.entries.filter(
-      (entry) =>
-        (hidden || !entry.name.startsWith(".")) &&
-        entry.name.toLowerCase().includes(filter.toLowerCase()),
-    ) ?? [];
+  const entries = useMemo(
+    () =>
+      folder?.entries.filter(
+        (entry) =>
+          (hidden || !entry.name.startsWith(".")) &&
+          entry.name.toLowerCase().includes(filter.toLowerCase()),
+      ) ?? [],
+    [folder, hidden, filter],
+  );
   const parent = folder?.path.replace(/\/[^/]+\/?$/, "") || "/";
   return (
     <section

@@ -78,6 +78,31 @@ it("cancels one queued upload while the first file is copying", async () => {
   expect(invoke.mock.calls.filter(([cmd]) => cmd === "transfer_file")).toHaveLength(1);
 });
 
+it("refreshes a filtered folder when an earlier upload is replaced after the batch finishes", async () => {
+  let size = 1;
+  invoke.mockImplementation(async (command, args) => {
+    if (command === "list_transfer_folder")
+      return { path: "/home/fixture", entries: [{ name: "report.csv", kind: "file", size }] };
+    if (command === "choose_transfer_paths") return ["/local/report.csv", "/local/notes.txt"];
+    if (command === "transfer_file") {
+      if (args.spec.replace) size = 400;
+      if (args.spec.localPath.endsWith("report.csv") && !args.spec.replace) return "exists";
+      return "complete";
+    }
+    throw new Error(command);
+  });
+  const user = userEvent.setup();
+  render(<FilesPane connection={host} workspaceId="tab" />);
+  const filter = await screen.findByRole("searchbox", { name: "Filter files" });
+  await user.type(filter, "report");
+  await user.click(screen.getByRole("button", { name: "Upload files" }));
+  await screen.findByText("Uploaded");
+  await user.click(screen.getByRole("button", { name: "Review" }));
+  await user.click(screen.getByRole("button", { name: "Replace file" }));
+  await screen.findByText("400 B");
+  expect((filter as HTMLInputElement).value).toBe("report");
+});
+
 it("hit-tests a scaled split pane and ignores drops over dialogs", () => {
   document.body.innerHTML =
     '<section data-file-workspace="second"><div></div><article role="dialog"><button></button></article></section>';
