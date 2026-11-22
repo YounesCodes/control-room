@@ -48,7 +48,7 @@ fn paths_are_literal_absolute_and_confined_to_the_chosen_folder() {
 }
 
 #[test]
-#[ignore = "requires an explicitly configured Linux SSH fixture"]
+#[ignore = "requires a writable folder on an explicitly configured SSH fixture"]
 fn live_file_round_trip() {
     let mut connection = connection();
     connection.destination = std::env::var("CONTROL_ROOM_TEST_HOST").unwrap();
@@ -57,6 +57,9 @@ fn live_file_round_trip() {
         .ok()
         .and_then(|v| v.parse().ok());
     let mut client = Sftp::connect(&connection).unwrap();
+    let folder =
+        std::env::var("CONTROL_ROOM_TEST_TRANSFER_FOLDER").unwrap_or_else(|_| "/tmp".into());
+    let folder = resolve_folder(&mut client, &remote_path(&folder).unwrap()).unwrap();
     let local = tempfile::tempdir().unwrap();
     let name = format!("control-room-{} 'sample [1].bin", Uuid::new_v4());
     let source = local.path().join(&name);
@@ -66,7 +69,7 @@ fn live_file_round_trip() {
         id: Uuid::new_v4(),
         direction: Direction::Upload,
         local_path: source,
-        remote_path: "/tmp".into(),
+        remote_path: folder.clone(),
         replace: false,
     };
     let cancel = AtomicBool::new(false);
@@ -76,7 +79,7 @@ fn live_file_round_trip() {
         start: Instant::now(),
         last: None,
     };
-    let remote = format!("/tmp/{name}");
+    let remote = remote_child(&folder, &name).unwrap();
     let check = (|| -> io::Result<()> {
         assert_eq!(upload(&mut client, &spec, &mut meter)?, Outcome::Complete);
         assert_eq!(upload(&mut client, &spec, &mut meter)?, Outcome::Exists);
@@ -86,7 +89,7 @@ fn live_file_round_trip() {
         cancel.store(false, Ordering::Release);
         assert_eq!(upload(&mut client, &spec, &mut meter)?, Outcome::Complete);
         assert!(
-            list(&mut client, Some("/tmp"))?
+            list(&mut client, Some(&folder))?
                 .entries
                 .iter()
                 .any(|e| e.name == name && e.size == Some(data.len() as u64))
