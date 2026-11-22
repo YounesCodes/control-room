@@ -78,6 +78,47 @@ it("cancels one queued upload while the first file is copying", async () => {
   expect(invoke.mock.calls.filter(([cmd]) => cmd === "transfer_file")).toHaveLength(1);
 });
 
+it("highlights literal matches and downloads a folder without opening it", async () => {
+  invoke.mockImplementation(async (command) => {
+    if (command === "list_transfer_folder")
+      return {
+        path: "/home/fixture",
+        entries: [
+          { name: "Report [Q1]", kind: "folder", size: null },
+          { name: "report [q1] - [Q1].txt", kind: "file", size: 24 },
+          { name: "report Q1.txt", kind: "file", size: 12 },
+        ],
+      };
+    if (command === "choose_transfer_paths") return ["/local/Downloads"];
+    if (command === "transfer_file") return "complete";
+    throw new Error(command);
+  });
+  const user = userEvent.setup();
+  render(<FilesPane connection={host} workspaceId="tab" />);
+  await user.click(await screen.findByRole("searchbox", { name: "Filter files" }));
+  await user.paste("[q1]");
+  expect(Array.from(document.querySelectorAll("mark"), (mark) => mark.textContent)).toEqual([
+    "[Q1]",
+    "[q1]",
+    "[Q1]",
+  ]);
+  expect(screen.queryByRole("button", { name: "Download report Q1.txt" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Download folder Report [Q1]" }));
+  await screen.findByText("Downloaded");
+  expect(invoke).toHaveBeenCalledWith(
+    "transfer_file",
+    expect.objectContaining({
+      spec: expect.objectContaining({
+        direction: "download",
+        folder: true,
+        remotePath: "/home/fixture/Report [Q1]",
+        localPath: "/local/Downloads",
+      }),
+    }),
+  );
+  expect(invoke.mock.calls.filter(([cmd]) => cmd === "list_transfer_folder")).toHaveLength(1);
+});
+
 it("refreshes a filtered folder when an earlier upload is replaced after the batch finishes", async () => {
   let size = 1;
   invoke.mockImplementation(async (command, args) => {

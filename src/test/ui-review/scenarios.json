@@ -15,9 +15,20 @@
   },
   "scenarios": {
     "files": {
-      "states": ["idle", "in-progress", "error", "overwrite-prompt", "loading", "empty"],
+      "states": [
+        "idle",
+        "in-progress",
+        "error",
+        "overwrite-prompt",
+        "loading",
+        "empty",
+        "filtered",
+        "folder-download"
+      ],
       "ready": ".files-page",
       "prepare": {
+        "filtered": [{ "role": "searchbox", "name": "Filter files", "fill": "re" }],
+        "folder-download": [{ "role": "button", "name": "Download folder reports" }],
         "in-progress": [{ "role": "button", "name": "Upload files" }],
         "overwrite-prompt": [
           { "role": "button", "name": "Upload files" },
@@ -25,6 +36,8 @@
         ]
       },
       "settled": {
+        "filtered": ".file-row mark",
+        "folder-download": ".file-job progress",
         "idle": ".file-list",
         "error": ".files-page .inline-error",
         "in-progress": ".file-job progress",

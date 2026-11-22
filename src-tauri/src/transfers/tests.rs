@@ -71,6 +71,7 @@ fn live_file_round_trip() {
         local_path: source,
         remote_path: folder.clone(),
         replace: false,
+        folder: false,
     };
     let cancel = AtomicBool::new(false);
     let mut meter = Meter {
@@ -101,11 +102,52 @@ fn live_file_round_trip() {
         spec.replace = false;
         assert_eq!(download(&mut client, &spec, &mut meter)?, Outcome::Complete);
         assert_eq!(download(&mut client, &spec, &mut meter)?, Outcome::Exists);
-        assert_eq!(fs::read(spec.local_path.join(name))?, data);
+        assert_eq!(fs::read(spec.local_path.join(&name))?, data);
         Ok(())
     })();
     client
         .status(sftp::REMOVE, &string(remote.as_bytes()))
         .unwrap();
+    check.unwrap();
+
+    let tree_name = format!("control-room-tree-{}", Uuid::new_v4());
+    let tree = remote_child(&folder, &tree_name).unwrap();
+    let nested = remote_child(&tree, "nested").unwrap();
+    let empty = remote_child(&nested, ".empty").unwrap();
+    let file = remote_child(&nested, &name).unwrap();
+    let check = (|| -> io::Result<()> {
+        for path in [&tree, &nested, &empty] {
+            let mut body = string(path.as_bytes());
+            body.extend(0_u32.to_be_bytes());
+            client.status(sftp::MKDIR, &body)?;
+        }
+        spec.direction = Direction::Upload;
+        spec.local_path = local.path().join(&name);
+        spec.remote_path = nested.clone();
+        assert_eq!(upload(&mut client, &spec, &mut meter)?, Outcome::Complete);
+        spec.direction = Direction::Download;
+        spec.folder = true;
+        spec.local_path = local.path().join("received");
+        spec.remote_path = tree.clone();
+        cancel.store(true, Ordering::Release);
+        let result = folder_download::download_folder(&mut client, &spec, &mut meter);
+        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::Interrupted);
+        assert_eq!(fs::read_dir(&spec.local_path)?.count(), 1);
+        cancel.store(false, Ordering::Release);
+        assert_eq!(
+            folder_download::download_folder(&mut client, &spec, &mut meter)?,
+            Outcome::Complete
+        );
+        let target = spec.local_path.join(&tree_name).join("nested");
+        assert_eq!(fs::read(target.join(&name))?, data);
+        assert!(target.join(".empty").is_dir());
+        let result = folder_download::download_folder(&mut client, &spec, &mut meter);
+        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::AlreadyExists);
+        Ok(())
+    })();
+    let _ = client.status(sftp::REMOVE, &string(file.as_bytes()));
+    for path in [&empty, &nested, &tree] {
+        let _ = client.status(sftp::RMDIR, &string(path.as_bytes()));
+    }
     check.unwrap();
 }

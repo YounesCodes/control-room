@@ -373,6 +373,10 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       };
       break;
     case "transfer_file":
+      if (state === "folder-download") {
+        args.progress.onmessage({ bytes: 28311552, total: null, bytesPerSecond: 5242880 });
+        return pending();
+      }
       if (state === "in-progress") {
         args.progress.onmessage({ bytes: 28311552, total: 78643200, bytesPerSecond: 5242880 });
         return pending();

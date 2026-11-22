@@ -16,6 +16,10 @@ pub(super) const FSTAT: u8 = 8;
 pub(super) const OPENDIR: u8 = 11;
 pub(super) const READDIR: u8 = 12;
 pub(super) const REMOVE: u8 = 13;
+#[cfg(test)]
+pub(super) const MKDIR: u8 = 14;
+#[cfg(test)]
+pub(super) const RMDIR: u8 = 15;
 pub(super) const REALPATH: u8 = 16;
 pub(super) const RENAME: u8 = 18;
 pub(super) const EXTENDED: u8 = 200;

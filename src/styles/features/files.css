@@ -62,20 +62,36 @@
   max-height: 55vh;
   overflow: auto;
 }
+.file-entry {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-faint);
+}
 .file-row {
   display: grid;
   grid-template-columns: 19px minmax(0, 1fr) auto 18px;
   align-items: center;
   text-align: left;
   width: 100%;
+  min-width: 0;
   min-height: 39px;
   padding: 6px 15px;
   gap: 10px;
   border: 0;
-  border-bottom: 1px solid var(--border-faint);
   border-radius: 0;
   background: transparent;
   color: var(--text);
+}
+.file-folder-download {
+  flex: none;
+  margin-inline-end: 8px;
+  color: var(--text-muted);
+}
+.file-row mark {
+  border-radius: 3px;
+  background: var(--fill-text-selection);
+  color: var(--text-strong);
+  box-shadow: 0 0 0 1px var(--fill-text-selection);
 }
 .file-row:not(:disabled):hover,
 .file-row:focus-visible {

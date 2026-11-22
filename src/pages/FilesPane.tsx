@@ -37,6 +37,13 @@ function size(value: number) {
 }
 const join = (dir: string, name: string) => dir.replace(/\/$/, "") + "/" + name;
 
+function matchedName(name: string, match: RegExp | null) {
+  if (!match) return name;
+  return name
+    .split(match)
+    .map((part, index) => (index % 2 === 1 ? <mark key={index}>{part}</mark> : part));
+}
+
 function Activity({ jobs, connection }: { jobs: FileJob[]; connection: SavedConnection }) {
   const [prompt, setPrompt] = useState<string | null>(null);
   const pending = jobs.find((job) => job.status === "exists" && job.id === prompt);
@@ -78,13 +85,13 @@ function Activity({ jobs, connection }: { jobs: FileJob[]; connection: SavedConn
                   <span role="status">{label}</span>
                   {active &&
                     progress &&
-                    ` · ${size(progress.bytes)} of ${size(progress.total)} · ${formatByteRate(progress.bytesPerSecond)}`}
+                    ` · ${size(progress.bytes)}${progress.total === null ? "" : ` of ${size(progress.total)}`} · ${formatByteRate(progress.bytesPerSecond)}`}
                 </span>
                 {active && progress && (
                   <progress
                     aria-label={`Transfer progress for ${job.name}`}
-                    value={progress.bytes}
-                    max={Math.max(progress.total, 1)}
+                    value={progress.total === null ? undefined : progress.bytes}
+                    max={Math.max(progress.total ?? 1, 1)}
                   />
                 )}
                 {job.error && job.status !== "canceled" && (
@@ -200,28 +207,36 @@ export function FilesPane({
     };
   }, [connection.id, request, completedUploads]);
 
-  async function pick(name?: string) {
+  async function pick(entry?: RemoteFolder["entries"][number]) {
     if (!folder) return;
     try {
-      const picked = await api.chooseTransferPaths(name ? "download" : "upload");
+      const picked = await api.chooseTransferPaths(entry ? "download" : "upload");
       if (!picked.length || !alive.current) return;
-      if (name)
+      if (entry)
         enqueue(connection, "download", [
-          { name, localPath: picked[0], remotePath: join(folder.path, name) },
+          {
+            name: entry.name,
+            localPath: picked[0],
+            remotePath: join(folder.path, entry.name),
+            folder: entry.kind === "folder",
+          },
         ]);
       else uploadFiles(connection, folder.path, picked);
     } catch (reason) {
       if (alive.current) setError(errorMessage(reason));
     }
   }
+  const match = useMemo(
+    () => (filter ? new RegExp(`(${filter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "giu") : null),
+    [filter],
+  );
   const entries = useMemo(
     () =>
       folder?.entries.filter(
         (entry) =>
-          (hidden || !entry.name.startsWith(".")) &&
-          entry.name.toLowerCase().includes(filter.toLowerCase()),
+          (hidden || !entry.name.startsWith(".")) && (!match || entry.name.search(match) !== -1),
       ) ?? [],
-    [folder, hidden, filter],
+    [folder, hidden, match],
   );
   const parent = folder?.path.replace(/\/[^/]+\/?$/, "") || "/";
   return (
@@ -308,7 +323,7 @@ export function FilesPane({
               const isFolder = entry.kind === "folder";
               const Icon = isFolder ? Folder : File;
               return (
-                <li key={entry.name}>
+                <li className="file-entry" key={entry.name}>
                   <button
                     className="file-row"
                     disabled={busy || entry.kind === "other"}
@@ -316,11 +331,11 @@ export function FilesPane({
                     onClick={() =>
                       isFolder
                         ? setRequest({ path: join(folder.path, entry.name) })
-                        : void pick(entry.name)
+                        : void pick(entry)
                     }
                   >
                     <Icon size={17} />
-                    <span title={entry.name}>{entry.name}</span>
+                    <span title={entry.name}>{matchedName(entry.name, match)}</span>
                     <small>
                       {entry.kind === "file" && entry.size !== null
                         ? size(entry.size)
@@ -334,6 +349,17 @@ export function FilesPane({
                       <ArrowDownToLine size={15} />
                     ) : null}
                   </button>
+                  {isFolder && (
+                    <button
+                      className="icon-button file-folder-download"
+                      disabled={busy}
+                      aria-label={`Download folder ${entry.name}`}
+                      title="Download folder"
+                      onClick={() => void pick(entry)}
+                    >
+                      <ArrowDownToLine size={15} />
+                    </button>
+                  )}
                 </li>
               );
             })}

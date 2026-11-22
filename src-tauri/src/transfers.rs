@@ -1,3 +1,4 @@
+mod folder_download;
 mod sftp;
 #[cfg(test)]
 mod tests;
@@ -180,9 +181,22 @@ fn list(client: &mut Sftp, folder: Option<&str>) -> io::Result<Folder> {
         .transpose()?
         .unwrap_or_else(|| ".".into());
     let path = resolve_folder(client, &path)?;
+    let mut entries = read_entries(client, &path, None)?;
+    entries.sort_by_cached_key(|entry| (entry.kind != "folder", entry.name.to_lowercase()));
+    Ok(Folder { path, entries })
+}
+
+fn read_entries(
+    client: &mut Sftp,
+    path: &str,
+    cancel: Option<&AtomicBool>,
+) -> io::Result<Vec<Entry>> {
     let handle = client.handle(sftp::OPENDIR, &string(path.as_bytes()))?;
     let mut entries = Vec::new();
     loop {
+        if let Some(cancel) = cancel {
+            check_cancel(cancel)?;
+        }
         let mut batch = match client.request(sftp::READDIR, &handle, NAME) {
             Err(e)
                 if e.kind() == io::ErrorKind::UnexpectedEof
@@ -197,10 +211,15 @@ fn list(client: &mut Sftp, folder: Option<&str>) -> io::Result<Folder> {
             return Err(invalid());
         }
         for _ in 0..count {
-            let name = std::str::from_utf8(batch.string()?).ok().map(str::to_owned);
+            let name = std::str::from_utf8(batch.string()?).map(str::to_owned);
+            if name.is_err() && cancel.is_some() {
+                return Err(io::Error::other(
+                    "A name in this folder is not valid UTF-8.",
+                ));
+            }
             batch.string()?;
             let (size, mode) = batch.attributes()?;
-            let Some(name) = name.filter(|n| !matches!(n.as_str(), "." | "..")) else {
+            let Some(name) = name.ok().filter(|n| !matches!(n.as_str(), "." | "..")) else {
                 continue;
             };
             let kind = match mode & TYPE_MASK {
@@ -217,8 +236,7 @@ fn list(client: &mut Sftp, folder: Option<&str>) -> io::Result<Folder> {
         }
     }
     client.status(sftp::CLOSE, &handle)?;
-    entries.sort_by_cached_key(|entry| (entry.kind != "folder", entry.name.to_lowercase()));
-    Ok(Folder { path, entries })
+    Ok(entries)
 }
 
 #[tauri::command(async)]
@@ -248,13 +266,15 @@ pub struct Transfer {
     local_path: PathBuf,
     remote_path: String,
     replace: bool,
+    #[serde(default)]
+    folder: bool,
 }
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Progress {
     bytes: u64,
-    total: u64,
+    total: Option<u64>,
     bytes_per_second: u64,
 }
 
@@ -265,15 +285,21 @@ struct Meter<'a> {
     last: Option<Instant>,
 }
 
+fn check_cancel(cancel: &AtomicBool) -> io::Result<()> {
+    if cancel.load(Ordering::Acquire) {
+        return Err(io::Error::new(
+            io::ErrorKind::Interrupted,
+            "Transfer canceled.",
+        ));
+    }
+    Ok(())
+}
+
 impl Meter<'_> {
-    fn update(&mut self, bytes: u64, total: u64) -> io::Result<()> {
-        if self.cancel.load(Ordering::Acquire) {
-            return Err(io::Error::new(
-                io::ErrorKind::Interrupted,
-                "Transfer canceled.",
-            ));
-        }
-        if bytes == total
+    fn update(&mut self, bytes: u64, total: impl Into<Option<u64>>) -> io::Result<()> {
+        check_cancel(self.cancel)?;
+        let total = total.into();
+        if total == Some(bytes)
             || self
                 .last
                 .is_none_or(|last| last.elapsed() >= Duration::from_millis(150))
@@ -411,35 +437,12 @@ fn download(client: &mut Sftp, spec: &Transfer, meter: &mut Meter<'_>) -> io::Re
         Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
         _ => (),
     }
-    let mut open = string(source.as_bytes());
-    open.extend(1u32.to_be_bytes());
-    open.extend(0u32.to_be_bytes());
-    let handle = client.handle(sftp::OPEN, &open)?;
-    let (total, mode) = client.request(sftp::FSTAT, &handle, ATTRS)?.attributes()?;
-    if mode & TYPE_MASK != REGULAR {
-        return Err(io::Error::other("Choose a regular file to download."));
-    }
-    let total = total.ok_or_else(invalid)?;
     let mut temporary = tempfile::NamedTempFile::new_in(&spec.local_path)?;
-    let mut bytes = 0_u64;
-    meter.update(bytes, total)?;
-    while bytes < total {
-        let mut read = handle.clone();
-        read.extend(bytes.to_be_bytes());
-        let wanted = (total - bytes).min(CHUNK as u64) as u32;
-        read.extend(wanted.to_be_bytes());
-        let mut reply = client.request(sftp::READ, &read, DATA)?;
-        let chunk = reply.string()?;
-        if chunk.is_empty() || chunk.len() > wanted as usize {
-            return Err(invalid());
-        }
-        temporary.write_all(chunk)?;
-        bytes += chunk.len() as u64;
-        meter.update(bytes, total)?;
-    }
-    client.status(sftp::CLOSE, &handle)?;
+    copy_remote_file(client, &source, &mut temporary, |bytes, total| {
+        meter.update(bytes, total)
+    })?;
     temporary.as_file().sync_all()?;
-    meter.update(bytes, total)?;
+    check_cancel(meter.cancel)?;
     let result = if spec.replace {
         temporary.persist(destination)
     } else {
@@ -450,6 +453,41 @@ fn download(client: &mut Sftp, spec: &Transfer, meter: &mut Meter<'_>) -> io::Re
         Err(e) if e.error.kind() == io::ErrorKind::AlreadyExists => Ok(Outcome::Exists),
         Err(e) => Err(e.error),
     }
+}
+
+fn copy_remote_file(
+    client: &mut Sftp,
+    source: &str,
+    destination: &mut impl Write,
+    mut report: impl FnMut(u64, u64) -> io::Result<()>,
+) -> io::Result<u64> {
+    let mut open = string(source.as_bytes());
+    open.extend(1u32.to_be_bytes());
+    open.extend(0u32.to_be_bytes());
+    let handle = client.handle(sftp::OPEN, &open)?;
+    let (total, mode) = client.request(sftp::FSTAT, &handle, ATTRS)?.attributes()?;
+    if mode & TYPE_MASK != REGULAR {
+        return Err(io::Error::other("Choose a regular file to download."));
+    }
+    let total = total.ok_or_else(invalid)?;
+    let mut bytes = 0_u64;
+    report(bytes, total)?;
+    while bytes < total {
+        let mut read = handle.clone();
+        read.extend(bytes.to_be_bytes());
+        let wanted = (total - bytes).min(CHUNK as u64) as u32;
+        read.extend(wanted.to_be_bytes());
+        let mut reply = client.request(sftp::READ, &read, DATA)?;
+        let chunk = reply.string()?;
+        if chunk.is_empty() || chunk.len() > wanted as usize {
+            return Err(invalid());
+        }
+        destination.write_all(chunk)?;
+        bytes += chunk.len() as u64;
+        report(bytes, total)?;
+    }
+    client.status(sftp::CLOSE, &handle)?;
+    Ok(bytes)
 }
 
 fn transfer(
@@ -470,6 +508,9 @@ fn transfer(
     };
     match spec.direction {
         Direction::Upload => upload(&mut client, spec, &mut meter),
+        Direction::Download if spec.folder => {
+            folder_download::download_folder(&mut client, spec, &mut meter)
+        }
         Direction::Download => download(&mut client, spec, &mut meter),
     }
 }

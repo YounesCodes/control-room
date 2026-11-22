@@ -29,7 +29,9 @@ Changing a connection's destination, username, port, or key clears its cached ho
 
 Open a saved host and select **Files** in the sidebar. The browser starts in the SSH account's home folder. Open a folder to browse it, or use **Parent folder** and **Home folder** to go back. Enable **Show hidden files** to see names beginning with a dot.
 
-Select **Upload files** to choose one or more local files, or drop them into the open folder. Dropping files on a host terminal uploads them to that account's home folder, including when the terminal is in a split. To download, select a file in **Files** and choose a folder on your computer.
+Select **Upload files** to choose one or more local files, or drop them into the open folder. Dropping files on a host terminal uploads them to that account's home folder, including when the terminal is in a split. **Filter files** highlights matches in file and folder names in the current folder.
+
+Select a file or use the **Download folder** arrow beside a folder, then choose where to save it. Folder downloads include nested folders, empty folders, and hidden files. They skip symbolic links and special files. If the folder name already exists locally, choose a different download location.
 
 **Transfers** shows progress, speed, and a cancel button. You can switch views while files copy. When a file already exists, select **Review** to replace it or keep the existing copy.
 
@@ -40,7 +42,7 @@ Select **Upload files** to choose one or more local files, or drop them into the
   <figcaption>An upload in progress. Example host and files.</figcaption>
 </figure>
 
-Transfers use SFTP with your saved SSH connection. The host must enable SFTP and accept your key or SSH agent without a password prompt. Choose individual files for transfer. On Windows hosts, a path such as `/C:/Users/Lee` refers to the account's Windows files.
+Transfers use SFTP with your saved SSH connection. The host must enable SFTP and accept your key or SSH agent without a password prompt. On Windows hosts, a path such as `/C:/Users/Lee` refers to the account's Windows files.
 
 ## Windows 10 and 11 hosts
 

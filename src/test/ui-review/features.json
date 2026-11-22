@@ -10,7 +10,16 @@
       "capture": [
         {
           "scenario": "files",
-          "states": ["idle", "in-progress", "error", "overwrite-prompt", "loading", "empty"]
+          "states": [
+            "idle",
+            "in-progress",
+            "error",
+            "overwrite-prompt",
+            "loading",
+            "empty",
+            "filtered",
+            "folder-download"
+          ]
         }
       ],
       "entryPoints": [
@@ -19,6 +28,12 @@
           "kind": "page",
           "role": "button",
           "name": "Upload files",
+          "fixture": { "scenario": "files", "state": "idle" }
+        },
+        {
+          "kind": "page",
+          "role": "button",
+          "name": "Download folder reports",
           "fixture": { "scenario": "files", "state": "idle" }
         }
       ]

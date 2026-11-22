@@ -11,7 +11,7 @@ export interface RemoteFolder {
 type Direction = "upload" | "download";
 export interface TransferProgress {
   bytes: number;
-  total: number;
+  total: number | null;
   bytesPerSecond: number;
 }
 
@@ -21,6 +21,7 @@ export interface FileJob {
   name: string;
   localPath: string;
   remotePath: string;
+  folder?: boolean;
   direction: Direction;
   status: "queued" | "active" | "canceling" | "exists" | "complete" | "failed" | "canceled";
   progress?: TransferProgress;
@@ -91,7 +92,7 @@ async function run(job: FileJob) {
 export function enqueue(
   connection: SavedConnection,
   direction: Direction,
-  files: { name: string; localPath: string; remotePath: string }[],
+  files: Pick<FileJob, "name" | "localPath" | "remotePath" | "folder">[],
 ) {
   publish([
     ...jobs,

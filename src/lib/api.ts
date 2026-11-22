@@ -118,6 +118,7 @@ export const api = {
         remotePath: job.remotePath,
         localPath: job.localPath,
         replace: job.replace,
+        folder: job.folder,
       },
       progress,
     });
