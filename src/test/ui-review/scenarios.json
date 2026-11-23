@@ -14,6 +14,59 @@
     }
   },
   "scenarios": {
+    "files": {
+      "states": [
+        "idle",
+        "in-progress",
+        "error",
+        "transfer-error",
+        "overwrite-prompt",
+        "loading",
+        "empty",
+        "filtered",
+        "folder-download",
+        "overflow",
+        "typed-path",
+        "path-suggestions"
+      ],
+      "ready": ".files-page",
+      "prepare": {
+        "error": [{ "role": "button", "name": "Open folder backups" }],
+        "transfer-error": [{ "role": "button", "name": "Upload files" }],
+        "filtered": [{ "role": "searchbox", "name": "Filter this folder", "fill": "re" }],
+        "folder-download": [{ "role": "button", "name": "Download folder reports" }],
+        "overflow": [{ "role": "button", "name": "Upload files" }],
+        "typed-path": [
+          { "role": "button", "name": "Edit path" },
+          { "role": "combobox", "name": "Remote folder path", "fill": "/srv/shared reports" },
+          { "role": "combobox", "name": "Remote folder path", "press": "Enter" }
+        ],
+        "path-suggestions": [
+          { "role": "button", "name": "Edit path" },
+          { "role": "combobox", "name": "Remote folder path", "fill": "/home/fixture/re" },
+          { "role": "combobox", "name": "Remote folder path", "press": "ArrowDown" }
+        ],
+        "in-progress": [{ "role": "button", "name": "Upload files" }],
+        "overwrite-prompt": [
+          { "role": "button", "name": "Upload files" },
+          { "role": "button", "name": "Review" }
+        ]
+      },
+      "settled": {
+        "filtered": ".file-entry:first-child mark",
+        "folder-download": ".file-job progress",
+        "overflow": ".file-job progress",
+        "typed-path": "[data-upload-folder='/srv/shared reports']",
+        "path-suggestions": ".file-path-suggestions [aria-selected='true']",
+        "idle": ".file-list",
+        "error": ".files-page .inline-error",
+        "transfer-error": ".file-activity .inline-error",
+        "in-progress": ".file-job progress",
+        "overwrite-prompt": ".modal",
+        "loading": ".files-page .skeleton",
+        "empty": ".files-empty"
+      }
+    },
     "settings": {
       "states": [
         "populated",

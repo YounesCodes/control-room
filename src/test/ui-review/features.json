@@ -5,6 +5,51 @@
   },
   "features": [
     {
+      "name": "File transfers",
+      "docs": "connections.mdx#transfer-files",
+      "capture": [
+        {
+          "scenario": "files",
+          "states": [
+            "idle",
+            "in-progress",
+            "error",
+            "transfer-error",
+            "overwrite-prompt",
+            "loading",
+            "empty",
+            "filtered",
+            "folder-download",
+            "overflow",
+            "typed-path",
+            "path-suggestions"
+          ]
+        }
+      ],
+      "entryPoints": [
+        { "kind": "sidebar", "role": "button", "name": "Files" },
+        {
+          "kind": "page",
+          "role": "combobox",
+          "name": "Remote folder path",
+          "open": [{ "role": "button", "name": "Edit path" }],
+          "fixture": { "scenario": "files", "state": "idle" }
+        },
+        {
+          "kind": "page",
+          "role": "button",
+          "name": "Upload files",
+          "fixture": { "scenario": "files", "state": "idle" }
+        },
+        {
+          "kind": "page",
+          "role": "button",
+          "name": "Download folder reports",
+          "fixture": { "scenario": "files", "state": "idle" }
+        }
+      ]
+    },
+    {
       "name": "Settings",
       "docs": "reference/settings.mdx",
       "capture": [

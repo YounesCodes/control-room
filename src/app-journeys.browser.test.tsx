@@ -144,6 +144,8 @@ async function respond(command: string, args: any = {}) {
       return;
     case "list_services":
       return [fixtures.service, fixtures.failedService];
+    case "list_transfer_folder":
+      return { path: "/home/fixture", entries: [] };
     case "list_containers":
       return [fixtures.container];
     case "inspect_container":
@@ -257,6 +259,34 @@ async function openSplit(card: "Split right" | "Split down" = "Split right") {
 }
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it("routes a native file drop on a terminal to the saved host home", async () => {
+    overrides.set("transfer_file", () => "complete");
+    await mount();
+    await expect.element(page.getByRole("textbox", { name: "Terminal input" })).toBeVisible();
+    const pane = element.querySelector<HTMLElement>(".terminal-workspace-pane-visible")!;
+    const { left, top, width, height } = pane.getBoundingClientRect();
+    const position = {
+      x: (left + width / 2) * devicePixelRatio,
+      y: (top + height / 2) * devicePixelRatio,
+    };
+    emit("tauri://drag-enter", { position, paths: ["/local/drop.txt"] });
+    expect(pane.hasAttribute("data-file-hover")).toBe(true);
+    emit("tauri://drag-drop", { position, paths: ["/local/drop.txt"] });
+    await expect.element(page.getByRole("heading", { name: "Files", exact: true })).toBeVisible();
+    expect(native.invoke).toHaveBeenCalledWith(
+      "transfer_file",
+      expect.objectContaining({
+        connectionId: "host-a",
+        spec: expect.objectContaining({
+          remotePath: ".",
+          localPath: "/local/drop.txt",
+          replace: false,
+        }),
+      }),
+    );
+    await page.getByRole("button", { name: "Clear finished" }).click();
+    expect((await runAxe(element.querySelector(".files-page")!)).violations).toEqual([]);
+  });
   it("keeps navigation reachable on both sides of the compact breakpoint", async () => {
     await mount();
     await expect.element(page.getByRole("textbox", { name: "Terminal input" })).toBeInTheDocument();
@@ -3293,8 +3323,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
       Array.from(element.querySelectorAll<HTMLButtonElement>(".feature-nav button")).map((button) =>
         button.textContent?.trim(),
       ),
-    ).toEqual(["Terminal", "Docker", "Systemd", "Logs", "Ports", "History"]);
+    ).toEqual(["Terminal", "Files", "Docker", "Systemd", "Logs", "Ports", "History"]);
     for (const [view, heading] of [
+      ["Files", "Files"],
       ["Docker", "Containers"],
       ["Systemd", "Systemd"],
       ["Logs", "Logs"],

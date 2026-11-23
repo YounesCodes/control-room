@@ -104,3 +104,32 @@ describe("feature map entry points", () => {
     await resolve(entry);
   });
 });
+
+it("keeps Files scrolling inside the list with many files and transfers", async () => {
+  const { width, height } = registry.viewports.narrow;
+  await page.viewport(width, height);
+  await mount({ scenario: "files", state: "overflow" });
+  await page.getByRole("button", { name: "Upload files", exact: true }).click();
+  await expect
+    .element(page.getByRole("progressbar", { name: "Transfer progress for archive-1.zip" }))
+    .toBeVisible();
+  const panel = document.querySelector<HTMLElement>(".files-page")!;
+  const activity = panel.querySelector<HTMLElement>(".file-activity ul")!;
+  const nav = panel.querySelector<HTMLElement>(".file-location")!;
+  const footer = panel.querySelector<HTMLElement>(".file-drop-hint")!;
+  const list = page.getByRole("region", { name: "Files and transfers" }).element() as HTMLElement;
+  expect(activity.children).toHaveLength(1);
+  await page.getByRole("button", { name: "Show all transfers" }).click();
+  expect(activity.children).toHaveLength(8);
+  expect(panel.scrollHeight).toBeLessThanOrEqual(panel.clientHeight + 1);
+  expect(activity.scrollHeight).toBeLessThanOrEqual(activity.clientHeight + 1);
+  expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+  const initialPositions = [nav, footer].map((element) => element.getBoundingClientRect().top);
+  await page.getByRole("button", { name: "Show more files" }).click();
+  expect(list.scrollTop).toBeGreaterThan(0);
+  expect(panel.scrollTop).toBe(0);
+  expect([nav, footer].map((element) => element.getBoundingClientRect().top)).toEqual(
+    initialPositions,
+  );
+  expect(page.getByRole("button", { name: "Open folder project-120" }).element()).toBeTruthy();
+});

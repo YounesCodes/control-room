@@ -10,6 +10,7 @@
 @import "./styles/features/systemd.css";
 @import "./styles/panels.css";
 @import "./styles/features/logs.css";
+@import "./styles/features/files.css";
 @import "./styles/features/history.css";
 @import "./styles/features/settings.css";
 @import "./styles/features/dialogs.css";

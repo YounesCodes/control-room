@@ -20,6 +20,7 @@ mod session;
 mod ssh;
 mod ssh_mux;
 mod systemd;
+mod transfers;
 mod updater;
 #[cfg(target_os = "linux")]
 mod window_corners;
@@ -74,6 +75,7 @@ pub fn run() {
         .manage(fonts::FontState::default())
         .manage(updater::UpdaterState::default())
         .manage(StreamManager::default())
+        .manage(transfers::Transfers::default())
         .manage(RemoteOperationLimiter::default())
         .setup(|app| {
             #[cfg(all(debug_assertions, not(feature = "desktop-e2e")))]
@@ -147,6 +149,10 @@ pub fn run() {
             fonts::preview_catalog_font,
             fonts::install_catalog_font,
             commands::list_connections,
+            transfers::list_transfer_folder,
+            transfers::choose_transfer_paths,
+            transfers::transfer_file,
+            transfers::cancel_transfer,
             commands::create_connection,
             commands::update_connection,
             commands::test_connection,
@@ -207,10 +213,19 @@ pub fn run() {
             updater::dismiss_update_notice,
             updater::current_app_version,
         ])
+        .on_webview_event(|webview, event| {
+            if let tauri::WebviewEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                webview.state::<transfers::Transfers>().allow_drop(paths);
+            }
+        })
         .on_window_event(|window, event| {
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                window.state::<transfers::Transfers>().allow_drop(paths);
+            }
             if matches!(event, tauri::WindowEvent::Destroyed) {
                 window.state::<SessionManager>().close_all();
                 window.state::<StreamManager>().stop_all();
+                window.state::<transfers::Transfers>().cancel_all();
                 ssh_mux::exit_all();
             }
         })
@@ -221,6 +236,7 @@ pub fn run() {
             if matches!(&event, tauri::RunEvent::Exit) {
                 app.state::<SessionManager>().close_all();
                 app.state::<StreamManager>().stop_all();
+                app.state::<transfers::Transfers>().cancel_all();
                 ssh_mux::exit_all();
             }
             #[cfg(target_os = "macos")]

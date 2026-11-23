@@ -35,6 +35,7 @@ import {
   LayoutPanelLeft,
   Copy,
   FileClock,
+  FolderOpen,
   FolderCog,
   History,
   BookOpen,
@@ -53,6 +54,9 @@ import {
   X,
 } from "lucide-react";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { FilesPane } from "./pages/FilesPane";
+import { uploadFiles } from "./lib/file-transfers";
+import { useFileDrop } from "./hooks/use-file-drop";
 import { HostMetrics } from "./components/HostMetrics";
 import { displayedHeaderMetrics } from "./lib/header-metrics";
 import { UpdateIndicator } from "./components/UpdateIndicator";
@@ -220,6 +224,7 @@ const navigation: {
   icon: ComponentType<{ size?: number; strokeWidth?: number }>;
 }[] = [
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
+  { id: "files", label: "Files", icon: FolderOpen },
   { id: "docker", label: "Docker", icon: DockerIcon },
   { id: "services", label: "Systemd", icon: Server },
   { id: "logs", label: "Logs", icon: FileClock },
@@ -344,6 +349,9 @@ const WorkspaceInspection = memo(function WorkspaceInspection({
   const connection = workspace.connectionSnapshot;
   return (
     <>
+      {workspace.view === "files" && (
+        <FilesPane key={id} workspaceId={id} connection={connection} />
+      )}
       {workspace.view === "services" &&
         (windowsHost ? (
           <Suspense fallback={<LoadingState label="Loading Windows services..." />}>
@@ -795,7 +803,9 @@ export function App() {
       ? navigation.filter((item) => item.id === "terminal")
       : windowsWorkspace
         ? navigation
-            .filter((item) => ["terminal", "services", "ports", "docker", "logs"].includes(item.id))
+            .filter((item) =>
+              ["terminal", "files", "services", "ports", "docker", "logs"].includes(item.id),
+            )
             .map((item) => (item.id === "services" ? { ...item, label: "Services" } : item))
         : macosWorkspace
           ? navigation.map((item) =>
@@ -806,6 +816,21 @@ export function App() {
     ? (connections.find((connection) => connection.id === activeRemoteWorkspace.connectionId) ??
       null)
     : null;
+  useFileDrop(
+    workspaces.some(isRemoteWorkspace),
+    (id, folder, paths) => {
+      const workspace = workspaces.find((item) => item.id === id);
+      if (!workspace || !isRemoteWorkspace(workspace) || workspace.container || settingsOpen)
+        return;
+      uploadFiles(workspace.connectionSnapshot, folder, paths);
+      if (workspace.view !== "files") {
+        exitTerminalFocus();
+        setActiveWorkspaceId(id);
+        updateRemoteWorkspace(id, { view: "files" });
+      }
+    },
+    setActionError,
+  );
   const offeredShells = offeredLocalShells(
     localShells,
     settingsContract?.current.hiddenLocalShells ?? [],
@@ -3084,6 +3109,16 @@ export function App() {
                           .join(" ")}
                         key={workspace.id}
                         data-workspace-id={workspace.id}
+                        data-file-workspace={
+                          terminalVisible && isRemoteWorkspace(workspace) && !workspace.container
+                            ? workspace.id
+                            : undefined
+                        }
+                        data-drop-label={
+                          isRemoteWorkspace(workspace)
+                            ? `Upload to ${workspace.connectionSnapshot.displayName} · Home folder`
+                            : undefined
+                        }
                         aria-hidden={!terminalVisible || undefined}
                         style={
                           terminalSplitMode && terminalVisible && paneRect
