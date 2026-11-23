@@ -18,12 +18,20 @@
             "loading",
             "empty",
             "filtered",
-            "folder-download"
+            "folder-download",
+            "typed-path",
+            "path-suggestions"
           ]
         }
       ],
       "entryPoints": [
         { "kind": "sidebar", "role": "button", "name": "Files" },
+        {
+          "kind": "page",
+          "role": "combobox",
+          "name": "Remote folder path",
+          "fixture": { "scenario": "files", "state": "idle" }
+        },
         {
           "kind": "page",
           "role": "button",

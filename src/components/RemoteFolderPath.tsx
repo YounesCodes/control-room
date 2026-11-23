@@ -1,0 +1,167 @@
+import { useEffect, useId, useState } from "react";
+import { Folder } from "lucide-react";
+import { api } from "../lib/api";
+import type { RemoteFolder } from "../lib/file-transfers";
+
+const SUGGESTION_DELAY_MS = 220;
+const SUGGESTION_LIMIT = 6;
+
+export function RemoteFolderPath({
+  connectionId,
+  folder,
+  draft,
+  busy,
+  showHidden,
+  onEdit,
+  onOpen,
+}: {
+  connectionId: string;
+  folder: RemoteFolder | null;
+  draft: string | null;
+  busy: boolean;
+  showHidden: boolean;
+  onEdit: (value: string | null) => void;
+  onOpen: (path: string) => void;
+}) {
+  const listId = useId();
+  const [focused, setFocused] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const [lookup, setLookup] = useState<{
+    connectionId: string;
+    parent: string;
+    folder: RemoteFolder;
+  } | null>(null);
+  const value = draft ?? folder?.path ?? "";
+  const normalized = /^\/?[a-z]:[/\\]/i.test(value)
+    ? "/" + value.replace(/^\//, "").replace(/\\/g, "/")
+    : value;
+  const separator = normalized.lastIndexOf("/");
+  const parent =
+    focused && !busy && draft !== null && value !== folder?.path && normalized.startsWith("/")
+      ? normalized.slice(0, separator + 1)
+      : null;
+  const prefix = normalized.slice(separator + 1).toLowerCase();
+  const current = parent !== null && parent === folder?.path.replace(/\/?$/, "/") ? folder : null;
+
+  useEffect(() => {
+    if (parent === null || current) return;
+    let canceled = false;
+    const timer = window.setTimeout(() => {
+      void api.listTransferFolder(connectionId, parent).then(
+        (result) => {
+          if (!canceled) setLookup({ connectionId, parent, folder: result });
+        },
+        () => {
+          if (!canceled) setLookup(null);
+        },
+      );
+    }, SUGGESTION_DELAY_MS);
+    return () => {
+      canceled = true;
+      window.clearTimeout(timer);
+    };
+  }, [connectionId, current, parent]);
+
+  const source =
+    current ??
+    (lookup?.connectionId === connectionId && lookup.parent === parent ? lookup.folder : null);
+  const suggestions =
+    source?.entries
+      .filter(
+        ({ kind, name }) =>
+          kind === "folder" &&
+          (showHidden || prefix.startsWith(".") || !name.startsWith(".")) &&
+          name.toLowerCase().startsWith(prefix),
+      )
+      .slice(0, SUGGESTION_LIMIT) ?? [];
+  const selected = suggestions[activeIndex];
+
+  function openSuggestion(name: string) {
+    if (source) onOpen(source.path.replace(/\/?$/, "/") + name);
+    setActiveIndex(-1);
+  }
+
+  return (
+    <form
+      className="search-field file-path-field"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (busy) return;
+        if (selected) openSuggestion(selected.name);
+        else if (value.trim()) onOpen(value);
+      }}
+    >
+      <input
+        type="text"
+        role="combobox"
+        aria-label="Remote folder path"
+        aria-description="Press Enter to open the folder"
+        aria-autocomplete="list"
+        aria-expanded={suggestions.length > 0}
+        aria-controls={suggestions.length ? listId : undefined}
+        aria-activedescendant={selected ? `${listId}-${activeIndex}` : undefined}
+        placeholder="Enter a remote folder path"
+        title={value ? `${value}\nPress Enter to open` : "Press Enter to open a folder"}
+        enterKeyHint="go"
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        readOnly={busy}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          setActiveIndex(-1);
+        }}
+        onChange={(event) => {
+          setActiveIndex(-1);
+          onEdit(event.target.value);
+        }}
+        onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing || busy) return;
+          if (event.key === "Escape" && draft !== null) {
+            event.preventDefault();
+            event.stopPropagation();
+            setActiveIndex(-1);
+            onEdit(null);
+          }
+          if (suggestions.length && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+            event.preventDefault();
+            const last = suggestions.length - 1;
+            setActiveIndex(
+              event.key === "ArrowDown"
+                ? activeIndex >= last
+                  ? 0
+                  : activeIndex + 1
+                : activeIndex <= 0
+                  ? last
+                  : activeIndex - 1,
+            );
+          }
+        }}
+      />
+      {suggestions.length > 0 && (
+        <ul
+          className="file-path-suggestions"
+          id={listId}
+          role="listbox"
+          aria-label="Remote folders"
+        >
+          {suggestions.map(({ name }, index) => (
+            <li
+              key={name}
+              id={`${listId}-${index}`}
+              role="option"
+              aria-selected={index === activeIndex}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => openSuggestion(name)}
+              title={name}
+            >
+              <Folder size={15} aria-hidden="true" />
+              <span>{name}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </form>
+  );
+}

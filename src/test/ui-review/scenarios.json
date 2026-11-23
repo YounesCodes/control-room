@@ -23,12 +23,22 @@
         "loading",
         "empty",
         "filtered",
-        "folder-download"
+        "folder-download",
+        "typed-path",
+        "path-suggestions"
       ],
       "ready": ".files-page",
       "prepare": {
         "filtered": [{ "role": "searchbox", "name": "Filter files", "fill": "re" }],
         "folder-download": [{ "role": "button", "name": "Download folder reports" }],
+        "typed-path": [
+          { "role": "combobox", "name": "Remote folder path", "fill": "/srv/shared reports" },
+          { "role": "combobox", "name": "Remote folder path", "press": "Enter" }
+        ],
+        "path-suggestions": [
+          { "role": "combobox", "name": "Remote folder path", "fill": "/home/fixture/re" },
+          { "role": "combobox", "name": "Remote folder path", "press": "ArrowDown" }
+        ],
         "in-progress": [{ "role": "button", "name": "Upload files" }],
         "overwrite-prompt": [
           { "role": "button", "name": "Upload files" },
@@ -38,6 +48,8 @@
       "settled": {
         "filtered": ".file-entry:first-child mark",
         "folder-download": ".file-job progress",
+        "typed-path": "[data-upload-folder='/srv/shared reports']",
+        "path-suggestions": ".file-path-suggestions [aria-selected='true']",
         "idle": ".file-list",
         "error": ".files-page .inline-error",
         "in-progress": ".file-job progress",

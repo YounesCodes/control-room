@@ -15,6 +15,7 @@ import {
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Bone, Skeleton, SkeletonRows } from "../components/PanelState";
 import { Search } from "../components/MagnifierIcon";
+import { RemoteFolderPath } from "../components/RemoteFolderPath";
 import {
   belongsTo,
   cancelJob,
@@ -165,6 +166,7 @@ export function FilesPane({
   ).length;
   const [request, setRequest] = useState<{ path: string | null }>({ path: null });
   const [folder, setFolder] = useState<RemoteFolder | null>(null);
+  const [pathDraft, setPathDraft] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
@@ -200,12 +202,20 @@ export function FilesPane({
         },
       )
       .finally(() => {
-        if (current) setBusy(false);
+        if (current) {
+          setPathDraft((draft) => (draft === request.path ? null : draft));
+          setBusy(false);
+        }
       });
     return () => {
       current = false;
     };
   }, [connection.id, request, completedUploads]);
+
+  function openFolder(path: string | null) {
+    setPathDraft(null);
+    setRequest({ path });
+  }
 
   async function pick(entry?: RemoteFolder["entries"][number]) {
     if (!folder) return;
@@ -239,15 +249,17 @@ export function FilesPane({
     [folder, hidden, match],
   );
   const parent = folder?.path.replace(/\/[^/]+\/?$/, "") || "/";
+  const folderPath = pathDraft ?? folder?.path ?? "";
+  const canUpload = folder !== null && !busy && folderPath === folder.path;
   return (
     <section
       className="feature-page files-page"
-      data-file-workspace={folder && !busy ? workspaceId : undefined}
+      data-file-workspace={canUpload ? workspaceId : undefined}
       data-upload-folder={folder?.path}
     >
       <header className="page-heading compact-heading">
         <h2>Files</h2>
-        <button className="secondary-button" onClick={() => void pick()} disabled={!folder || busy}>
+        <button className="secondary-button" onClick={() => void pick()} disabled={!canUpload}>
           <ArrowUpFromLine size={15} /> Upload files
         </button>
       </header>
@@ -260,13 +272,13 @@ export function FilesPane({
           </button>
         </div>
       )}
-      {!folder && busy && (
+      {!folder && busy && request.path === null && (
         <Skeleton label="Reading remote folder">
           <Bone shape="control" width="100%" />
           <SkeletonRows count={6} />
         </Skeleton>
       )}
-      {folder && (
+      {(folder || !busy || request.path !== null) && (
         <div className="file-browser" aria-busy={busy}>
           <div className="file-location">
             <button
@@ -274,7 +286,7 @@ export function FilesPane({
               title="Home folder"
               aria-label="Home folder"
               disabled={busy}
-              onClick={() => setRequest({ path: null })}
+              onClick={() => openFolder(null)}
             >
               <House size={16} />
             </button>
@@ -282,99 +294,113 @@ export function FilesPane({
               className="icon-button"
               title="Parent folder"
               aria-label="Parent folder"
-              disabled={busy || folder.path === "/"}
-              onClick={() => setRequest({ path: parent })}
+              disabled={busy || !folder || folder.path === "/"}
+              onClick={() => openFolder(parent)}
             >
               <ArrowUp size={16} />
             </button>
-            <code title={folder.path}>{folder.path}</code>
+            <RemoteFolderPath
+              connectionId={connection.id}
+              folder={folder}
+              draft={pathDraft}
+              busy={busy}
+              showHidden={hidden}
+              onEdit={setPathDraft}
+              onOpen={(path) => {
+                setBusy(true);
+                setPathDraft(path);
+                setRequest({ path });
+              }}
+            />
             <button
               className="icon-button"
               title="Refresh folder"
               aria-label="Refresh folder"
-              disabled={busy}
-              onClick={() => setRequest({ path: folder.path })}
+              disabled={busy || !folder}
+              onClick={() => openFolder(folder?.path ?? null)}
             >
               <RefreshCw size={15} />
             </button>
           </div>
-          <div className="file-filter">
-            <label className="search-field">
-              <Search size={15} />
-              <input
-                type="search"
-                aria-label="Filter files"
-                placeholder="Filter files"
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-              />
-            </label>
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={hidden}
-                onChange={(e) => setHidden(e.target.checked)}
-              />
-              Show hidden files
-            </label>
-          </div>
-          <ul className="file-list" aria-label="Remote files">
-            {entries.slice(0, visibleCount).map((entry) => {
-              const isFolder = entry.kind === "folder";
-              const Icon = isFolder ? Folder : File;
-              return (
-                <li className="file-entry" key={entry.name}>
-                  <button
-                    className="file-row"
-                    disabled={busy || entry.kind === "other"}
-                    aria-label={`${isFolder ? "Open folder" : "Download"} ${entry.name}`}
-                    onClick={() =>
-                      isFolder
-                        ? setRequest({ path: join(folder.path, entry.name) })
-                        : void pick(entry)
-                    }
-                  >
-                    <Icon size={17} />
-                    <span title={entry.name}>{matchedName(entry.name, match)}</span>
-                    <small>
-                      {entry.kind === "file" && entry.size !== null
-                        ? size(entry.size)
-                        : entry.kind === "other"
-                          ? "Special file"
-                          : ""}
-                    </small>
-                    {isFolder ? (
-                      <ChevronRight size={15} />
-                    ) : entry.kind === "file" ? (
-                      <ArrowDownToLine size={15} />
-                    ) : null}
-                  </button>
-                  {isFolder && (
+          {folder && (
+            <div className="file-filter">
+              <label className="search-field">
+                <Search size={15} />
+                <input
+                  type="search"
+                  aria-label="Filter files"
+                  placeholder="Filter files"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                />
+              </label>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={hidden}
+                  onChange={(e) => setHidden(e.target.checked)}
+                />
+                Show hidden files
+              </label>
+            </div>
+          )}
+          {folder && (
+            <ul className="file-list" aria-label="Remote files">
+              {entries.slice(0, visibleCount).map((entry) => {
+                const isFolder = entry.kind === "folder";
+                const Icon = isFolder ? Folder : File;
+                return (
+                  <li className="file-entry" key={entry.name}>
                     <button
-                      className="icon-button file-folder-download"
-                      disabled={busy}
-                      aria-label={`Download folder ${entry.name}`}
-                      title="Download folder"
-                      onClick={() => void pick(entry)}
+                      className="file-row"
+                      disabled={busy || entry.kind === "other"}
+                      aria-label={`${isFolder ? "Open folder" : "Download"} ${entry.name}`}
+                      onClick={() =>
+                        isFolder ? openFolder(join(folder.path, entry.name)) : void pick(entry)
+                      }
                     >
-                      <ArrowDownToLine size={15} />
+                      <Icon size={17} />
+                      <span title={entry.name}>{matchedName(entry.name, match)}</span>
+                      <small>
+                        {entry.kind === "file" && entry.size !== null
+                          ? size(entry.size)
+                          : entry.kind === "other"
+                            ? "Special file"
+                            : ""}
+                      </small>
+                      {isFolder ? (
+                        <ChevronRight size={15} />
+                      ) : entry.kind === "file" ? (
+                        <ArrowDownToLine size={15} />
+                      ) : null}
                     </button>
-                  )}
+                    {isFolder && (
+                      <button
+                        className="icon-button file-folder-download"
+                        disabled={busy}
+                        aria-label={`Download folder ${entry.name}`}
+                        title="Download folder"
+                        onClick={() => void pick(entry)}
+                      >
+                        <ArrowDownToLine size={15} />
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+              {entries.length > visibleCount && (
+                <li>
+                  <button
+                    className="secondary-button"
+                    onClick={() => setVisibleCount((count) => count + 100)}
+                  >
+                    Show more files
+                  </button>
                 </li>
-              );
-            })}
-            {entries.length > visibleCount && (
-              <li>
-                <button
-                  className="secondary-button"
-                  onClick={() => setVisibleCount((count) => count + 100)}
-                >
-                  Show more files
-                </button>
-              </li>
-            )}
-          </ul>
-          {!entries.length && (
+              )}
+            </ul>
+          )}
+          {folder && !entries.length && (
             <p className="files-empty">
               {filter
                 ? "No matching files"
@@ -383,9 +409,11 @@ export function FilesPane({
                   : "This folder is empty"}
             </p>
           )}
-          <footer className="file-drop-hint">
-            <ArrowUpFromLine size={14} /> Drop local files here to upload
-          </footer>
+          {folder && (
+            <footer className="file-drop-hint">
+              <ArrowUpFromLine size={14} /> Drop local files here to upload
+            </footer>
+          )}
         </div>
       )}
     </section>

@@ -22,6 +22,74 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("opens a typed path and keeps the listed folder when navigation fails", async () => {
+  invoke.mockImplementation(async (command, args) => {
+    if (command !== "list_transfer_folder") throw new Error(command);
+    if (args.folder === "/missing") throw new Error("Path not found on the host");
+    return {
+      path: args.folder === null ? "/home/fixture" : "/srv/shared reports",
+      entries: [],
+    };
+  });
+  const user = userEvent.setup();
+  render(<FilesPane connection={host} workspaceId="tab" />);
+  const path = await screen.findByRole<HTMLInputElement>("combobox", {
+    name: "Remote folder path",
+  });
+  expect(path.value).toBe("/home/fixture");
+  await user.clear(path);
+  await user.paste("/srv/shared reports/");
+  expect(screen.getByRole("button", { name: "Upload files" })).toHaveProperty("disabled", true);
+  await user.keyboard("{Enter}");
+  await waitFor(() => expect(path.value).toBe("/srv/shared reports"));
+  expect(invoke).toHaveBeenCalledWith("list_transfer_folder", {
+    connectionId: host.id,
+    folder: "/srv/shared reports/",
+  });
+  await user.clear(path);
+  await user.paste("/missing");
+  await user.keyboard("{Enter}");
+  expect((await screen.findByRole("alert")).textContent).toContain("Path not found");
+  expect(path.value).toBe("/srv/shared reports");
+  expect(screen.getByText("This folder is empty")).toBeTruthy();
+  await user.clear(path);
+  await user.paste("/discard");
+  await user.keyboard("{Escape}");
+  expect(path.value).toBe("/srv/shared reports");
+  expect(invoke.mock.calls.some(([, args]) => args.folder === "/discard")).toBe(false);
+});
+
+it("suggests matching folders under the typed parent and opens a keyboard selection", async () => {
+  invoke.mockImplementation(async (command, args) => {
+    if (command !== "list_transfer_folder") throw new Error(command);
+    if (args.folder === "/srv/")
+      return {
+        path: "/srv",
+        entries: [
+          { name: "Shared", kind: "folder", size: null },
+          { name: "shared.txt", kind: "file", size: 12 },
+        ],
+      };
+    return { path: args.folder ?? "/home/fixture", entries: [] };
+  });
+  const user = userEvent.setup();
+  render(<FilesPane connection={host} workspaceId="tab" />);
+  const path = await screen.findByRole<HTMLInputElement>("combobox", {
+    name: "Remote folder path",
+  });
+  await user.clear(path);
+  await user.paste("/srv/sh");
+  await screen.findByRole("option", { name: "Shared" });
+  await user.type(path, "a");
+  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["Shared"]);
+  await user.keyboard("{ArrowDown}");
+  expect(screen.getByRole("option", { name: "Shared", selected: true })).toBeTruthy();
+  await user.keyboard("{Enter}");
+  await waitFor(() => expect(path.value).toBe("/srv/Shared"));
+  expect(screen.queryByRole("listbox")).toBeNull();
+  expect(invoke.mock.calls.filter(([, args]) => args.folder === "/srv/")).toHaveLength(1);
+});
+
 it("downloads a remote selection to the chosen local folder and waits for overwrite consent", async () => {
   invoke.mockImplementation(async (command, args) => {
     if (command === "list_transfer_folder")
