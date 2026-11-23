@@ -90,6 +90,29 @@ it("suggests matching folders under the typed parent and opens a keyboard select
   expect(invoke.mock.calls.filter(([, args]) => args.folder === "/srv/")).toHaveLength(1);
 });
 
+it("uses the loaded folder for suggestions when typing a Windows path", async () => {
+  invoke.mockImplementation(async (command, args) => {
+    if (command !== "list_transfer_folder") throw new Error(command);
+    return {
+      path: args.folder ?? "/C:/Users/fixture",
+      entries: args.folder ? [] : [{ name: "Documents", kind: "folder", size: null }],
+    };
+  });
+  const user = userEvent.setup();
+  render(<FilesPane connection={host} workspaceId="tab" />);
+  const path = await screen.findByRole<HTMLInputElement>("combobox", {
+    name: "Remote folder path",
+  });
+  await user.clear(path);
+  await user.paste(String.raw`C:\Users\fixture\Doc`);
+  await user.click(await screen.findByRole("option", { name: "Documents" }));
+  await waitFor(() => expect(path.value).toBe("/C:/Users/fixture/Documents"));
+  expect(invoke.mock.calls.map(([, args]) => args.folder)).toEqual([
+    null,
+    "/C:/Users/fixture/Documents",
+  ]);
+});
+
 it("downloads a remote selection to the chosen local folder and waits for overwrite consent", async () => {
   invoke.mockImplementation(async (command, args) => {
     if (command === "list_transfer_folder")
