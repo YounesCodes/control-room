@@ -239,16 +239,34 @@ fn read_entries(
     Ok(entries)
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderReadError {
+    message: String,
+    permission_denied: bool,
+}
+
 #[tauri::command(async)]
 pub fn list_transfer_folder(
     database: State<'_, Database>,
     connection_id: String,
     folder: Option<String>,
-) -> Result<Folder, String> {
-    let connection = database.get_connection(&connection_id)?;
-    Sftp::connect(&connection)
-        .and_then(|mut client| list(&mut client, folder.as_deref()))
-        .map_err(|e| e.to_string())
+) -> Result<Folder, FolderReadError> {
+    let connection =
+        database
+            .get_connection(&connection_id)
+            .map_err(|message| FolderReadError {
+                message,
+                permission_denied: false,
+            })?;
+    let mut client = Sftp::connect(&connection).map_err(|error| FolderReadError {
+        message: error.to_string(),
+        permission_denied: false,
+    })?;
+    list(&mut client, folder.as_deref()).map_err(|error| FolderReadError {
+        message: error.to_string(),
+        permission_denied: error.kind() == io::ErrorKind::PermissionDenied,
+    })
 }
 
 #[derive(Deserialize)]

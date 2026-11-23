@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Folder } from "lucide-react";
 import { api } from "../lib/api";
 import type { RemoteFolder } from "../lib/file-transfers";
@@ -15,6 +15,7 @@ export function RemoteFolderPath({
   showHidden,
   onEdit,
   onOpen,
+  onClose,
 }: {
   connectionId: string;
   folder: RemoteFolder | null;
@@ -23,7 +24,9 @@ export function RemoteFolderPath({
   showHidden: boolean;
   onEdit: (value: string | null) => void;
   onOpen: (path: string) => void;
+  onClose: () => void;
 }) {
+  const input = useRef<HTMLInputElement>(null);
   const listId = useId();
   const [focused, setFocused] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -43,6 +46,11 @@ export function RemoteFolderPath({
   const typedPrefix = normalized.slice(separator + 1);
   const prefix = typedPrefix.toLowerCase();
   const current = parent !== null && parent === folder?.path.replace(/\/?$/, "/") ? folder : null;
+
+  useEffect(() => {
+    input.current?.focus();
+    input.current?.select();
+  }, []);
 
   useEffect(() => {
     if (parent === null || current) return;
@@ -94,6 +102,7 @@ export function RemoteFolderPath({
       }}
     >
       <input
+        ref={input}
         type="text"
         role="combobox"
         aria-label="Remote folder path"
@@ -142,11 +151,11 @@ export function RemoteFolderPath({
             );
             return;
           }
-          if (event.key === "Escape" && draft !== null) {
+          if (event.key === "Escape") {
             event.preventDefault();
             event.stopPropagation();
-            setActiveIndex(-1);
-            onEdit(null);
+            onClose();
+            return;
           }
           if (suggestions.length && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
             event.preventDefault();

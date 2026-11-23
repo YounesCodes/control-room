@@ -355,7 +355,8 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       break;
     case "list_transfer_folder":
       if (state === "loading") return pending();
-      if (state === "error" && args.folder) throw new Error("Permission denied on the host");
+      if (state === "error" && args.folder)
+        throw { message: "Permission denied on the host", permissionDenied: true };
       result = {
         path: args.folder ?? "/home/fixture",
         entries:

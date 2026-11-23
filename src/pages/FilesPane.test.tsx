@@ -22,6 +22,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+async function editPath(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole("button", { name: "Edit path" }));
+  return screen.findByRole<HTMLInputElement>("combobox", { name: "Remote folder path" });
+}
+
 it("opens a typed path and keeps the listed folder when navigation fails", async () => {
   invoke.mockImplementation(async (command, args) => {
     if (command !== "list_transfer_folder") throw new Error(command);
@@ -33,30 +38,60 @@ it("opens a typed path and keeps the listed folder when navigation fails", async
   });
   const user = userEvent.setup();
   render(<FilesPane connection={host} workspaceId="tab" />);
-  const path = await screen.findByRole<HTMLInputElement>("combobox", {
-    name: "Remote folder path",
-  });
+  const path = await editPath(user);
   expect(path.value).toBe("/home/fixture");
+  expect(document.activeElement).toBe(path);
   await user.clear(path);
   await user.paste("/srv/shared reports/");
   expect(screen.getByRole("button", { name: "Upload files" })).toHaveProperty("disabled", true);
   await user.keyboard("{Enter}");
-  await waitFor(() => expect(path.value).toBe("/srv/shared reports"));
+  await screen.findByText("shared reports");
+  expect(screen.queryByRole("combobox")).toBeNull();
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Edit path" }));
   expect(invoke).toHaveBeenCalledWith("list_transfer_folder", {
     connectionId: host.id,
     folder: "/srv/shared reports/",
   });
-  await user.clear(path);
+  const missing = await editPath(user);
+  await user.clear(missing);
   await user.paste("/missing");
   await user.keyboard("{Enter}");
   expect((await screen.findByRole("alert")).textContent).toContain("Path not found");
-  expect(path.value).toBe("/srv/shared reports");
+  expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  expect(screen.getByText("shared reports").getAttribute("aria-current")).toBe("location");
   expect(screen.getByText("This folder is empty")).toBeTruthy();
-  await user.clear(path);
+  const discard = await editPath(user);
+  await user.clear(discard);
   await user.paste("/discard");
   await user.keyboard("{Escape}");
-  expect(path.value).toBe("/srv/shared reports");
+  expect(screen.queryByRole("combobox")).toBeNull();
+  expect(screen.getByText("shared reports").getAttribute("aria-current")).toBe("location");
   expect(invoke.mock.calls.some(([, args]) => args.folder === "/discard")).toBe(false);
+});
+
+it("opens an ancestor from the breadcrumbs and hides retry for permission errors", async () => {
+  invoke.mockImplementation(async (command, args) => {
+    if (command !== "list_transfer_folder") throw new Error(command);
+    if (args.folder === "/C:/Users/private")
+      throw { permissionDenied: true, message: "Permission denied on the host" };
+    return {
+      path: args.folder ?? "/C:/Users/fixture",
+      entries: [{ name: "private", kind: "folder", size: null }],
+    };
+  });
+  const user = userEvent.setup();
+  render(<FilesPane connection={host} workspaceId="tab" />);
+  await user.click(await screen.findByRole("button", { name: "Open /C:/Users" }));
+  await waitFor(() =>
+    expect(screen.getByText("Users").getAttribute("aria-current")).toBe("location"),
+  );
+  expect(screen.getByRole("button", { name: "Open /C:/" })).toBeTruthy();
+  expect(screen.getAllByRole("searchbox")).toHaveLength(1);
+  expect(screen.queryByRole("combobox")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Open folder private" }));
+  expect((await screen.findByRole("alert")).textContent).toBe("Permission denied on the host");
+  expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  expect(screen.getByText("Users").getAttribute("aria-current")).toBe("location");
 });
 
 it("suggests matching folders under the typed parent and opens a keyboard selection", async () => {
@@ -74,9 +109,7 @@ it("suggests matching folders under the typed parent and opens a keyboard select
   });
   const user = userEvent.setup();
   render(<FilesPane connection={host} workspaceId="tab" />);
-  const path = await screen.findByRole<HTMLInputElement>("combobox", {
-    name: "Remote folder path",
-  });
+  const path = await editPath(user);
   await user.clear(path);
   await user.paste("/srv/sh");
   await screen.findByRole("option", { name: "Shared" });
@@ -87,7 +120,7 @@ it("suggests matching folders under the typed parent and opens a keyboard select
   await user.keyboard("{ArrowDown}");
   expect(screen.getByRole("option", { name: "Shared", selected: true })).toBeTruthy();
   await user.keyboard("{Enter}");
-  await waitFor(() => expect(path.value).toBe("/srv/Shared"));
+  expect((await screen.findByText("Shared")).getAttribute("aria-current")).toBe("location");
   expect(screen.queryByRole("listbox")).toBeNull();
   expect(invoke.mock.calls.filter(([, args]) => args.folder === "/srv/")).toHaveLength(1);
 });
@@ -104,9 +137,7 @@ it("keeps focus with multiple suggestions and completes a single match with Tab"
   });
   const user = userEvent.setup();
   render(<FilesPane connection={host} workspaceId="tab" />);
-  const path = await screen.findByRole<HTMLInputElement>("combobox", {
-    name: "Remote folder path",
-  });
+  const path = await editPath(user);
   await user.clear(path);
   await user.paste("/home/fixture/re");
   expect(screen.getAllByRole("option")).toHaveLength(2);
@@ -117,17 +148,18 @@ it("keeps focus with multiple suggestions and completes a single match with Tab"
   await user.keyboard("{Escape}");
   await user.tab();
   expect(document.activeElement).toBe(screen.getByRole("button", { name: "Refresh folder" }));
-  expect(path.value).toBe("/home/fixture");
-  await user.clear(path);
+  expect(screen.queryByRole("combobox")).toBeNull();
+  const next = await editPath(user);
+  await user.clear(next);
   await user.paste("/home/fixture/rep");
   expect(screen.getByRole("option", { name: "reports" })).toBeTruthy();
   await user.tab();
-  expect(path.value).toBe("/home/fixture/reports/");
-  expect(document.activeElement).toBe(path);
+  expect(next.value).toBe("/home/fixture/reports/");
+  expect(document.activeElement).toBe(next);
   await screen.findByRole("option", { name: "2026" });
   await user.tab();
-  expect(path.value).toBe("/home/fixture/reports/2026/");
-  expect(document.activeElement).toBe(path);
+  expect(next.value).toBe("/home/fixture/reports/2026/");
+  expect(document.activeElement).toBe(next);
   expect(screen.getByRole("button", { name: "Upload files" })).toHaveProperty("disabled", true);
   await user.keyboard("{Enter}");
   await waitFor(() =>
@@ -145,9 +177,7 @@ it("uses the loaded folder for suggestions when typing a Windows path", async ()
   });
   const user = userEvent.setup();
   render(<FilesPane connection={host} workspaceId="tab" />);
-  const path = await screen.findByRole<HTMLInputElement>("combobox", {
-    name: "Remote folder path",
-  });
+  const path = await editPath(user);
   await user.clear(path);
   await user.paste(String.raw`C:\Users\fixture\Doc`);
   const suggestion = await screen.findByRole("option", { name: "Documents" });
@@ -163,7 +193,7 @@ it("uses the loaded folder for suggestions when typing a Windows path", async ()
   await user.hover(name);
   expect(name.title).toBe("Documents");
   await user.click(suggestion);
-  await waitFor(() => expect(path.value).toBe("/C:/Users/fixture/Documents"));
+  expect((await screen.findByText("Documents")).getAttribute("aria-current")).toBe("location");
   expect(invoke.mock.calls.map(([, args]) => args.folder)).toEqual([
     null,
     "/C:/Users/fixture/Documents",
@@ -243,7 +273,7 @@ it("highlights literal matches and downloads a folder without opening it", async
   });
   const user = userEvent.setup();
   render(<FilesPane connection={host} workspaceId="tab" />);
-  await user.click(await screen.findByRole("searchbox", { name: "Filter files" }));
+  await user.click(await screen.findByRole("searchbox", { name: "Filter this folder" }));
   await user.paste("[q1]");
   expect(Array.from(document.querySelectorAll("mark"), (mark) => mark.textContent)).toEqual([
     "[Q1]",
@@ -282,7 +312,7 @@ it("refreshes a filtered folder when an earlier upload is replaced after the bat
   });
   const user = userEvent.setup();
   render(<FilesPane connection={host} workspaceId="tab" />);
-  const filter = await screen.findByRole("searchbox", { name: "Filter files" });
+  const filter = await screen.findByRole("searchbox", { name: "Filter this folder" });
   await user.type(filter, "report");
   await user.click(screen.getByRole("button", { name: "Upload files" }));
   await screen.findByText("Uploaded");

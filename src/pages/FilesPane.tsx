@@ -9,6 +9,7 @@ import {
   File,
   Folder,
   House,
+  Pencil,
   RefreshCw,
   X,
 } from "lucide-react";
@@ -16,6 +17,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Bone, Skeleton, SkeletonRows } from "../components/PanelState";
 import { Search } from "../components/MagnifierIcon";
 import { RemoteFolderPath } from "../components/RemoteFolderPath";
+import { FolderBreadcrumbs } from "../components/FolderBreadcrumbs";
 import {
   belongsTo,
   cancelJob,
@@ -168,8 +170,10 @@ export function FilesPane({
   const [request, setRequest] = useState<{ path: string | null }>({ path: null });
   const [folder, setFolder] = useState<RemoteFolder | null>(null);
   const [pathDraft, setPathDraft] = useState<string | null>(null);
+  const [editingPath, setEditingPath] = useState(false);
+  const editPathButton = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<{ message: string; retry: boolean } | null>(null);
   const [filter, setFilter] = useState("");
   const [visibleCount, setVisibleCount] = useState(100);
   const [hidden, setHidden] = useState(false);
@@ -184,7 +188,7 @@ export function FilesPane({
   useEffect(() => {
     let current = true;
     setBusy(true);
-    setError("");
+    setError(null);
     void api
       .listTransferFolder(connection.id, request.path)
       .then(
@@ -198,15 +202,24 @@ export function FilesPane({
             }
           }
         },
-        (reason) => {
-          if (current) setError(errorMessage(reason));
+        (reason: unknown) => {
+          if (!current) return;
+          if (
+            reason !== null &&
+            typeof reason === "object" &&
+            "message" in reason &&
+            typeof reason.message === "string" &&
+            "permissionDenied" in reason &&
+            typeof reason.permissionDenied === "boolean"
+          ) {
+            setError({ message: reason.message, retry: !reason.permissionDenied });
+          } else {
+            setError({ message: errorMessage(reason), retry: true });
+          }
         },
       )
       .finally(() => {
-        if (current) {
-          setPathDraft((draft) => (draft === request.path ? null : draft));
-          setBusy(false);
-        }
+        if (current) setBusy(false);
       });
     return () => {
       current = false;
@@ -214,6 +227,8 @@ export function FilesPane({
   }, [connection.id, request, completedUploads]);
 
   function openFolder(path: string | null) {
+    setBusy(true);
+    setEditingPath(false);
     setPathDraft(null);
     setRequest({ path });
   }
@@ -234,7 +249,7 @@ export function FilesPane({
         ]);
       else uploadFiles(connection, folder.path, picked);
     } catch (reason) {
-      if (alive.current) setError(errorMessage(reason));
+      if (alive.current) setError({ message: errorMessage(reason), retry: false });
     }
   }
   const match = useMemo(
@@ -267,10 +282,12 @@ export function FilesPane({
       {jobs.length > 0 && <Activity jobs={jobs} connection={connection} />}
       {error && (
         <div className="inline-error" role="alert">
-          <span>{error}</span>
-          <button className="inline-action" onClick={() => setRequest({ ...request })}>
-            Try again
-          </button>
+          <span>{error.message}</span>
+          {error.retry && (
+            <button className="inline-action" onClick={() => openFolder(request.path)}>
+              Try again
+            </button>
+          )}
         </div>
       )}
       {!folder && busy && request.path === null && (
@@ -300,19 +317,40 @@ export function FilesPane({
             >
               <ArrowUp size={16} />
             </button>
-            <RemoteFolderPath
-              connectionId={connection.id}
-              folder={folder}
-              draft={pathDraft}
-              busy={busy}
-              showHidden={hidden}
-              onEdit={setPathDraft}
-              onOpen={(path) => {
-                setBusy(true);
-                setPathDraft(path);
-                setRequest({ path });
+            {editingPath ? (
+              <RemoteFolderPath
+                connectionId={connection.id}
+                folder={folder}
+                draft={pathDraft}
+                busy={busy}
+                showHidden={hidden}
+                onEdit={setPathDraft}
+                onOpen={(path) => {
+                  openFolder(path);
+                  editPathButton.current?.focus();
+                }}
+                onClose={() => {
+                  setEditingPath(false);
+                  setPathDraft(null);
+                  editPathButton.current?.focus();
+                }}
+              />
+            ) : (
+              <FolderBreadcrumbs path={folder?.path ?? null} busy={busy} onOpen={openFolder} />
+            )}
+            <button
+              ref={editPathButton}
+              className="icon-button"
+              title={editingPath ? "Close path editor" : "Edit path"}
+              aria-label={editingPath ? "Close path editor" : "Edit path"}
+              aria-expanded={editingPath}
+              onClick={() => {
+                setPathDraft(null);
+                setEditingPath(!editingPath);
               }}
-            />
+            >
+              {editingPath ? <X size={15} /> : <Pencil size={15} />}
+            </button>
             <button
               className="icon-button"
               title="Refresh folder"
@@ -329,8 +367,8 @@ export function FilesPane({
                 <Search size={15} />
                 <input
                   type="search"
-                  aria-label="Filter files"
-                  placeholder="Filter files"
+                  aria-label="Filter this folder"
+                  placeholder="Filter this folder"
                   value={filter}
                   onChange={(e) => setFilter(e.target.value)}
                 />

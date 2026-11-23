@@ -32,13 +32,15 @@
       "prepare": {
         "error": [{ "role": "button", "name": "Open folder backups" }],
         "transfer-error": [{ "role": "button", "name": "Upload files" }],
-        "filtered": [{ "role": "searchbox", "name": "Filter files", "fill": "re" }],
+        "filtered": [{ "role": "searchbox", "name": "Filter this folder", "fill": "re" }],
         "folder-download": [{ "role": "button", "name": "Download folder reports" }],
         "typed-path": [
+          { "role": "button", "name": "Edit path" },
           { "role": "combobox", "name": "Remote folder path", "fill": "/srv/shared reports" },
           { "role": "combobox", "name": "Remote folder path", "press": "Enter" }
         ],
         "path-suggestions": [
+          { "role": "button", "name": "Edit path" },
           { "role": "combobox", "name": "Remote folder path", "fill": "/home/fixture/re" },
           { "role": "combobox", "name": "Remote folder path", "press": "ArrowDown" }
         ],

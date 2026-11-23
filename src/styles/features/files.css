@@ -36,9 +36,56 @@
   border-radius: var(--radius-md) var(--radius-md) 0 0;
   border-bottom: 1px solid var(--border);
 }
+.file-breadcrumbs,
 .file-path-field {
   flex: 1;
   min-width: 0;
+}
+.file-breadcrumbs {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.file-breadcrumbs ol,
+.file-breadcrumbs li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.file-breadcrumbs ol {
+  min-width: max-content;
+  list-style: none;
+  margin: 0;
+  padding: 2px;
+}
+.file-breadcrumbs li > svg {
+  color: var(--text-faint);
+}
+.file-crumb {
+  display: block;
+  max-width: 12rem;
+  min-height: 26px;
+  align-content: center;
+  padding: 2px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font: 12px var(--font-mono);
+}
+button.file-crumb {
+  background: transparent;
+  border: 0;
+}
+button.file-crumb:hover:not(:disabled) {
+  background: var(--fill-hover);
+  color: var(--text);
+}
+.file-crumb[aria-current] {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+.file-path-field {
   position: relative;
 }
 .file-path-field input {
