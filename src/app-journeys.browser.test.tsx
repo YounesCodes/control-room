@@ -277,6 +277,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await picker.click();
     await userEvent.keyboard("nomatch");
     await expect.element(menu.getByText("No matching terminals")).toBeVisible();
+    expect((await runAxe(menu.element())).violations.map(({ id }) => id)).toEqual([]);
     await userEvent.keyboard("{ArrowDown}");
     await expect.element(menu.getByRole("menuitem", { name: "Close all terminals" })).toHaveFocus();
     await userEvent.keyboard("{Enter}");
@@ -337,6 +338,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
       name: "Reopen terminals from the last app session",
     });
     await expect.element(restore).not.toBeChecked();
+    await expect
+      .element(restore)
+      .toHaveAccessibleDescription(/local and SSH tabs and split groups.*fresh session/);
     await restore.click();
     await page.getByRole("button", { name: "Save settings" }).click();
     await expect.poll(() => currentSettings.restoreTerminalsOnStartup).toBe(true);
