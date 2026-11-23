@@ -40,6 +40,10 @@ const user = process.env.CONTROL_ROOM_WINDOWS_TEST_USER;
   }
   it("connects PowerShell, reads Windows identity, and hides Linux navigation", async () => {
     const saved = await connect("powershell");
+    await expect($(".terminal-workspace-pane.active .xterm-rows > div:first-child")).toHaveText(
+      expect.stringMatching(/^PS .+>\s*$/),
+      { wait: 30_000 },
+    );
     await terminalCommand("Write-Output ('WINDOWS_' + 'SSH_OK')", "WINDOWS_SSH_OK");
     const capabilities = await ipc<HostCapabilities>("get_cached_capabilities", {
       connectionId: saved.id,

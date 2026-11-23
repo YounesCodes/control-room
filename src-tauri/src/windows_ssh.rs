@@ -373,7 +373,7 @@ fn cmd_launch(shell: &ResolvedShell) -> Option<String> {
         ""
     };
     Some(format!(
-        "if exist {executable} (<nul set /p \"={CONNECTED_MARKER}\" & {git_environment}{}) else (>&2 echo {MISSING_SHELL}& exit 1)",
+        "if exist {executable} (<nul set /p \"={CONNECTED_MARKER}\"&{git_environment}{}) else (>&2 echo {MISSING_SHELL}& exit 1)",
         program.join(" ")
     ))
 }
@@ -718,7 +718,7 @@ mod tests {
 
     fn direct(executable: &str, program: &str) -> String {
         format!(
-            "if exist \"{executable}\" (<nul set /p \"=\u{1b}]633;ControlRoom;connected\u{7}\" & {program}) else (>&2 echo The selected shell is no longer installed& exit 1)"
+            "if exist \"{executable}\" (<nul set /p \"=\u{1b}]633;ControlRoom;connected\u{7}\"&{program}) else (>&2 echo The selected shell is no longer installed& exit 1)"
         )
     }
 
