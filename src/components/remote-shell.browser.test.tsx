@@ -33,7 +33,7 @@ afterEach(() => {
   host?.remove();
 });
 describe("Windows remote shell picker", () => {
-  it("pulses the placeholders together and keeps the pending shell rows steady", async () => {
+  it("fades the placeholders from top to bottom and keeps the row borders steady", async () => {
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
@@ -54,14 +54,24 @@ describe("Windows remote shell picker", () => {
     await expect.element(page.getByRole("button", { name: "Connect", exact: true })).toBeDisabled();
     const rows = status.element().querySelectorAll(".remote-shell-option");
     expect(rows).toHaveLength(3);
-    for (const row of rows) {
+    const rowDelays = Array.from(rows, (row) => {
       expect(getComputedStyle(row).animationName).toBe("none");
-    }
-    const bones = [...status.element().querySelectorAll(".skeleton-bone")];
-    for (const bone of bones) {
-      expect(getComputedStyle(bone).animationName).not.toBe("none");
-    }
-    expect(new Set(bones.map((bone) => getComputedStyle(bone).animationDelay)).size).toBe(1);
+      const placeholderStyles = Array.from(row.querySelectorAll(".skeleton-bone"), (bone) =>
+        getComputedStyle(bone),
+      );
+      const delay = placeholderStyles[0].animationDelay;
+      for (const style of placeholderStyles) {
+        expect(style.animationName).not.toBe("none");
+        expect(style.animationDelay).toBe(delay);
+      }
+      return Number.parseFloat(delay);
+    });
+    const legend = status.element().querySelector(".skeleton-legend")!;
+    expect(rowDelays[0]).toBeGreaterThan(
+      Number.parseFloat(getComputedStyle(legend).animationDelay),
+    );
+    expect(rowDelays[1]).toBeGreaterThan(rowDelays[0]);
+    expect(rowDelays[2]).toBeGreaterThan(rowDelays[1]);
 
     finishDiscovery(await api.discoverRemoteShells("windows-test"));
     await expect.element(page.getByRole("radio", { name: "Windows PowerShell" })).toBeVisible();

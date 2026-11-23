@@ -9,7 +9,7 @@ import type {
 } from "../types";
 import { HostOsIcon } from "./HostOsIcon";
 import { Modal } from "./Modal";
-import { Bone, Skeleton, boneWidth } from "./PanelState";
+import { Bone, Skeleton, boneWidth, wave } from "./PanelState";
 
 const PLATFORM_NAMES: Record<string, string> = { macos: "macOS", windows: "Windows" };
 const FINDING_SHELLS = "Finding available shells…";
@@ -144,7 +144,7 @@ export function RemoteShellDialog({
               <div className="remote-shell-options">
                 <Bone shape="caption" width="64px" className="skeleton-legend" />
                 {Array.from({ length: 3 }, (_, index) => (
-                  <div className="remote-shell-option" key={index}>
+                  <div className="remote-shell-option" key={index} style={wave(index + 1)}>
                     <Bone shape="mark" />
                     <span className="remote-shell-option-text">
                       <Bone width={boneWidth(index, 160, "px")} />
