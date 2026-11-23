@@ -25,6 +25,7 @@
         "empty",
         "filtered",
         "folder-download",
+        "overflow",
         "typed-path",
         "path-suggestions"
       ],
@@ -34,6 +35,7 @@
         "transfer-error": [{ "role": "button", "name": "Upload files" }],
         "filtered": [{ "role": "searchbox", "name": "Filter this folder", "fill": "re" }],
         "folder-download": [{ "role": "button", "name": "Download folder reports" }],
+        "overflow": [{ "role": "button", "name": "Upload files" }],
         "typed-path": [
           { "role": "button", "name": "Edit path" },
           { "role": "combobox", "name": "Remote folder path", "fill": "/srv/shared reports" },
@@ -53,6 +55,7 @@
       "settled": {
         "filtered": ".file-entry:first-child mark",
         "folder-download": ".file-job progress",
+        "overflow": ".file-job progress",
         "typed-path": "[data-upload-folder='/srv/shared reports']",
         "path-suggestions": ".file-path-suggestions [aria-selected='true']",
         "idle": ".file-list",

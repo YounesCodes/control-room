@@ -50,19 +50,38 @@ function matchedName(name: string, match: RegExp | null) {
 
 function Activity({ jobs, connection }: { jobs: FileJob[]; connection: SavedConnection }) {
   const [prompt, setPrompt] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const pending = jobs.find((job) => job.status === "exists" && job.id === prompt);
+  const featured =
+    jobs.find((job) => job.status === "exists") ??
+    jobs.find((job) => job.status === "active" || job.status === "canceling") ??
+    jobs.find((job) => job.status === "failed") ??
+    jobs.at(-1);
+  const visible = expanded || !featured ? jobs : [featured];
   return (
     <section className="file-activity" aria-label="Transfers">
       <header>
         <h3>Transfers</h3>
-        {jobs.some((job) => ["complete", "failed", "canceled"].includes(job.status)) && (
-          <button className="secondary-button" onClick={() => clearFinished(connection)}>
-            Clear finished
-          </button>
-        )}
+        <div className="file-activity-actions">
+          {jobs.length > 1 && (
+            <button
+              className="secondary-button"
+              aria-expanded={expanded}
+              aria-label={expanded ? "Show fewer transfers" : "Show all transfers"}
+              onClick={() => setExpanded(!expanded)}
+            >
+              {expanded ? "Show less" : `Show all ${jobs.length}`}
+            </button>
+          )}
+          {jobs.some((job) => ["complete", "failed", "canceled"].includes(job.status)) && (
+            <button className="secondary-button" onClick={() => clearFinished(connection)}>
+              Clear finished
+            </button>
+          )}
+        </div>
       </header>
       <ul>
-        {jobs.map((job) => {
+        {visible.map((job) => {
           const active = job.status === "active";
           const progress = job.progress;
           const label = {
@@ -299,6 +318,8 @@ export function FilesPane({
   const parent = folder?.path.replace(/\/[^/]+\/?$/, "") || "/";
   const folderPath = pathDraft ?? folder?.path ?? "";
   const canUpload = folder !== null && !busy && folderPath === folder.path;
+  const showBrowser = folder !== null || !busy || request.path !== null;
+  const activity = jobs.length > 0 && <Activity jobs={jobs} connection={connection} />;
   return (
     <section
       className="feature-page files-page"
@@ -311,7 +332,6 @@ export function FilesPane({
           <ArrowUpFromLine size={15} /> Upload files
         </button>
       </header>
-      {jobs.length > 0 && <Activity jobs={jobs} connection={connection} />}
       {error && (
         <div className="inline-error" role="alert">
           <span>{error.message}</span>
@@ -322,13 +342,7 @@ export function FilesPane({
           )}
         </div>
       )}
-      {!folder && busy && request.path === null && (
-        <Skeleton label="Reading remote folder">
-          <Bone shape="control" width="100%" />
-          <SkeletonRows count={6} />
-        </Skeleton>
-      )}
-      {(folder || !busy || request.path !== null) && (
+      {showBrowser ? (
         <div className="file-browser" aria-busy={busy}>
           <div className="file-location">
             <button
@@ -415,76 +429,89 @@ export function FilesPane({
               </label>
             </div>
           )}
-          {folder && (
-            <ul className="file-list" aria-label="Remote files">
-              {entries.slice(0, visibleCount).map((entry) => {
-                const isFolder = entry.kind === "folder";
-                const Icon = isFolder ? Folder : File;
-                return (
-                  <li className="file-entry" key={entry.name}>
-                    <button
-                      className="file-row"
-                      disabled={busy || entry.kind === "other"}
-                      aria-label={`${isFolder ? "Open folder" : "Download"} ${entry.name}`}
-                      onClick={() =>
-                        isFolder ? openFolder(join(folder.path, entry.name)) : void pick(entry)
-                      }
-                    >
-                      <Icon size={17} />
-                      <span onMouseEnter={showOverflowTitle}>{matchedName(entry.name, match)}</span>
-                      <small>
-                        {entry.kind === "file" && entry.size !== null
-                          ? size(entry.size)
-                          : entry.kind === "other"
-                            ? "Special file"
-                            : ""}
-                      </small>
-                      {isFolder ? (
-                        <ChevronRight size={15} />
-                      ) : entry.kind === "file" ? (
-                        <ArrowDownToLine size={15} />
-                      ) : null}
-                    </button>
-                    {isFolder && (
+          <div className="file-scroll" role="region" aria-label="Files and transfers" tabIndex={0}>
+            {activity}
+            {folder && (
+              <ul className="file-list" aria-label="Remote files">
+                {entries.slice(0, visibleCount).map((entry) => {
+                  const isFolder = entry.kind === "folder";
+                  const Icon = isFolder ? Folder : File;
+                  return (
+                    <li className="file-entry" key={entry.name}>
                       <button
-                        className="icon-button file-folder-download"
-                        disabled={busy}
-                        aria-label={`Download folder ${entry.name}`}
-                        title="Download folder"
-                        onClick={() => void pick(entry)}
+                        className="file-row"
+                        disabled={busy || entry.kind === "other"}
+                        aria-label={`${isFolder ? "Open folder" : "Download"} ${entry.name}`}
+                        onClick={() =>
+                          isFolder ? openFolder(join(folder.path, entry.name)) : void pick(entry)
+                        }
                       >
-                        <ArrowDownToLine size={15} />
+                        <Icon size={17} />
+                        <span onMouseEnter={showOverflowTitle}>
+                          {matchedName(entry.name, match)}
+                        </span>
+                        <small>
+                          {entry.kind === "file" && entry.size !== null
+                            ? size(entry.size)
+                            : entry.kind === "other"
+                              ? "Special file"
+                              : ""}
+                        </small>
+                        {isFolder ? (
+                          <ChevronRight size={15} />
+                        ) : entry.kind === "file" ? (
+                          <ArrowDownToLine size={15} />
+                        ) : null}
                       </button>
-                    )}
+                      {isFolder && (
+                        <button
+                          className="icon-button file-folder-download"
+                          disabled={busy}
+                          aria-label={`Download folder ${entry.name}`}
+                          title="Download folder"
+                          onClick={() => void pick(entry)}
+                        >
+                          <ArrowDownToLine size={15} />
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+                {entries.length > visibleCount && (
+                  <li>
+                    <button
+                      className="secondary-button"
+                      onClick={() => setVisibleCount((count) => count + 100)}
+                    >
+                      Show more files
+                    </button>
                   </li>
-                );
-              })}
-              {entries.length > visibleCount && (
-                <li>
-                  <button
-                    className="secondary-button"
-                    onClick={() => setVisibleCount((count) => count + 100)}
-                  >
-                    Show more files
-                  </button>
-                </li>
-              )}
-            </ul>
-          )}
-          {folder && !entries.length && (
-            <p className="files-empty">
-              {filter
-                ? "No matching files"
-                : folder.entries.length
-                  ? "No visible files"
-                  : "This folder is empty"}
-            </p>
-          )}
+                )}
+              </ul>
+            )}
+            {folder && !entries.length && (
+              <p className="files-empty">
+                {filter
+                  ? "No matching files"
+                  : folder.entries.length
+                    ? "No visible files"
+                    : "This folder is empty"}
+              </p>
+            )}
+          </div>
           {folder && (
             <footer className="file-drop-hint">
               <ArrowUpFromLine size={14} /> Drop local files here to upload
             </footer>
           )}
+        </div>
+      ) : (
+        <div className="file-scroll">
+          {activity}
+          <Skeleton label="Reading remote folder">
+            <Bone shape="control" width="100%" />
+            <SkeletonRows count={6} />
+          </Skeleton>
         </div>
       )}
     </section>

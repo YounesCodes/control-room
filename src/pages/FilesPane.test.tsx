@@ -269,6 +269,7 @@ it("cancels one queued upload while the first file is copying", async () => {
   render(<FilesPane connection={host} workspaceId="tab" />);
   await screen.findByText("This folder is empty");
   await user.click(screen.getByRole("button", { name: "Upload files" }));
+  await user.click(screen.getByRole("button", { name: "Show all transfers" }));
   await user.click(await screen.findByRole("button", { name: "Cancel transfer of next.txt" }));
   finish("complete");
   await waitFor(() =>
@@ -362,8 +363,7 @@ it("refreshes a filtered folder when an earlier upload is replaced after the bat
   const filter = await screen.findByRole("searchbox", { name: "Filter this folder" });
   await user.type(filter, "report");
   await user.click(screen.getByRole("button", { name: "Upload files" }));
-  await screen.findByText("Uploaded");
-  await user.click(screen.getByRole("button", { name: "Review" }));
+  await user.click(await screen.findByRole("button", { name: "Review" }));
   await user.click(screen.getByRole("button", { name: "Replace file" }));
   await screen.findByText("400 B");
   expect((filter as HTMLInputElement).value).toBe("report");

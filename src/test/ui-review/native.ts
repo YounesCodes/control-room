@@ -351,7 +351,12 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
   let result: unknown;
   switch (command) {
     case "choose_transfer_paths":
-      result = args.direction === "upload" ? ["/example/release.tar.gz"] : ["/example/downloads"];
+      result =
+        state === "overflow" && args.direction === "upload"
+          ? Array.from({ length: 8 }, (_, index) => `/example/archive-${index + 1}.zip`)
+          : args.direction === "upload"
+            ? ["/example/release.tar.gz"]
+            : ["/example/downloads"];
       break;
     case "list_transfer_folder":
       if (state === "loading") return pending();
@@ -362,14 +367,20 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
         entries:
           state === "empty"
             ? []
-            : [
-                { name: "backups", kind: "folder", size: null },
-                { name: "projects", kind: "folder", size: null },
-                { name: "reports", kind: "folder", size: null },
-                { name: "deploy.log", kind: "file", size: 162408 },
-                { name: "release.tar.gz", kind: "file", size: 78643200 },
-                { name: ".profile", kind: "file", size: 768 },
-              ],
+            : state === "overflow"
+              ? Array.from({ length: 120 }, (_, index) => ({
+                  name: `project-${String(index + 1).padStart(3, "0")}`,
+                  kind: "folder",
+                  size: null,
+                }))
+              : [
+                  { name: "backups", kind: "folder", size: null },
+                  { name: "projects", kind: "folder", size: null },
+                  { name: "reports", kind: "folder", size: null },
+                  { name: "deploy.log", kind: "file", size: 162408 },
+                  { name: "release.tar.gz", kind: "file", size: 78643200 },
+                  { name: ".profile", kind: "file", size: 768 },
+                ],
       };
       break;
     case "transfer_file":
@@ -378,7 +389,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
         args.progress.onmessage({ bytes: 28311552, total: null, bytesPerSecond: 5242880 });
         return pending();
       }
-      if (state === "in-progress") {
+      if (state === "in-progress" || state === "overflow") {
         args.progress.onmessage({ bytes: 28311552, total: 78643200, bytesPerSecond: 5242880 });
         return pending();
       }

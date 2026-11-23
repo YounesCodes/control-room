@@ -1,5 +1,9 @@
 .files-page {
+  display: flex;
+  flex-direction: column;
   height: 100%;
+  min-height: 0;
+  overflow: clip;
   padding: 26px clamp(16px, 3vw, 30px);
   position: relative;
 }
@@ -10,9 +14,20 @@
   border-radius: var(--radius-md);
   background: var(--surface-sunken);
 }
+.file-browser {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.file-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
 .files-page .page-heading,
 .files-page > .inline-error {
   max-width: 1040px;
+  flex: none;
 }
 .files-page .inline-error {
   align-items: center;
@@ -32,6 +47,7 @@
   padding: 8px 12px;
 }
 .file-location {
+  flex: none;
   background: var(--surface-chrome);
   border-radius: var(--radius-md) var(--radius-md) 0 0;
   border-bottom: 1px solid var(--border);
@@ -147,6 +163,7 @@ button.file-crumb:hover:not(:disabled) {
   flex-shrink: 0;
 }
 .file-filter {
+  flex: none;
   justify-content: space-between;
   flex-wrap: wrap;
   border-bottom: 1px solid var(--border-subtle);
@@ -163,10 +180,6 @@ button.file-crumb:hover:not(:disabled) {
   list-style: none;
   margin: 0;
   padding: 0;
-}
-.file-list {
-  max-height: 55vh;
-  overflow: auto;
 }
 .file-entry {
   display: flex;
@@ -219,6 +232,7 @@ button.file-crumb:hover:not(:disabled) {
 .file-row svg,
 .file-row small,
 .file-drop-hint {
+  flex: none;
   color: var(--text-muted);
 }
 .file-drop-hint {
@@ -233,20 +247,22 @@ button.file-crumb:hover:not(:disabled) {
   color: var(--text-muted);
 }
 .file-activity {
-  margin-bottom: 16px;
+  margin: 8px 12px;
 }
 .file-activity header {
   justify-content: space-between;
   border-bottom: 1px solid var(--border-subtle);
   min-height: 36px;
 }
+.file-activity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
 .file-activity h3 {
   margin: 0;
   font-size: 13px;
-}
-.file-activity ul {
-  max-height: 24vh;
-  overflow: auto;
 }
 .file-activity li {
   min-height: 50px;
