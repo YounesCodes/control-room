@@ -130,9 +130,10 @@ export function RemoteFolderPath({
             !event.ctrlKey &&
             !event.metaKey &&
             !event.altKey &&
-            soleSuggestion
+            suggestions.length > 0
           ) {
             event.preventDefault();
+            if (!soleSuggestion) return;
             setActiveIndex(-1);
             const delimiter =
               drivePath && value.lastIndexOf("\\") > value.lastIndexOf("/") ? "\\" : "/";

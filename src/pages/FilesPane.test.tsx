@@ -92,7 +92,7 @@ it("suggests matching folders under the typed parent and opens a keyboard select
   expect(invoke.mock.calls.filter(([, args]) => args.folder === "/srv/")).toHaveLength(1);
 });
 
-it("completes one suggestion with Tab and keeps ordinary Tab navigation for multiple matches", async () => {
+it("keeps focus with multiple suggestions and completes a single match with Tab", async () => {
   invoke.mockImplementation(async (command, args) => {
     if (command !== "list_transfer_folder") throw new Error(command);
     const entries = (names: string[]) =>
@@ -110,6 +110,11 @@ it("completes one suggestion with Tab and keeps ordinary Tab navigation for mult
   await user.clear(path);
   await user.paste("/home/fixture/re");
   expect(screen.getAllByRole("option")).toHaveLength(2);
+  await user.tab();
+  expect(document.activeElement).toBe(path);
+  expect(path.value).toBe("/home/fixture/re");
+  expect(screen.getAllByRole("option")).toHaveLength(2);
+  await user.keyboard("{Escape}");
   await user.tab();
   expect(document.activeElement).toBe(screen.getByRole("button", { name: "Refresh folder" }));
   expect(path.value).toBe("/home/fixture");
