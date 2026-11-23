@@ -355,8 +355,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       break;
     case "list_transfer_folder":
       if (state === "loading") return pending();
-      if (state === "error")
-        throw new Error("Permission denied. Check the SSH key or agent for this host.");
+      if (state === "error" && args.folder) throw new Error("Permission denied on the host");
       result = {
         path: args.folder ?? "/home/fixture",
         entries:
@@ -373,6 +372,7 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       };
       break;
     case "transfer_file":
+      if (state === "transfer-error") throw "Permission denied on the host";
       if (state === "folder-download") {
         args.progress.onmessage({ bytes: 28311552, total: null, bytesPerSecond: 5242880 });
         return pending();

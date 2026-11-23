@@ -40,6 +40,28 @@ pub(super) fn invalid() -> io::Error {
     )
 }
 
+fn status_error(code: u32, detail: &str) -> io::Error {
+    let (kind, message) = match code {
+        1 => (io::ErrorKind::UnexpectedEof, "End of SFTP listing or file"),
+        2 => (io::ErrorKind::NotFound, "Path not found on the host"),
+        3 => (
+            io::ErrorKind::PermissionDenied,
+            "Permission denied on the host",
+        ),
+        14 => (io::ErrorKind::StorageFull, "The host disk is full"),
+        _ => (
+            io::ErrorKind::Other,
+            "The host could not complete the file operation",
+        ),
+    };
+    let detail = detail.trim();
+    if detail.is_empty() || (code == 3 && detail.eq_ignore_ascii_case("permission denied")) {
+        io::Error::new(kind, message)
+    } else {
+        io::Error::new(kind, format!("{message}: {detail}"))
+    }
+}
+
 pub(super) struct Packet(pub Cursor<Vec<u8>>);
 impl Packet {
     pub fn byte(&mut self) -> io::Result<u8> {
@@ -215,20 +237,7 @@ impl Sftp {
                 return Ok(packet);
             }
             let detail = String::from_utf8_lossy(packet.string()?);
-            let (kind, message) = match code {
-                1 => (io::ErrorKind::UnexpectedEof, "End of SFTP listing or file"),
-                2 => (io::ErrorKind::NotFound, "Path not found on the host"),
-                3 => (
-                    io::ErrorKind::PermissionDenied,
-                    "Permission denied on the host",
-                ),
-                14 => (io::ErrorKind::StorageFull, "The host disk is full"),
-                _ => (
-                    io::ErrorKind::Other,
-                    "The host could not complete the file operation",
-                ),
-            };
-            return Err(io::Error::new(kind, format!("{message}: {detail}")));
+            return Err(status_error(code, &detail));
         }
         if kind != expected {
             return Err(invalid());
@@ -260,5 +269,21 @@ impl Sftp {
 
     pub fn handle(&mut self, kind: u8, body: &[u8]) -> io::Result<Vec<u8>> {
         Ok(string(self.request(kind, body, HANDLE)?.string()?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn permission_status_omits_repeated_text_and_preserves_specific_detail() {
+        let denied = status_error(3, "Permission denied");
+        assert_eq!(denied.kind(), io::ErrorKind::PermissionDenied);
+        assert_eq!(denied.to_string(), "Permission denied on the host");
+        assert_eq!(
+            status_error(3, "Read access required").to_string(),
+            "Permission denied on the host: Read access required"
+        );
     }
 }

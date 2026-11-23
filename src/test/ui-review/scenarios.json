@@ -19,6 +19,7 @@
         "idle",
         "in-progress",
         "error",
+        "transfer-error",
         "overwrite-prompt",
         "loading",
         "empty",
@@ -29,6 +30,8 @@
       ],
       "ready": ".files-page",
       "prepare": {
+        "error": [{ "role": "button", "name": "Open folder backups" }],
+        "transfer-error": [{ "role": "button", "name": "Upload files" }],
         "filtered": [{ "role": "searchbox", "name": "Filter files", "fill": "re" }],
         "folder-download": [{ "role": "button", "name": "Download folder reports" }],
         "typed-path": [
@@ -52,6 +55,7 @@
         "path-suggestions": ".file-path-suggestions [aria-selected='true']",
         "idle": ".file-list",
         "error": ".files-page .inline-error",
+        "transfer-error": ".file-activity .inline-error",
         "in-progress": ".file-job progress",
         "overwrite-prompt": ".modal",
         "loading": ".files-page .skeleton",

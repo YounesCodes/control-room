@@ -13,6 +13,13 @@
 .files-page .page-heading {
   max-width: 1040px;
 }
+.files-page .inline-error {
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+.files-page .inline-error::before {
+  margin-top: 0;
+}
 .file-location,
 .file-filter,
 .file-drop-hint,
