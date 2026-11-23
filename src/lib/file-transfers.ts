@@ -27,9 +27,11 @@ export interface FileJob {
   progress?: TransferProgress;
   error?: string;
   replace: boolean;
+  uploadRevision?: number;
 }
 
 let jobs: FileJob[] = [];
+let uploadRevision = 0;
 const listeners = new Set<() => void>();
 export const fileJobs = () => jobs;
 export const subscribeFileJobs = (listener: () => void) => {
@@ -80,6 +82,8 @@ async function run(job: FileJob) {
         outcome === "exists" && jobs.find((item) => item.id === job.id)?.status === "canceling"
           ? "canceled"
           : outcome,
+      uploadRevision:
+        outcome === "complete" && job.direction === "upload" ? ++uploadRevision : undefined,
     });
   } catch (error) {
     const reason = String(error);

@@ -24,7 +24,6 @@ use uuid::Uuid;
 use crate::{database::Database, models::SavedConnection};
 use sftp::{ATTRS, DATA, NAME, POSIX_RENAME, Sftp, invalid, string};
 
-const CHUNK: usize = 64 * 1024;
 const TYPE_MASK: u32 = 0o170000;
 const DIRECTORY: u32 = 0o040000;
 const REGULAR: u32 = 0o100000;
@@ -385,8 +384,9 @@ fn upload(client: &mut Sftp, spec: &Transfer, meter: &mut Meter<'_>) -> io::Resu
     let handle = client.handle(sftp::OPEN, &open)?;
     let result = (|| {
         let mut bytes = 0;
-        let mut chunk = vec![0; CHUNK];
         meter.update(0, metadata.len())?;
+        let chunk_size = client.chunk_size(metadata.len(), Direction::Upload, &handle)?;
+        let mut chunk = vec![0; chunk_size];
         loop {
             let size = source.read(&mut chunk)?;
             if size == 0 {
@@ -490,10 +490,11 @@ fn copy_remote_file(
     let total = total.ok_or_else(invalid)?;
     let mut bytes = 0_u64;
     report(bytes, total)?;
+    let chunk_size = client.chunk_size(total, Direction::Download, &handle)?;
     while bytes < total {
         let mut read = handle.clone();
         read.extend(bytes.to_be_bytes());
-        let wanted = (total - bytes).min(CHUNK as u64) as u32;
+        let wanted = (total - bytes).min(chunk_size as u64) as u32;
         read.extend(wanted.to_be_bytes());
         let mut reply = client.request(sftp::READ, &read, DATA)?;
         let chunk = reply.string()?;

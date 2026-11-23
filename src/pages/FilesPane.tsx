@@ -161,13 +161,17 @@ export function FilesPane({
   connection: SavedConnection;
   workspaceId: string;
 }) {
-  const jobs = useSyncExternalStore(subscribeFileJobs, fileJobs).filter((job) =>
-    belongsTo(job, connection),
+  const allJobs = useSyncExternalStore(subscribeFileJobs, fileJobs);
+  const jobs = useMemo(
+    () => allJobs.filter((job) => belongsTo(job, connection)),
+    [allJobs, connection],
   );
-  const completedUploads = jobs.filter(
-    (job) => job.direction === "upload" && job.status === "complete",
-  ).length;
-  const [request, setRequest] = useState<{ path: string | null }>({ path: null });
+  const latestUpload = jobs.reduce((latest, job) => Math.max(latest, job.uploadRevision ?? 0), 0);
+  const observedUpload = useRef(latestUpload);
+  const pendingRefresh = useRef<string | null>(null);
+  const [request, setRequest] = useState<{ path: string | null; prefetched?: RemoteFolder }>({
+    path: null,
+  });
   const [folder, setFolder] = useState<RemoteFolder | null>(null);
   const [pathDraft, setPathDraft] = useState<string | null>(null);
   const [editingPath, setEditingPath] = useState(false);
@@ -187,10 +191,12 @@ export function FilesPane({
   }, []);
   useEffect(() => {
     let current = true;
-    setBusy(true);
+    setBusy(request.prefetched === undefined);
     setError(null);
-    void api
-      .listTransferFolder(connection.id, request.path)
+    const listing = request.prefetched
+      ? Promise.resolve(request.prefetched)
+      : api.listTransferFolder(connection.id, request.path);
+    void listing
       .then(
         (result) => {
           if (current) {
@@ -224,13 +230,40 @@ export function FilesPane({
     return () => {
       current = false;
     };
-  }, [connection.id, request, completedUploads]);
+  }, [connection.id, request]);
 
-  function openFolder(path: string | null) {
-    setBusy(true);
+  useEffect(() => {
+    if (latestUpload > observedUpload.current) {
+      if (
+        folder &&
+        jobs.some(
+          (job) =>
+            (job.uploadRevision ?? 0) > observedUpload.current &&
+            (job.remotePath === folder.path || job.remotePath === "."),
+        )
+      ) {
+        pendingRefresh.current = folder.path;
+      }
+      observedUpload.current = latestUpload;
+    }
+    if (busy || pendingRefresh.current === null) return;
+    const uploading = jobs.some(
+      (job) =>
+        job.direction === "upload" &&
+        (job.remotePath === pendingRefresh.current || job.remotePath === ".") &&
+        ["queued", "active", "canceling"].includes(job.status),
+    );
+    if (uploading) return;
+    const path = pendingRefresh.current;
+    pendingRefresh.current = null;
+    if (path === folder?.path) setRequest({ path });
+  }, [busy, folder, jobs, latestUpload]);
+
+  function openFolder(path: string | null, prefetched?: RemoteFolder) {
+    setBusy(prefetched === undefined);
     setEditingPath(false);
     setPathDraft(null);
-    setRequest({ path });
+    setRequest({ path, prefetched });
   }
 
   async function pick(entry?: RemoteFolder["entries"][number]) {
@@ -253,14 +286,13 @@ export function FilesPane({
     }
   }
   const match = useMemo(
-    () => (filter ? new RegExp(`(${filter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "giu") : null),
+    () => (filter ? new RegExp(`(${filter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "iu") : null),
     [filter],
   );
   const entries = useMemo(
     () =>
       folder?.entries.filter(
-        (entry) =>
-          (hidden || !entry.name.startsWith(".")) && (!match || entry.name.search(match) !== -1),
+        (entry) => (hidden || !entry.name.startsWith(".")) && (!match || match.test(entry.name)),
       ) ?? [],
     [folder, hidden, match],
   );
@@ -325,8 +357,8 @@ export function FilesPane({
                 busy={busy}
                 showHidden={hidden}
                 onEdit={setPathDraft}
-                onOpen={(path) => {
-                  openFolder(path);
+                onOpen={(path, prefetched) => {
+                  openFolder(path, prefetched);
                   editPathButton.current?.focus();
                 }}
                 onClose={() => {

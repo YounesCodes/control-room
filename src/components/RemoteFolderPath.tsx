@@ -6,6 +6,7 @@ import { showOverflowTitle } from "../lib/overflow-title";
 
 const SUGGESTION_DELAY_MS = 220;
 const SUGGESTION_LIMIT = 6;
+const LISTING_FRESH_MS = 3000;
 
 export function RemoteFolderPath({
   connectionId,
@@ -23,7 +24,7 @@ export function RemoteFolderPath({
   busy: boolean;
   showHidden: boolean;
   onEdit: (value: string | null) => void;
-  onOpen: (path: string) => void;
+  onOpen: (path: string, prefetched?: RemoteFolder) => void;
   onClose: () => void;
 }) {
   const input = useRef<HTMLInputElement>(null);
@@ -34,6 +35,7 @@ export function RemoteFolderPath({
     connectionId: string;
     parent: string;
     folder: RemoteFolder;
+    receivedAt: number;
   } | null>(null);
   const value = draft ?? folder?.path ?? "";
   const drivePath = /^\/?[a-z]:[/\\]/i.test(value);
@@ -58,7 +60,8 @@ export function RemoteFolderPath({
     const timer = window.setTimeout(() => {
       void api.listTransferFolder(connectionId, parent).then(
         (result) => {
-          if (!canceled) setLookup({ connectionId, parent, folder: result });
+          if (!canceled)
+            setLookup({ connectionId, parent, folder: result, receivedAt: performance.now() });
         },
         () => {
           if (!canceled) setLookup(null);
@@ -74,20 +77,32 @@ export function RemoteFolderPath({
   const source =
     current ??
     (lookup?.connectionId === connectionId && lookup.parent === parent ? lookup.folder : null);
-  const suggestions =
-    source?.entries
-      .filter(
-        ({ kind, name }) =>
-          kind === "folder" &&
-          (showHidden || prefix.startsWith(".") || !name.startsWith(".")) &&
-          name.toLowerCase().startsWith(prefix),
-      )
-      .slice(0, SUGGESTION_LIMIT) ?? [];
+  const suggestions: RemoteFolder["entries"] = [];
+  for (const entry of source?.entries ?? []) {
+    if (
+      entry.kind === "folder" &&
+      (showHidden || prefix.startsWith(".") || !entry.name.startsWith(".")) &&
+      entry.name.toLowerCase().startsWith(prefix)
+    ) {
+      suggestions.push(entry);
+      if (suggestions.length === SUGGESTION_LIMIT) break;
+    }
+  }
   const selected = suggestions[activeIndex];
   const soleSuggestion = suggestions.length === 1 ? suggestions[0] : null;
 
+  function openPath(path: string) {
+    const prefetched =
+      lookup?.connectionId === connectionId &&
+      (path === lookup.parent || path === lookup.folder.path) &&
+      performance.now() - lookup.receivedAt < LISTING_FRESH_MS
+        ? lookup.folder
+        : undefined;
+    onOpen(path, prefetched);
+  }
+
   function openSuggestion(name: string) {
-    if (source) onOpen(source.path.replace(/\/?$/, "/") + name);
+    if (source) openPath(source.path.replace(/\/?$/, "/") + name);
     setActiveIndex(-1);
   }
 
@@ -98,7 +113,7 @@ export function RemoteFolderPath({
         event.preventDefault();
         if (busy) return;
         if (selected) openSuggestion(selected.name);
-        else if (value.trim()) onOpen(value);
+        else if (value.trim()) openPath(value);
       }}
     >
       <input

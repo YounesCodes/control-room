@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { FilesPane } from "./FilesPane";
@@ -123,6 +123,27 @@ it("suggests matching folders under the typed parent and opens a keyboard select
   expect((await screen.findByText("Shared")).getAttribute("aria-current")).toBe("location");
   expect(screen.queryByRole("listbox")).toBeNull();
   expect(invoke.mock.calls.filter(([, args]) => args.folder === "/srv/")).toHaveLength(1);
+});
+
+it("uses the just-loaded folder listing when Enter opens the suggested parent path", async () => {
+  invoke.mockImplementation(async (command, args) => {
+    if (command !== "list_transfer_folder") throw new Error(command);
+    return {
+      path: args.folder ? "/srv" : "/home/fixture",
+      entries: args.folder ? [{ name: "Shared", kind: "folder", size: null }] : [],
+    };
+  });
+  const user = userEvent.setup();
+  render(<FilesPane connection={host} workspaceId="tab" />);
+  const path = await editPath(user);
+  await user.clear(path);
+  await user.paste("/srv/");
+  await screen.findByRole("option", { name: "Shared" });
+  await user.keyboard("{Enter}");
+  await screen.findByRole("button", { name: "Open folder Shared" });
+  expect(invoke.mock.calls.map(([, args]) => args.folder)).toEqual([null, "/srv/"]);
+  await user.click(screen.getByRole("button", { name: "Refresh folder" }));
+  expect(invoke.mock.calls.map(([, args]) => args.folder)).toEqual([null, "/srv/", "/srv"]);
 });
 
 it("keeps focus with multiple suggestions and completes a single match with Tab", async () => {
@@ -254,6 +275,32 @@ it("cancels one queued upload while the first file is copying", async () => {
     expect(fileJobs().map((job) => job.status)).toEqual(["complete", "canceled"]),
   );
   expect(invoke.mock.calls.filter(([cmd]) => cmd === "transfer_file")).toHaveLength(1);
+});
+
+it("refreshes the folder once after a batch and keeps the listing when clearing transfers", async () => {
+  const uploads: ((result: string) => void)[] = [];
+  const names = ["alpha.txt", "beta.txt", "gamma.txt"];
+  invoke.mockImplementation(async (command) => {
+    if (command === "list_transfer_folder") return { path: "/home/fixture", entries: [] };
+    if (command === "choose_transfer_paths") return names.map((name) => `/local/${name}`);
+    if (command === "transfer_file") return new Promise((resolve) => uploads.push(resolve));
+    throw new Error(command);
+  });
+  const user = userEvent.setup();
+  render(<FilesPane connection={host} workspaceId="tab" />);
+  await screen.findByText("This folder is empty");
+  await user.click(screen.getByRole("button", { name: "Upload files" }));
+  for (let index = 0; index < names.length; index++) {
+    await waitFor(() => expect(uploads).toHaveLength(index + 1));
+    await act(async () => uploads[index]("complete"));
+    if (index === 0) {
+      await user.click(screen.getByRole("button", { name: "Clear finished" }));
+      expect(invoke.mock.calls.filter(([cmd]) => cmd === "list_transfer_folder")).toHaveLength(1);
+    }
+  }
+  await user.click(screen.getByRole("button", { name: "Clear finished" }));
+  const reads = invoke.mock.calls.filter(([cmd]) => cmd === "list_transfer_folder");
+  expect(reads.map(([, args]) => args.folder)).toEqual([null, "/home/fixture"]);
 });
 
 it("highlights literal matches and downloads a folder without opening it", async () => {

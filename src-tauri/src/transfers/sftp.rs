@@ -4,6 +4,7 @@ use std::{
     process::{Child, ChildStdin, ChildStdout, Stdio},
 };
 
+use super::Direction;
 use crate::{models::SavedConnection, ssh, ssh_mux};
 
 const VERSION: u8 = 2;
@@ -30,6 +31,12 @@ pub(super) const DATA: u8 = 103;
 pub(super) const NAME: u8 = 104;
 pub(super) const ATTRS: u8 = 105;
 const MAX_PACKET: usize = 1024 * 1024;
+const DEFAULT_CHUNK: usize = 64 * 1024;
+const MAX_CHUNK: usize = 256 * 1024;
+const PACKET_HEADER: u64 = 4 + 1 + 4;
+const STRING_LENGTH: u64 = 4;
+const FILE_OFFSET: u64 = 8;
+const LIMITS: &[u8] = b"limits@openssh.com";
 pub(super) const POSIX_RENAME: &[u8] = b"posix-rename@openssh.com";
 const STATVFS: &[u8] = b"statvfs@openssh.com";
 
@@ -47,6 +54,10 @@ fn status_error(code: u32, detail: &str) -> io::Error {
         3 => (
             io::ErrorKind::PermissionDenied,
             "Permission denied on the host",
+        ),
+        8 => (
+            io::ErrorKind::Unsupported,
+            "The host does not support this file operation",
         ),
         14 => (io::ErrorKind::StorageFull, "The host disk is full"),
         _ => (
@@ -145,6 +156,37 @@ pub(super) struct Sftp {
     sequence: u32,
     pub posix_rename: bool,
     statvfs: bool,
+    query_limits: bool,
+    limits: Option<Limits>,
+}
+
+struct Limits {
+    packet: u64,
+    read: u64,
+    write: u64,
+}
+
+impl Limits {
+    fn chunk(&self, direction: Direction, handle_len: usize) -> io::Result<usize> {
+        let (advertised, overhead) = match direction {
+            Direction::Download => (self.read, PACKET_HEADER + STRING_LENGTH),
+            Direction::Upload => (
+                self.write,
+                PACKET_HEADER + handle_len as u64 + FILE_OFFSET + STRING_LENGTH,
+            ),
+        };
+        let mut chunk = MAX_CHUNK as u64;
+        if advertised != 0 {
+            chunk = chunk.min(advertised);
+        }
+        if self.packet != 0 {
+            chunk = chunk.min(self.packet.saturating_sub(overhead));
+        }
+        if chunk == 0 {
+            return Err(invalid());
+        }
+        Ok(chunk as usize)
+    }
 }
 
 impl Drop for Sftp {
@@ -173,6 +215,8 @@ impl Sftp {
             sequence: 0,
             posix_rename: false,
             statvfs: false,
+            query_limits: false,
+            limits: None,
         };
         client.send(&[1, 0, 0, 0, 3])?;
         let mut version = client.receive()?;
@@ -186,8 +230,37 @@ impl Sftp {
             let revision = version.string()?;
             client.posix_rename |= extension == POSIX_RENAME && revision == b"1";
             client.statvfs |= extension == STATVFS && revision == b"2";
+            client.query_limits |= extension == LIMITS && revision == b"1";
         }
         Ok(client)
+    }
+
+    pub fn chunk_size(
+        &mut self,
+        total: u64,
+        direction: Direction,
+        handle: &[u8],
+    ) -> io::Result<usize> {
+        if self.query_limits && total > (2 * DEFAULT_CHUNK) as u64 {
+            self.query_limits = false;
+            match self.request(EXTENDED, &string(LIMITS), EXTENDED_REPLY) {
+                Ok(mut reply) => {
+                    let limits = Limits {
+                        packet: reply.wide()?,
+                        read: reply.wide()?,
+                        write: reply.wide()?,
+                    };
+                    reply.wide()?;
+                    self.limits = Some(limits);
+                }
+                Err(error) if error.kind() == io::ErrorKind::Unsupported => (),
+                Err(error) => return Err(error),
+            }
+        }
+        match &self.limits {
+            Some(limits) => limits.chunk(direction, handle.len()),
+            None => Ok(DEFAULT_CHUNK),
+        }
     }
 
     fn send(&mut self, data: &[u8]) -> io::Result<()> {
@@ -285,5 +358,23 @@ mod tests {
             status_error(3, "Read access required").to_string(),
             "Permission denied on the host: Read access required"
         );
+    }
+
+    #[test]
+    fn transfer_chunks_respect_packet_and_payload_limits() {
+        let limits = Limits {
+            packet: 128 * 1024,
+            read: 32 * 1024,
+            write: 0,
+        };
+        assert_eq!(limits.chunk(Direction::Download, 8).unwrap(), 32 * 1024);
+        assert_eq!(limits.chunk(Direction::Upload, 8).unwrap(), 128 * 1024 - 29);
+        let unlimited = Limits {
+            packet: 0,
+            read: u64::MAX,
+            write: 0,
+        };
+        assert_eq!(unlimited.chunk(Direction::Upload, 8).unwrap(), MAX_CHUNK);
+        assert_eq!(unlimited.chunk(Direction::Download, 8).unwrap(), MAX_CHUNK);
     }
 }
