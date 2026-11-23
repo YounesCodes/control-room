@@ -32,15 +32,15 @@ export function RemoteFolderPath({
     folder: RemoteFolder;
   } | null>(null);
   const value = draft ?? folder?.path ?? "";
-  const normalized = /^\/?[a-z]:[/\\]/i.test(value)
-    ? "/" + value.replace(/^\//, "").replace(/\\/g, "/")
-    : value;
+  const drivePath = /^\/?[a-z]:[/\\]/i.test(value);
+  const normalized = drivePath ? "/" + value.replace(/^\//, "").replace(/\\/g, "/") : value;
   const separator = normalized.lastIndexOf("/");
   const parent =
     focused && !busy && draft !== null && value !== folder?.path && normalized.startsWith("/")
       ? normalized.slice(0, separator + 1)
       : null;
-  const prefix = normalized.slice(separator + 1).toLowerCase();
+  const typedPrefix = normalized.slice(separator + 1);
+  const prefix = typedPrefix.toLowerCase();
   const current = parent !== null && parent === folder?.path.replace(/\/?$/, "/") ? folder : null;
 
   useEffect(() => {
@@ -75,6 +75,7 @@ export function RemoteFolderPath({
       )
       .slice(0, SUGGESTION_LIMIT) ?? [];
   const selected = suggestions[activeIndex];
+  const soleSuggestion = suggestions.length === 1 ? suggestions[0] : null;
 
   function openSuggestion(name: string) {
     if (source) onOpen(source.path.replace(/\/?$/, "/") + name);
@@ -95,7 +96,11 @@ export function RemoteFolderPath({
         type="text"
         role="combobox"
         aria-label="Remote folder path"
-        aria-description="Press Enter to open the folder"
+        aria-description={
+          soleSuggestion
+            ? "Press Tab to complete or Enter to open the path"
+            : "Press Enter to open the path"
+        }
         aria-autocomplete="list"
         aria-expanded={suggestions.length > 0}
         aria-controls={suggestions.length ? listId : undefined}
@@ -111,6 +116,7 @@ export function RemoteFolderPath({
         onBlur={() => {
           setFocused(false);
           setActiveIndex(-1);
+          if (!busy) onEdit(null);
         }}
         onChange={(event) => {
           setActiveIndex(-1);
@@ -118,6 +124,23 @@ export function RemoteFolderPath({
         }}
         onKeyDown={(event) => {
           if (event.nativeEvent.isComposing || busy) return;
+          if (
+            event.key === "Tab" &&
+            !event.shiftKey &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey &&
+            soleSuggestion
+          ) {
+            event.preventDefault();
+            setActiveIndex(-1);
+            const delimiter =
+              drivePath && value.lastIndexOf("\\") > value.lastIndexOf("/") ? "\\" : "/";
+            onEdit(
+              value.slice(0, value.lastIndexOf(delimiter) + 1) + soleSuggestion.name + delimiter,
+            );
+            return;
+          }
           if (event.key === "Escape" && draft !== null) {
             event.preventDefault();
             event.stopPropagation();
@@ -151,13 +174,22 @@ export function RemoteFolderPath({
               key={name}
               id={`${listId}-${index}`}
               role="option"
+              aria-label={name}
               aria-selected={index === activeIndex}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => openSuggestion(name)}
               title={name}
             >
               <Folder size={15} aria-hidden="true" />
-              <span>{name}</span>
+              <span className="file-path-suggestion-name">
+                {typedPrefix && <mark>{name.slice(0, typedPrefix.length)}</mark>}
+                {name.slice(typedPrefix.length)}
+              </span>
+              {soleSuggestion && (
+                <kbd className="file-path-completion-hint" aria-hidden="true">
+                  Tab
+                </kbd>
+              )}
             </li>
           ))}
         </ul>

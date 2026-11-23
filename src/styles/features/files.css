@@ -69,12 +69,23 @@
   flex: none;
   color: var(--text-muted);
 }
-.file-path-suggestions span {
+.file-path-suggestion-name {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font: 12px var(--font-mono);
+}
+.file-path-suggestion-name mark {
+  border-radius: 2px;
+  background: var(--fill-text-selection);
+  color: var(--text-strong);
+}
+.file-path-completion-hint {
+  flex: none;
+  color: var(--text-muted);
+  font: 11px var(--font-mono);
 }
 .file-location .icon-button,
 .file-activity .icon-button {

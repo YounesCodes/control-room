@@ -81,13 +81,53 @@ it("suggests matching folders under the typed parent and opens a keyboard select
   await user.paste("/srv/sh");
   await screen.findByRole("option", { name: "Shared" });
   await user.type(path, "a");
-  expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["Shared"]);
+  expect(screen.getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual([
+    "Shared",
+  ]);
   await user.keyboard("{ArrowDown}");
   expect(screen.getByRole("option", { name: "Shared", selected: true })).toBeTruthy();
   await user.keyboard("{Enter}");
   await waitFor(() => expect(path.value).toBe("/srv/Shared"));
   expect(screen.queryByRole("listbox")).toBeNull();
   expect(invoke.mock.calls.filter(([, args]) => args.folder === "/srv/")).toHaveLength(1);
+});
+
+it("completes one suggestion with Tab and keeps ordinary Tab navigation for multiple matches", async () => {
+  invoke.mockImplementation(async (command, args) => {
+    if (command !== "list_transfer_folder") throw new Error(command);
+    const entries = (names: string[]) =>
+      names.map((name) => ({ name, kind: "folder", size: null }));
+    return {
+      path: args.folder ?? "/home/fixture",
+      entries: entries(args.folder === null ? ["reports", "reviews"] : ["2026"]),
+    };
+  });
+  const user = userEvent.setup();
+  render(<FilesPane connection={host} workspaceId="tab" />);
+  const path = await screen.findByRole<HTMLInputElement>("combobox", {
+    name: "Remote folder path",
+  });
+  await user.clear(path);
+  await user.paste("/home/fixture/re");
+  expect(screen.getAllByRole("option")).toHaveLength(2);
+  await user.tab();
+  expect(document.activeElement).toBe(screen.getByRole("button", { name: "Refresh folder" }));
+  expect(path.value).toBe("/home/fixture");
+  await user.clear(path);
+  await user.paste("/home/fixture/rep");
+  expect(screen.getByRole("option", { name: "reports" })).toBeTruthy();
+  await user.tab();
+  expect(path.value).toBe("/home/fixture/reports/");
+  expect(document.activeElement).toBe(path);
+  await screen.findByRole("option", { name: "2026" });
+  await user.tab();
+  expect(path.value).toBe("/home/fixture/reports/2026/");
+  expect(document.activeElement).toBe(path);
+  expect(screen.getByRole("button", { name: "Upload files" })).toHaveProperty("disabled", true);
+  await user.keyboard("{Enter}");
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "Upload files" })).toHaveProperty("disabled", false),
+  );
 });
 
 it("uses the loaded folder for suggestions when typing a Windows path", async () => {
