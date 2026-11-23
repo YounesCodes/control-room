@@ -419,6 +419,25 @@
   overflow: auto;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .remote-shell-groups .skeleton-bone {
+    --skeleton-fill: color-mix(in srgb, var(--fill-active) 75%, var(--text-muted));
+    animation: remote-shell-placeholder-wave 2.6s ease-in-out infinite both;
+    animation-delay: calc(var(--skeleton-row, 0) * 220ms);
+  }
+}
+
+@keyframes remote-shell-placeholder-wave {
+  0%,
+  68%,
+  100% {
+    opacity: 0.28;
+  }
+  34% {
+    opacity: 0.9;
+  }
+}
+
 .remote-shell-options {
   display: grid;
   gap: 6px;

@@ -12,6 +12,7 @@ import { Modal } from "./Modal";
 import { Bone, Skeleton, boneWidth, wave } from "./PanelState";
 
 const PLATFORM_NAMES: Record<string, string> = { macos: "macOS", windows: "Windows" };
+const FINDING_SHELLS = "Finding available shells…";
 
 function shellDescription(id: string): string {
   if (id.startsWith("wsl:")) return "Linux distribution";
@@ -98,6 +99,7 @@ export function RemoteShellDialog({
       ].filter((group) => group.shells.length)
     : [];
   const selectedShell = catalog?.shells.find((shell) => shell.id === selected);
+  const findingShells = loading && !catalog;
   return (
     <Modal title={`Connect to ${connection.displayName}`} onClose={onClose}>
       <div className="remote-shell-body">
@@ -113,7 +115,9 @@ export function RemoteShellDialog({
                   PLATFORM_NAMES[catalog?.platform ?? ""] ??
                   "Remote host"}
               </strong>
-              <span>Choose a shell for this session</span>
+              <span aria-hidden={findingShells || undefined}>
+                {findingShells ? FINDING_SHELLS : "Choose a shell for this session"}
+              </span>
             </div>
           </div>
           {catalog && (
@@ -136,11 +140,11 @@ export function RemoteShellDialog({
               <span>Refreshing available shells…</span>
             </div>
           ) : (
-            <Skeleton label="Finding available shells…" className="remote-shell-groups">
+            <Skeleton label={FINDING_SHELLS} className="remote-shell-groups">
               <div className="remote-shell-options">
                 <Bone shape="caption" width="64px" className="skeleton-legend" />
                 {Array.from({ length: 3 }, (_, index) => (
-                  <div className="remote-shell-option skeleton-row" key={index} style={wave(index)}>
+                  <div className="remote-shell-option" key={index} style={wave(index + 1)}>
                     <Bone shape="mark" />
                     <span className="remote-shell-option-text">
                       <Bone width={boneWidth(index, 160, "px")} />

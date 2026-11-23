@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
+import { api } from "../lib/api";
 import { runAxe } from "../test/axe";
 import { RemoteShellDialog } from "./RemoteShellDialog";
 import { HostOsIcon } from "./HostOsIcon";
-import type { SavedConnection } from "../types";
+import type { RemoteShellCatalog, SavedConnection } from "../types";
 import "../styles.css";
 
 vi.mock("../lib/api", () => ({
@@ -32,6 +33,51 @@ afterEach(() => {
   host?.remove();
 });
 describe("Windows remote shell picker", () => {
+  it("fades the placeholders from top to bottom and keeps the row borders steady", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    let finishDiscovery!: (catalog: RemoteShellCatalog) => void;
+    const discovery = new Promise<RemoteShellCatalog>((resolve) => {
+      finishDiscovery = resolve;
+    });
+    root.render(
+      <RemoteShellDialog
+        connection={{ id: "windows-test", displayName: "Windows test host" } as SavedConnection}
+        discovery={discovery}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    const status = page.getByRole("status");
+    await expect.element(status).toHaveTextContent("Finding available shells…");
+    await expect.element(page.getByRole("button", { name: "Connect", exact: true })).toBeDisabled();
+    const rows = status.element().querySelectorAll(".remote-shell-option");
+    expect(rows).toHaveLength(3);
+    const rowDelays = Array.from(rows, (row) => {
+      expect(getComputedStyle(row).animationName).toBe("none");
+      const placeholderStyles = Array.from(row.querySelectorAll(".skeleton-bone"), (bone) =>
+        getComputedStyle(bone),
+      );
+      const delay = placeholderStyles[0].animationDelay;
+      for (const style of placeholderStyles) {
+        expect(style.animationName).not.toBe("none");
+        expect(style.animationDelay).toBe(delay);
+      }
+      return Number.parseFloat(delay);
+    });
+    const legend = status.element().querySelector(".skeleton-legend")!;
+    expect(rowDelays[0]).toBeGreaterThan(
+      Number.parseFloat(getComputedStyle(legend).animationDelay),
+    );
+    expect(rowDelays[1]).toBeGreaterThan(rowDelays[0]);
+    expect(rowDelays[2]).toBeGreaterThan(rowDelays[1]);
+
+    finishDiscovery(await api.discoverRemoteShells("windows-test"));
+    await expect.element(page.getByRole("radio", { name: "Windows PowerShell" })).toBeVisible();
+    await expect.element(status).not.toBeInTheDocument();
+  });
+
   it("supports keyboard shell selection and an accessible bounded dialog", async () => {
     host = document.createElement("div");
     document.body.append(host);

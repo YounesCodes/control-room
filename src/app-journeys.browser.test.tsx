@@ -3195,6 +3195,47 @@ describe("complete app journeys with typed IPC fixtures", () => {
     },
   );
 
+  it("clears the sidebar host color after a mouse dismissal and restores keyboard focus", async () => {
+    const capabilities = { ...fixtures.capabilities(), osId: "windows" };
+    overrides.set("get_cached_capabilities", () => capabilities);
+    overrides.set("discover_remote_shells", () => ({
+      platform: "windows",
+      shells: [{ id: "powershell", label: "Windows PowerShell" }],
+      capabilities,
+    }));
+    root.render(<App />);
+    const host = page.getByRole("button", { name: /Fixture Alpha/ }).first();
+    const dialog = page.getByRole("dialog", { name: "Connect to Fixture Alpha" });
+    const mark = host.getByRole("img", { name: /Windows/ });
+    await expect.element(mark).toBeVisible();
+    await settleMotion(mark.element());
+    const idleColor = getComputedStyle(mark.element()).color;
+    await userEvent.hover(host);
+    await settleMotion(mark.element());
+    const hoverColor = getComputedStyle(mark.element()).color;
+    expect(hoverColor).not.toBe(idleColor);
+
+    await host.click();
+    await expect.element(dialog.getByRole("radio", { name: "Windows PowerShell" })).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect.element(dialog).not.toBeInTheDocument();
+    await expect.element(host).toHaveFocus();
+    expect(host.element().matches(":focus-visible")).toBe(false);
+    expect(host.element().closest(".host-row")?.matches(":hover, .active")).toBe(false);
+    await settleMotion(mark.element());
+    expect(getComputedStyle(mark.element()).color).toBe(idleColor);
+
+    await userEvent.keyboard("{Enter}");
+    await expect.element(dialog).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(dialog).not.toBeInTheDocument();
+    await expect.element(host).toHaveFocus();
+    expect(host.element().matches(":focus-visible")).toBe(true);
+    await settleMotion(mark.element());
+    expect(getComputedStyle(mark.element()).color).toBe(hoverColor);
+    expect(native.invoke.mock.calls.some(([command]) => command === "start_session")).toBe(false);
+  });
+
   it("opens a Mac shell and exposes native inspection without Linux boot controls", async () => {
     const capabilities = {
       ...fixtures.capabilities(),
