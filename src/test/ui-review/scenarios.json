@@ -897,8 +897,8 @@
       },
       "settled": {
         "overflow": ".session-tab-scroll-region .session-tab-wrap.active",
-        "overflow-menu": ".session-tab-overflow-menu [aria-current='page']",
-        "focus-menu": ".app-shell.terminal-focus-mode .session-tab-overflow-menu [aria-current='page']",
+        "overflow-menu": ".session-tabs:has(.session-tab-wrap.active[data-session-state='connected']) .session-tab-overflow-menu [aria-current='page']",
+        "focus-menu": ".app-shell.terminal-focus-mode:has(.session-tab-wrap.active[data-session-state='connected']) .session-tab-overflow-menu [aria-current='page']",
         "new-terminal": ".new-terminal-menu button:has-text('WSL: Ubuntu-24.04')",
         "local-shells": ".local-shell-toggle-group"
       }

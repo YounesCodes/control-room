@@ -46,7 +46,7 @@ const sections = {
   behavior: [
     "terminal",
     "Tabs & naming",
-    "automatic current command process terminal names titles scrollback lines output history restore reopen remember terminal tabs on startup restart",
+    "automatic current command process terminal names titles scrollback lines output history restore remember terminal tabs startup restart reopen terminals from the last app session",
   ],
   shells: [
     "terminal",
