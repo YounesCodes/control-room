@@ -41,10 +41,12 @@ Select a file or use the **Download folder** arrow beside a folder, then choose 
   <a href={filesScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={filesScreenshot.src}
-      alt="The remote path field suggests the reports folder while typing."
+      alt="Files showing the current folder in breadcrumbs and two matching results below the filter."
     />
   </a>
-  <figcaption>A matching folder appears below the path field. Example host and files.</figcaption>
+  <figcaption>
+    The path stays visible while filtering the open folder. Example host and files.
+  </figcaption>
 </figure>
 
 Transfers use SFTP with your saved SSH connection. The host must enable SFTP and accept your key or SSH agent without a password prompt. Access follows the SSH account's file permissions, including when sudo is enabled for host inspection. On Windows hosts, a path such as `/C:/Users/Lee` refers to the account's Windows files.
