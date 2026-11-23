@@ -188,10 +188,38 @@ try {
   );
   await withInstalledApp(application, async (invoke, session) => {
     assert.equal(await invoke("current_app_version"), version);
+    const restoreTerminalsOnStartup = expected.settings.restoreTerminalsOnStartup ?? false;
+    const workspace = restoreTerminalsOnStartup
+      ? expected.workspace
+      : {
+          ...expected.workspace,
+          workspaces: [],
+          activeWorkspaceId: null,
+          terminalGroups: [],
+          terminalLayout: null,
+        };
     await session.waitUntil(() =>
-      session.execute(() => globalThis.document.querySelectorAll(".session-tab-wrap").length === 2),
+      session.execute(
+        (count) => globalThis.document.querySelectorAll(".session-tab-wrap").length === count,
+        workspace.workspaces.length,
+      ),
     );
-    assertLifecycleData(expected, await readLifecycleData(invoke, expected.connections[0].id));
+    await session.waitUntil(
+      async () =>
+        (await invoke("get_workspace_state")).workspaces.length === workspace.workspaces.length,
+    );
+    assertLifecycleData(
+      {
+        ...expected,
+        settings: { ...expected.settings, restoreTerminalsOnStartup },
+        workspace,
+      },
+      await readLifecycleData(
+        invoke,
+        expected.connections[0].id,
+        expected.workspace.workspaces[0].id,
+      ),
+    );
   });
   const upgradedSchema = inspectDatabase();
   assert.ok(
@@ -204,7 +232,7 @@ try {
     "Upgrade must apply the retired Baselines table migration",
   );
   console.log(
-    `Installed ${previous.tag_name} -> ${version}; all user data survived; schema ${oldSchema.version} -> ${upgradedSchema.version}; legacy table ${oldSchema.legacyBaselines} -> ${upgradedSchema.legacyBaselines}`,
+    `Installed ${previous.tag_name} -> ${version}; saved data and terminal startup preference verified; schema ${oldSchema.version} -> ${upgradedSchema.version}; legacy table ${oldSchema.legacyBaselines} -> ${upgradedSchema.legacyBaselines}`,
   );
 
   uninstall();
