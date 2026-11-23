@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
+import { api } from "../lib/api";
 import { runAxe } from "../test/axe";
 import { RemoteShellDialog } from "./RemoteShellDialog";
 import { HostOsIcon } from "./HostOsIcon";
-import type { SavedConnection } from "../types";
+import type { RemoteShellCatalog, SavedConnection } from "../types";
 import "../styles.css";
 
 vi.mock("../lib/api", () => ({
@@ -32,6 +33,36 @@ afterEach(() => {
   host?.remove();
 });
 describe("Windows remote shell picker", () => {
+  it("keeps the pending shell rows steady until discovery finishes", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    let finishDiscovery!: (catalog: RemoteShellCatalog) => void;
+    const discovery = new Promise<RemoteShellCatalog>((resolve) => {
+      finishDiscovery = resolve;
+    });
+    root.render(
+      <RemoteShellDialog
+        connection={{ id: "windows-test", displayName: "Windows test host" } as SavedConnection}
+        discovery={discovery}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    const status = page.getByRole("status");
+    await expect.element(status).toHaveTextContent("Finding available shells…");
+    await expect.element(page.getByRole("button", { name: "Connect", exact: true })).toBeDisabled();
+    const rows = status.element().querySelectorAll(".remote-shell-option");
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(getComputedStyle(row).animationName).toBe("none");
+    }
+
+    finishDiscovery(await api.discoverRemoteShells("windows-test"));
+    await expect.element(page.getByRole("radio", { name: "Windows PowerShell" })).toBeVisible();
+    await expect.element(status).not.toBeInTheDocument();
+  });
+
   it("supports keyboard shell selection and an accessible bounded dialog", async () => {
     host = document.createElement("div");
     document.body.append(host);
