@@ -36,6 +36,7 @@ vi.mock("../lib/api", () => {
     automaticUpdateChecks: false,
     hiddenLocalShells: [],
     localTerminalMode: true,
+    restoreTerminalsOnStartup: true,
     defaultLocalShellId: null,
   };
   return {

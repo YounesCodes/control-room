@@ -275,6 +275,7 @@ describe("Local Terminal Mode desktop", () => {
       settings: {
         ...settings,
         localTerminalMode: true,
+        restoreTerminalsOnStartup: true,
         defaultLocalShellId: localShellId,
         hiddenLocalShells: catalog.profiles
           .filter((shell) => shell.id !== localShellId)

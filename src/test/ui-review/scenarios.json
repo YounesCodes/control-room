@@ -76,6 +76,7 @@
         "update-failed",
         "update-available",
         "save-failed",
+        "tabs-and-naming",
         "linux-package",
         "linux-font"
       ],
@@ -85,6 +86,26 @@
           {
             "role": "button",
             "name": "Open Settings"
+          }
+        ],
+        "tabs-and-naming": [
+          {
+            "role": "button",
+            "name": "Open Settings"
+          },
+          {
+            "selector": ".settings-navigation button:has-text('Terminal')",
+            "optional": true
+          },
+          {
+            "role": "combobox",
+            "name": "Settings category",
+            "option": "terminal",
+            "optional": true
+          },
+          {
+            "role": "tab",
+            "name": "Tabs & naming"
           }
         ],
         "monitoring": [

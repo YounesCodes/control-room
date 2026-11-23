@@ -281,6 +281,37 @@
   display: flex;
 }
 
+.session-tab-overflow-menu:has(.session-tab-menu-footer) {
+  scroll-padding-bottom: 29px;
+}
+
+.session-tab-menu-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-overlay);
+}
+
+.session-tab-menu-footer > button {
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.session-tab-menu-footer > button:is(:hover, :focus-visible) {
+  background: var(--fill-active);
+  color: var(--text-strong);
+}
+
 .session-tab-menu-row > [role="menuitem"] {
   display: flex;
   align-items: center;

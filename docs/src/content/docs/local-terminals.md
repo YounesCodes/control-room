@@ -31,4 +31,4 @@ Windows 11 version 24H2 or later provides this setting. **Inline** keeps the adm
 
 Expand **Run as administrator** in the menu for setup instructions. This section appears only when an enabled shell supports administrator mode and needs that setup. Git Bash alone does not trigger it.
 
-Git Bash and WSL have no administrator option. Local shells do not record Enhanced History. After an app restart, restored local tabs start fresh shells.
+Git Bash and WSL have no administrator option. Local shells do not record Enhanced History. If **Reopen terminals from the last app session** is enabled, reopened local tabs start fresh shells.

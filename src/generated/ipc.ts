@@ -293,6 +293,7 @@ export type HeaderMetrics = {
 
 export type AppSettings = {
   automaticTerminalTitles: boolean;
+  restoreTerminalsOnStartup: boolean;
   hostMetricsEnabled: boolean;
   hostMetrics: Array<HeaderMetric>;
   hostMetricsIntervalSeconds: number;

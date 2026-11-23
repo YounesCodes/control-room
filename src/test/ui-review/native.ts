@@ -501,7 +501,10 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       const desktop = (value: typeof settings) =>
         linux ? { ...value, terminalFontFamily: "monospace" } : value;
       result = {
-        current: desktop(metricsSettings),
+        current: desktop({
+          ...metricsSettings,
+          restoreTerminalsOnStartup: scenario !== "settings",
+        }),
         defaults: desktop(settings),
         logTailOptions: [50, 100, 200, 500, 1000],
       };

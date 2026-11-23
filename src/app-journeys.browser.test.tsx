@@ -50,7 +50,7 @@ function emit(name: string, payload: any) {
 }
 
 function expectTerminalMenuAlignment(menu: Element) {
-  for (const row of menu.querySelectorAll<HTMLElement>('[role="menuitem"]')) {
+  for (const row of menu.querySelectorAll<HTMLElement>("button[data-match]")) {
     const icon = row.querySelector<HTMLElement>(".session-tab-menu-icon")!;
     const name = row.querySelector<HTMLElement>(".session-tab-menu-name")!;
     expect(row.firstElementChild).toBe(icon);
@@ -232,7 +232,7 @@ beforeEach(async () => {
   native.invoke.mockReset();
   sequence = 0;
   streamOutput = null;
-  currentSettings = { ...fixtures.settings };
+  currentSettings = { ...fixtures.settings, restoreTerminalsOnStartup: true };
   persisted = {
     panelSizes: {},
     workspaces: [],
@@ -259,6 +259,101 @@ async function openSplit(card: "Split right" | "Split down" = "Split right") {
 }
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it("closes every local and SSH terminal from a filtered All terminals menu in Focus Mode", async () => {
+    await mount();
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    await openSplit();
+    await page.getByRole("button", { name: "New local terminal: Command Prompt" }).click();
+    const picker = page.getByRole("button", { name: "All terminals", exact: true });
+    const menu = page.getByRole("menu", { name: "All terminals menu" });
+    const confirmation = page.getByRole("dialog", { name: "Close all terminals" });
+    const closedSessions = () =>
+      native.invoke.mock.calls
+        .filter(([command]) => command === "close_session")
+        .map(([, { sessionId }]) => sessionId);
+
+    await expect.poll(() => persisted.workspaces.length).toBe(2);
+    await expect.poll(() => sequence).toBe(2);
+    await picker.click();
+    await userEvent.keyboard("nomatch");
+    await expect.element(menu.getByText("No matching terminals")).toBeVisible();
+    await userEvent.keyboard("{ArrowDown}");
+    await expect.element(menu.getByRole("menuitem", { name: "Close all terminals" })).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect.element(picker).toHaveFocus();
+    expect(closedSessions()).toEqual([]);
+
+    await picker.click();
+    await menu.getByRole("menuitem", { name: "Close all terminals" }).click();
+    await confirmation.getByRole("button", { name: "Close all terminals" }).click();
+    await expect.element(picker).not.toBeInTheDocument();
+    await expect
+      .element(page.getByRole("button", { name: "New terminal", exact: true }))
+      .toBeVisible();
+    await expect
+      .element(page.getByRole("button", { name: "Exit terminal focus" }))
+      .not.toBeInTheDocument();
+    expect(new Set(closedSessions())).toEqual(new Set(["session-1", "session-2"]));
+    await expect
+      .poll(() => persisted)
+      .toMatchObject({
+        workspaces: [],
+        terminalGroups: [],
+        activeWorkspaceId: null,
+      });
+  });
+
+  it("reopens saved tabs only when the startup setting is enabled", async () => {
+    const workspaces = [
+      {
+        id: "saved-remote",
+        label: "Previously open",
+        connectionId: "host-a",
+        localShellId: null,
+        view: "terminal" as const,
+        historyPaused: false,
+      },
+    ];
+    currentSettings = { ...fixtures.settings };
+    persisted = {
+      ...persisted,
+      workspaces,
+      activeWorkspaceId: "saved-remote",
+      panelSizes: { connections: 280 },
+    };
+    root.render(<App />);
+    await expect.element(page.getByRole("button", { name: "Open Settings" })).toBeVisible();
+    const picker = page.getByRole("button", { name: "All terminals", exact: true });
+    await expect.element(picker).not.toBeInTheDocument();
+    await expect.poll(() => persisted.workspaces).toEqual([]);
+    expect(persisted.panelSizes?.connections).toBe(280);
+    expect(sequence).toBe(0);
+
+    await page.getByRole("button", { name: "Open Settings" }).click();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    await page.getByRole("tab", { name: "Tabs & naming" }).click();
+    const restore = page.getByRole("checkbox", {
+      name: "Reopen terminals from the last app session",
+    });
+    await expect.element(restore).not.toBeChecked();
+    await restore.click();
+    await page.getByRole("button", { name: "Save settings" }).click();
+    await expect.poll(() => currentSettings.restoreTerminalsOnStartup).toBe(true);
+    await page.getByRole("button", { name: "Close Settings" }).click();
+    await page
+      .getByRole("button", { name: /Fixture Alpha/ })
+      .first()
+      .click();
+    await expect.poll(() => persisted.workspaces.length).toBe(1);
+
+    root.unmount();
+    root = createRoot(element);
+    root.render(<App />);
+    await expect.element(picker).toBeVisible();
+    await expect.poll(() => sequence).toBe(2);
+  });
+
   it("routes a native file drop on a terminal to the saved host home", async () => {
     overrides.set("transfer_file", () => "complete");
     await mount();
