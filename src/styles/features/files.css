@@ -10,7 +10,8 @@
   border-radius: var(--radius-md);
   background: var(--surface-sunken);
 }
-.files-page .page-heading {
+.files-page .page-heading,
+.files-page > .inline-error {
   max-width: 1040px;
 }
 .files-page .inline-error {
