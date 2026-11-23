@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from "react";
 import { Folder } from "lucide-react";
 import { api } from "../lib/api";
 import type { RemoteFolder } from "../lib/file-transfers";
+import { showOverflowTitle } from "../lib/overflow-title";
 
 const SUGGESTION_DELAY_MS = 220;
 const SUGGESTION_LIMIT = 6;
@@ -106,7 +107,6 @@ export function RemoteFolderPath({
         aria-controls={suggestions.length ? listId : undefined}
         aria-activedescendant={selected ? `${listId}-${activeIndex}` : undefined}
         placeholder="Enter a remote folder path"
-        title={value ? `${value}\nPress Enter to open` : "Press Enter to open a folder"}
         enterKeyHint="go"
         autoComplete="off"
         spellCheck={false}
@@ -179,10 +179,9 @@ export function RemoteFolderPath({
               aria-selected={index === activeIndex}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => openSuggestion(name)}
-              title={name}
             >
               <Folder size={15} aria-hidden="true" />
-              <span className="file-path-suggestion-name">
+              <span className="file-path-suggestion-name" onMouseEnter={showOverflowTitle}>
                 {typedPrefix && <mark>{name.slice(0, typedPrefix.length)}</mark>}
                 {name.slice(typedPrefix.length)}
               </span>

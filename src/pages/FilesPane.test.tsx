@@ -150,7 +150,19 @@ it("uses the loaded folder for suggestions when typing a Windows path", async ()
   });
   await user.clear(path);
   await user.paste(String.raw`C:\Users\fixture\Doc`);
-  await user.click(await screen.findByRole("option", { name: "Documents" }));
+  const suggestion = await screen.findByRole("option", { name: "Documents" });
+  const name = suggestion.querySelector("span")!;
+  await user.hover(name);
+  expect(suggestion.hasAttribute("title")).toBe(false);
+  expect(name.hasAttribute("title")).toBe(false);
+  await user.unhover(name);
+  Object.defineProperties(name, {
+    clientWidth: { value: 40 },
+    scrollWidth: { value: 80 },
+  });
+  await user.hover(name);
+  expect(name.title).toBe("Documents");
+  await user.click(suggestion);
   await waitFor(() => expect(path.value).toBe("/C:/Users/fixture/Documents"));
   expect(invoke.mock.calls.map(([, args]) => args.folder)).toEqual([
     null,

@@ -29,6 +29,7 @@ import {
   type RemoteFolder,
 } from "../lib/file-transfers";
 import { formatByteRate } from "../lib/header-metrics";
+import { showOverflowTitle } from "../lib/overflow-title";
 import type { SavedConnection } from "../types";
 
 function size(value: number) {
@@ -81,7 +82,7 @@ function Activity({ jobs, connection }: { jobs: FileJob[]; connection: SavedConn
             <li key={job.id}>
               <Icon size={16} aria-hidden="true" />
               <div className="file-job">
-                <strong title={job.name}>{job.name}</strong>
+                <strong onMouseEnter={showOverflowTitle}>{job.name}</strong>
                 <span>
                   <span role="status">{label}</span>
                   {active &&
@@ -360,7 +361,7 @@ export function FilesPane({
                       }
                     >
                       <Icon size={17} />
-                      <span title={entry.name}>{matchedName(entry.name, match)}</span>
+                      <span onMouseEnter={showOverflowTitle}>{matchedName(entry.name, match)}</span>
                       <small>
                         {entry.kind === "file" && entry.size !== null
                           ? size(entry.size)
