@@ -33,7 +33,7 @@ afterEach(() => {
   host?.remove();
 });
 describe("Windows remote shell picker", () => {
-  it("keeps the pending shell rows steady until discovery finishes", async () => {
+  it("pulses the placeholders together and keeps the pending shell rows steady", async () => {
     host = document.createElement("div");
     document.body.append(host);
     root = createRoot(host);
@@ -57,6 +57,11 @@ describe("Windows remote shell picker", () => {
     for (const row of rows) {
       expect(getComputedStyle(row).animationName).toBe("none");
     }
+    const bones = [...status.element().querySelectorAll(".skeleton-bone")];
+    for (const bone of bones) {
+      expect(getComputedStyle(bone).animationName).not.toBe("none");
+    }
+    expect(new Set(bones.map((bone) => getComputedStyle(bone).animationDelay)).size).toBe(1);
 
     finishDiscovery(await api.discoverRemoteShells("windows-test"));
     await expect.element(page.getByRole("radio", { name: "Windows PowerShell" })).toBeVisible();

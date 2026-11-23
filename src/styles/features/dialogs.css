@@ -419,6 +419,18 @@
   overflow: auto;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .remote-shell-groups .skeleton-bone {
+    animation: remote-shell-placeholder-pulse 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes remote-shell-placeholder-pulse {
+  50% {
+    opacity: 0.7;
+  }
+}
+
 .remote-shell-options {
   display: grid;
   gap: 6px;
