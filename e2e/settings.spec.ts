@@ -66,6 +66,7 @@ describe("Settings and native window", () => {
     expect(native.diskTotalKib).toBeGreaterThan(0);
     expect(native.uptimeSeconds).toBeGreaterThanOrEqual(0);
     await restartApp();
+    await openLocal();
     await expect(
       $('.host-metrics-trigger[aria-label$="Host metrics for Local machine"]'),
     ).toBeDisplayed();

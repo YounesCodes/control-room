@@ -334,12 +334,11 @@ describe("Local Terminal Mode in the real App", () => {
       await userEvent.click(
         strip.querySelector<HTMLButtonElement>('[aria-label="All terminals"]')!,
       );
-      expect(
-        page
-          .getByRole("menu", { name: "All terminals menu" })
-          .element()
-          .querySelectorAll('[role="menuitem"]'),
-      ).toHaveLength(4);
+      const menu = page.getByRole("menu", { name: "All terminals menu" });
+      await expect
+        .element(menu.getByRole("menuitem", { name: "Close all terminals" }))
+        .toBeVisible();
+      expect(menu.element().querySelectorAll("[data-match]")).toHaveLength(4);
       await userEvent.keyboard("{Escape}");
     },
   );
