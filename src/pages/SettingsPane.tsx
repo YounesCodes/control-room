@@ -713,23 +713,16 @@ export function SettingsPane({
                 </div>
               </SettingsSection>
               <SettingsSection id="behavior" {...sectionProps}>
-                <div className="settings-checkbox-option">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={draft.restoreTerminalsOnStartup}
-                      aria-describedby="restore-terminals-help"
-                      onChange={(event) =>
-                        setDraft({ ...draft, restoreTerminalsOnStartup: event.target.checked })
-                      }
-                    />
-                    Reopen terminals from the last app session
-                  </label>
-                  <small id="restore-terminals-help">
-                    Restores the local and SSH tabs and split groups you had open when you quit.
-                    Each terminal starts a fresh session.
-                  </small>
-                </div>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={draft.restoreTerminalsOnStartup}
+                    onChange={(event) =>
+                      setDraft({ ...draft, restoreTerminalsOnStartup: event.target.checked })
+                    }
+                  />
+                  Reopen terminals from the last app session
+                </label>
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
@@ -754,7 +747,7 @@ export function SettingsPane({
                 </label>
               </SettingsSection>
               <SettingsSection id="shells" {...sectionProps}>
-                <div className="settings-checkbox-option">
+                <div className="local-terminal-mode-option">
                   <label className="checkbox-label">
                     <input
                       type="checkbox"

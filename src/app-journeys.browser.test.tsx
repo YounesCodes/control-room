@@ -338,9 +338,6 @@ describe("complete app journeys with typed IPC fixtures", () => {
       name: "Reopen terminals from the last app session",
     });
     await expect.element(restore).not.toBeChecked();
-    await expect
-      .element(restore)
-      .toHaveAccessibleDescription(/local and SSH tabs and split groups.*fresh session/);
     await restore.click();
     await page.getByRole("button", { name: "Save settings" }).click();
     await expect.poll(() => currentSettings.restoreTerminalsOnStartup).toBe(true);
@@ -350,6 +347,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .first()
       .click();
     await expect.poll(() => persisted.workspaces.length).toBe(1);
+    await expect.poll(() => sequence).toBe(1);
 
     root.unmount();
     root = createRoot(element);

@@ -23,7 +23,7 @@ export async function seedLifecycleData(invoke, session) {
     if (await terminalSettings.isDisplayed()) await terminalSettings.click();
     else await session.$("aria/Settings category").selectByAttribute("value", "terminal");
     await session.$('[role="tab"]=Tabs & naming').click();
-    await session.$('[aria-describedby="restore-terminals-help"]').click();
+    await session.$("aria/Reopen terminals from the last app session").click();
     await session.$("button=Save settings").click();
     await session.waitUntil(
       async () => (await invoke("get_settings_contract")).current.restoreTerminalsOnStartup,

@@ -520,19 +520,19 @@
 }
 
 .settings-form fieldset > small,
-.settings-checkbox-option > small {
+.local-terminal-mode-option > small {
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.5;
 }
 
-.settings-checkbox-option {
+.local-terminal-mode-option {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.settings-checkbox-option .checkbox-label {
+.local-terminal-mode-option .checkbox-label {
   min-height: 28px;
 }
 
