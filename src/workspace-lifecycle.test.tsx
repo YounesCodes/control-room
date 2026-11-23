@@ -83,6 +83,7 @@ import type { AppSettings, PersistedWorkspaceState, SavedConnection } from "./ty
 
 const settings: AppSettings = {
   automaticTerminalTitles: true,
+  restoreTerminalsOnStartup: true,
   hostMetricsEnabled: false,
   hostMetrics: ["cpu", "ram", "gpu", "diskIo", "uptime"],
   hostMetricsIntervalSeconds: 5,

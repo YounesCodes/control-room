@@ -87,7 +87,11 @@ import { TerminalLayoutControls } from "./components/TerminalLayoutControls";
 import { useTerminalLayoutMotion } from "./hooks/use-terminal-layout-motion";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
 import { useWorkspaceSession } from "./hooks/use-workspace-session";
-import { closeWorkspaceInSession, removeConnectionFromSession } from "./lib/workspace-session";
+import {
+  closeWorkspaceInSession,
+  emptyWorkspaceSession,
+  removeConnectionFromSession,
+} from "./lib/workspace-session";
 import { useLatestHandlers } from "./hooks/use-latest-handlers";
 import { usePopoverExit } from "./hooks/use-popover-exit";
 import { api, errorMessage } from "./lib/api";
@@ -694,19 +698,18 @@ export function App() {
           const detectedShells = localShellCatalog.profiles;
           setLocalShells(detectedShells);
           setAdministratorTerminalStatus(localShellCatalog.administratorStatus);
+          const startupSettings =
+            settingsResult.status === "fulfilled" ? settingsResult.value.current : null;
           let terminalFocusMode = false;
           const restored = restoreWorkspaceState(
             connectionsResult.status === "fulfilled" ? connectionsResult.value : [],
-            workspaceStateResult.status === "fulfilled"
+            startupSettings?.restoreTerminalsOnStartup &&
+              workspaceStateResult.status === "fulfilled"
               ? workspaceStateResult.value
               : { workspaces: [], activeWorkspaceId: null, terminalLayout: null },
             detectedShells,
           );
-          if (
-            settingsResult.status === "fulfilled" &&
-            settingsResult.value.current.localTerminalMode
-          ) {
-            const startupSettings = settingsResult.value.current;
+          if (startupSettings?.localTerminalMode) {
             const shell = defaultLocalShell(
               offeredLocalShells(detectedShells, startupSettings.hiddenLocalShells ?? []),
               startupSettings.defaultLocalShellId ?? null,
@@ -726,7 +729,9 @@ export function App() {
             setPanelSizes(restorePanelSizes(workspaceStateResult.value.panelSizes));
           workspaceSession.restore({ ...restored, terminalFocusMode });
           setWorkspacePersistenceReady(
-            connectionsResult.status === "fulfilled" && workspaceStateResult.status === "fulfilled",
+            startupSettings !== null &&
+              connectionsResult.status === "fulfilled" &&
+              workspaceStateResult.status === "fulfilled",
           );
           if (workspaceStateResult.status === "rejected") {
             setActionError(
@@ -924,11 +929,12 @@ export function App() {
   const existingSplitCandidates = terminalFocusMode
     ? ungroupedWorkspaces.filter((workspace) => workspace.id !== activeWorkspaceId)
     : [];
+  const persistedSession = settingsContract?.current.restoreTerminalsOnStartup
+    ? { workspaces, activeWorkspaceId, terminalGroups }
+    : emptyWorkspaceSession;
   useWorkspacePersistence({
+    ...persistedSession,
     ready: workspacePersistenceReady,
-    workspaces,
-    activeWorkspaceId,
-    terminalGroups,
     panelSizes,
     onError: setActionError,
   });
@@ -1441,7 +1447,7 @@ export function App() {
       setRemoteShellRequest({ connection, split: false, provisionalId: workspaceId, discovery });
     },
     close(workspaceId) {
-      void performCloseWorkspace(workspaceId);
+      void performCloseWorkspaces([workspaceId]);
     },
   });
 
@@ -1710,22 +1716,44 @@ export function App() {
             : `Disconnect the SSH session and close “${duplicateLabel(workspace)}”?`,
         confirmLabel: local ? "Stop & close" : "Disconnect & close",
         danger: true,
-        onConfirm: () => void performCloseWorkspace(id),
+        onConfirm: () => void performCloseWorkspaces([id]),
       });
       return;
     }
-    void performCloseWorkspace(id);
+    void performCloseWorkspaces([id]);
   }
 
-  async function performCloseWorkspace(id: string) {
-    const workspace = workspaceSession.current().workspaces.find((item) => item.id === id);
-    if (!workspace || closingWorkspaceIdsRef.current.has(id)) return;
-    closingWorkspaceIdsRef.current.add(id);
-    provisionalTerminals.forget(id);
+  function closeAllTerminals() {
+    setConfirmState({
+      title: "Close all terminals",
+      message: "Close every terminal, stop local shells, and disconnect SSH sessions?",
+      confirmLabel: "Close all terminals",
+      danger: true,
+      onConfirm: () => void performCloseWorkspaces(workspaces.map((workspace) => workspace.id)),
+    });
+  }
+
+  async function performCloseWorkspaces(ids: string[]) {
+    const workspaceIds = new Set(ids);
+    const closing = workspaceSession
+      .current()
+      .workspaces.filter(
+        ({ id }) => workspaceIds.has(id) && !closingWorkspaceIdsRef.current.has(id),
+      );
+    if (closing.length === 0) return;
+    for (const { id } of closing) {
+      closingWorkspaceIdsRef.current.add(id);
+      provisionalTerminals.forget(id);
+    }
     setActionError(null);
-    if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
-    workspaceSession.commit((current) => closeWorkspaceInSession(current, id));
-    closingWorkspaceIdsRef.current.delete(id);
+    const sessions = closing.flatMap(({ sessionId }) =>
+      sessionId ? [api.closeSession(sessionId).catch(() => undefined)] : [],
+    );
+    if (sessions.length) await Promise.all(sessions);
+    workspaceSession.commit((current) =>
+      closing.reduce((next, { id }) => closeWorkspaceInSession(next, id), current),
+    );
+    for (const { id } of closing) closingWorkspaceIdsRef.current.delete(id);
   }
 
   function deleteConnection(connection: SavedConnection) {
@@ -2730,6 +2758,7 @@ export function App() {
               activeTabId={settingsOpen ? null : activeWorkspaceId}
               arrangementKey={tabArrangementKey}
               items={workspaceTabOptions}
+              onCloseAll={closeAllTerminals}
               onReorder={moveTabTo}
               onDragOut={splitAvailable ? tabDragOut : undefined}
               menuAlwaysShown

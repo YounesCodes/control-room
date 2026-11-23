@@ -6,16 +6,18 @@ import {
   openLocal,
   pressBoundaryKey,
   restartApp,
+  setRestoreTerminals,
   terminalCommand,
 } from "./helpers";
 import { isLinux, isMac, localShellId } from "./platform";
-import type { EnvironmentInfo, LocalShellCatalog } from "../src/types";
+import type { EnvironmentInfo, LocalShellCatalog, PersistedWorkspaceState } from "../src/types";
 
 describe("Native client platform", () => {
   (isMac ? it : it.skip)(
     "opens zsh directly at its first prompt without a stray percent line",
     async () => {
       await browser.setWindowRect(0, 0, 1180, 700);
+      await setRestoreTerminals(true);
       await openLocal();
       const lines = () =>
         browser.execute(() =>
@@ -30,8 +32,14 @@ describe("Native client platform", () => {
       await openLocal();
       await browser.waitUntil(async () => (await lines()).some((line) => /.+ %$/.test(line)));
       expect(await lines()).not.toContain("%");
+      await browser.waitUntil(
+        async () =>
+          (await ipc<PersistedWorkspaceState>("get_workspace_state")).workspaces.length === 2,
+      );
       await restartApp();
-      for (const tab of await $$(".session-tab-main")) {
+      const tabs = await $$(".session-tab-main");
+      expect(tabs).toHaveLength(2);
+      for (const tab of tabs) {
         await tab.click();
         await browser.waitUntil(async () => (await lines()).some((line) => /.+ %$/.test(line)));
         expect(await lines()).not.toContain("%");

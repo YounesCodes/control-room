@@ -46,7 +46,7 @@ const sections = {
   behavior: [
     "terminal",
     "Tabs & naming",
-    "automatic current command process terminal names titles scrollback lines output history",
+    "automatic current command process terminal names titles scrollback lines output history restore remember terminal tabs startup restart reopen terminals from the last app session",
   ],
   shells: [
     "terminal",
@@ -713,6 +713,16 @@ export function SettingsPane({
                 </div>
               </SettingsSection>
               <SettingsSection id="behavior" {...sectionProps}>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={draft.restoreTerminalsOnStartup}
+                    onChange={(event) =>
+                      setDraft({ ...draft, restoreTerminalsOnStartup: event.target.checked })
+                    }
+                  />
+                  Reopen terminals from the last app session
+                </label>
                 <label className="checkbox-label">
                   <input
                     type="checkbox"

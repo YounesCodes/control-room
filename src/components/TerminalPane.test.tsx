@@ -237,6 +237,7 @@ import type { AppSettings, ConnectionState, LocalShellProfile, SavedConnection }
 
 const settings: AppSettings = {
   automaticTerminalTitles: true,
+  restoreTerminalsOnStartup: false,
   hostMetricsEnabled: false,
   hostMetrics: ["cpu", "ram", "gpu", "diskIo", "uptime"],
   hostMetricsIntervalSeconds: 5,

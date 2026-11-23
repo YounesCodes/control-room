@@ -406,6 +406,19 @@ export async function savedSettings() {
   return (await ipc<{ current: AppSettings }>("get_settings_contract")).current;
 }
 
+export async function setRestoreTerminals(enabled: boolean) {
+  await $("aria/Open Settings").click();
+  await $(".settings-navigation").$("button=Terminal").click();
+  await $('[role="tab"]=Tabs & naming').click();
+  const setting = $("aria/Reopen terminals from the last app session");
+  if ((await setting.isSelected()) !== enabled) {
+    await setting.click();
+    await $("button=Save settings").click();
+    await expectNativeText(await $(".settings-heading [role=status]"), "Settings saved.");
+  }
+  await $("aria/Close Settings").click();
+}
+
 export async function feature(label: string) {
   await $("nav[aria-label='Workspace features']").$(`button=${label}`).click();
 }

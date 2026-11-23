@@ -7,6 +7,8 @@ import {
   ipc,
   openLocal,
   restartApp,
+  setRestoreTerminals,
+  savedSettings,
   runtime,
   terminalCommand,
   terminalContains,
@@ -75,6 +77,7 @@ describe("Native PTY and Workspace lifecycle", () => {
     await expectNativeText(await $(".session-tab-wrap.active .session-tab-label"), "Shell 1");
     await $('button[aria-label="All terminals"]').click();
     await pressBoundaryKey("End");
+    await pressBoundaryKey("ArrowUp");
     await activateFocusedButton();
     await expectNativeText(await $(".session-tab-wrap.active .session-tab-label"), "Shell 8");
     await terminalCommand("echo OVERFLOW_LAST", "OVERFLOW_LAST");
@@ -99,6 +102,7 @@ describe("Native PTY and Workspace lifecycle", () => {
   });
 
   it("renames and closes specific split panes, cancels group actions, and restores the survivors", async () => {
+    await setRestoreTerminals(true);
     await openLocal();
     await renameActive("Original pane");
     await $("aria/Focus terminal").click();
@@ -324,8 +328,16 @@ describe("Native PTY and Workspace lifecycle", () => {
   });
 
   it("restores labels and fresh sessions without restoring old terminal output", async () => {
+    expect((await savedSettings()).restoreTerminalsOnStartup).toBe(false);
+    await openLocal();
+    await renameActive("Temporary shell");
+    await restartApp();
+    await expect($(".session-tab-main=Temporary shell")).not.toExist();
+    expect((await runtime()).sessionIds).toEqual([]);
+
     await openLocal();
     await renameActive("Persistent shell");
+    await setRestoreTerminals(true);
     await terminalCommand("echo OLD_PROCESS_ONLY", "OLD_PROCESS_ONLY");
     const initial = (await runtime()).sessionIds;
     await browser.waitUntil(
@@ -341,6 +353,33 @@ describe("Native PTY and Workspace lifecycle", () => {
       () => document.querySelector(".terminal-workspace-pane.active .xterm-rows")?.textContent,
     );
     expect(text).not.toContain("OLD_PROCESS_ONLY");
+
+    await setRestoreTerminals(false);
+    await expect($(".session-tab-main=Persistent shell")).toBeDisplayed();
+    await restartApp();
+    await expect($(".session-tab-main=Persistent shell")).not.toExist();
+  });
+
+  it("cancels or closes every tab and split from All terminals", async () => {
+    await openLocal();
+    await openLocal();
+    await $("aria/Focus terminal").click();
+    await openSplitMenu();
+    await $(".new-terminal-menu").$(`aria/New local terminal: ${localShellLabel}`).click();
+    await browser.waitUntil(async () => (await runtime()).sessionIds.length === 3);
+    const sessions = (await runtime()).sessionIds;
+    const picker = $('button[aria-label="All terminals"]');
+    const action = $('[role="menuitem"]=Close all terminals');
+    await picker.click();
+    await action.click();
+    await $("[role=dialog]").$("button=Cancel").click();
+    expect((await runtime()).sessionIds).toEqual(sessions);
+    await picker.click();
+    await action.click();
+    await $("[role=dialog]").$("button=Close all terminals").click();
+    await browser.waitUntil(async () => (await runtime()).sessionIds.length === 0);
+    await expect(picker).not.toExist();
+    await expect($("aria/Exit terminal focus")).not.toExist();
   });
 
   it("finds real terminal output and returns focus when search closes", async () => {
@@ -356,6 +395,7 @@ describe("Native PTY and Workspace lifecycle", () => {
 
   for (const direction of ["vertically", "horizontally"] as const) {
     it(`splits ${direction}, routes input, renames the group and restores its layout`, async () => {
+      await setRestoreTerminals(true);
       await openLocal();
       await $("aria/Focus terminal").click();
       await openSplitMenu(direction);

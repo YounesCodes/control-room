@@ -66,6 +66,7 @@ describe("Settings and native window", () => {
     expect(native.diskTotalKib).toBeGreaterThan(0);
     expect(native.uptimeSeconds).toBeGreaterThanOrEqual(0);
     await restartApp();
+    await openLocal();
     await expect(
       $('.host-metrics-trigger[aria-label$="Host metrics for Local machine"]'),
     ).toBeDisplayed();
@@ -275,6 +276,7 @@ describe("Local Terminal Mode desktop", () => {
       settings: {
         ...settings,
         localTerminalMode: true,
+        restoreTerminalsOnStartup: true,
         defaultLocalShellId: localShellId,
         hiddenLocalShells: catalog.profiles
           .filter((shell) => shell.id !== localShellId)

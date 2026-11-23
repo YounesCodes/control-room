@@ -17,6 +17,19 @@ export async function seedLifecycleData(invoke, session) {
     },
   });
   await invoke("set_connection_group_collapsed", { id: group.id, collapsed: true });
+  if ((await invoke("get_settings_contract")).current.restoreTerminalsOnStartup === false) {
+    await session.$('[aria-label="Open Settings"]').click();
+    const terminalSettings = await session.$(".settings-navigation").$("button=Terminal");
+    if (await terminalSettings.isDisplayed()) await terminalSettings.click();
+    else await session.$("aria/Settings category").selectByAttribute("value", "terminal");
+    await session.$('[role="tab"]=Tabs & naming').click();
+    await session.$("aria/Reopen terminals from the last app session").click();
+    await session.$("button=Save settings").click();
+    await session.waitUntil(
+      async () => (await invoke("get_settings_contract")).current.restoreTerminalsOnStartup,
+    );
+    await session.$('[aria-label="Close Settings"]').click();
+  }
   const { current } = await invoke("get_settings_contract");
   await invoke("save_settings", {
     settings: {
@@ -53,32 +66,33 @@ export async function seedLifecycleData(invoke, session) {
   return readLifecycleData(invoke, connection.id);
 }
 
-export async function readLifecycleData(invoke, connectionId) {
+export async function readLifecycleData(invoke, connectionId, localWorkspaceId) {
   const settings = (await invoke("get_settings_contract")).current;
+  const workspace = await invoke("get_workspace_state");
+  const localNoteId = localWorkspaceId ?? workspace.workspaces[0]?.id;
   return {
     connections: await invoke("list_connections"),
     groups: await invoke("list_connection_groups"),
     tags: await invoke("list_connection_tags"),
     settings: Object.fromEntries(
-      ["automaticUpdateChecks", "terminalFontSize", "terminalFontFamily"].map((key) => [
-        key,
-        settings[key],
-      ]),
+      [
+        "automaticUpdateChecks",
+        "terminalFontSize",
+        "terminalFontFamily",
+        "restoreTerminalsOnStartup",
+      ].map((key) => [key, settings[key]]),
     ),
-    workspace: await invoke("get_workspace_state"),
+    workspace,
     notes: await Promise.all([
       invoke("get_scratchpad_note", { scope: "global", ownerId: "global", connectionId: null }),
       invoke("get_scratchpad_note", { scope: "connection", ownerId: connectionId, connectionId }),
-      (async () => {
-        const state = await invoke("get_workspace_state");
-        return state.workspaces.length
-          ? invoke("get_scratchpad_note", {
-              scope: "local",
-              ownerId: state.workspaces[0].id,
-              connectionId: null,
-            })
-          : null;
-      })(),
+      localNoteId
+        ? invoke("get_scratchpad_note", {
+            scope: "local",
+            ownerId: localNoteId,
+            connectionId: null,
+          })
+        : null,
     ]),
     history: await invoke("get_history", { connectionId, search: "", limit: 500 }),
   };

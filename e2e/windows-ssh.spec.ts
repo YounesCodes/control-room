@@ -1,6 +1,14 @@
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
-import { addConnection, feature, ipc, restartApp, runtime, terminalCommand } from "./helpers";
+import {
+  addConnection,
+  feature,
+  ipc,
+  restartApp,
+  runtime,
+  setRestoreTerminals,
+  terminalCommand,
+} from "./helpers";
 import type {
   AppSettings,
   HostCapabilities,
@@ -85,6 +93,7 @@ const user = process.env.CONTROL_ROOM_WINDOWS_TEST_USER;
   it("opens the selected WSL distribution and preserves it across an app restart", async function () {
     const distribution = process.env.CONTROL_ROOM_WINDOWS_TEST_WSL;
     if (!distribution) this.skip();
+    await setRestoreTerminals(true);
     await connect(`wsl:${distribution}`);
     await terminalCommand("printf 'WSL_%s\\n' SSH_OK", "WSL_SSH_OK");
     await browser.pause(600);
@@ -124,6 +133,7 @@ const user = process.env.CONTROL_ROOM_WINDOWS_TEST_USER;
     await ipc("save_settings", {
       settings: {
         ...contract.current,
+        restoreTerminalsOnStartup: true,
         hostMetricsEnabled: true,
         hostMetrics: ["cpu", "ram", "disk", "uptime"],
         hostMetricsIntervalSeconds: 30,
