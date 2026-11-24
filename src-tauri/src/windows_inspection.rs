@@ -139,11 +139,16 @@ pub fn container(connection: &SavedConnection, id: &str) -> Result<DockerContain
 }
 const DOCKER_CLI_PATH: &str = r"$docker=(Get-Command docker.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source; if (!$docker) { $docker=Join-Path $env:ProgramFiles 'Docker\Docker\resources\bin\docker.exe' }; if (!(Test-Path -LiteralPath $docker -PathType Leaf)) { throw 'Docker CLI was not found on this Windows host.' };";
 
-pub fn docker_log_command(container: &str, lines: u16, follow: bool) -> Result<String, String> {
+pub fn docker_log_command(
+    container: &str,
+    lines: u16,
+    follow: bool,
+    time_range: Option<remote::LogTimeRange>,
+) -> Result<String, String> {
     let container = validate_container_id(container)?;
+    let read = remote::docker_log_args(lines, follow, time_range);
     Ok(powershell_command(&format!(
-        "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false); {DOCKER_CLI_PATH} $ErrorActionPreference='Continue'; & $docker logs --tail {lines} {} '{container}' 2>&1 | ForEach-Object {{ [Console]::WriteLine($_.ToString()) }}; exit $LASTEXITCODE",
-        if follow { "--follow" } else { "" }
+        "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false); {DOCKER_CLI_PATH} $ErrorActionPreference='Continue'; & $docker logs {read} '{container}' 2>&1 | ForEach-Object {{ [Console]::WriteLine($_.ToString()) }}; exit $LASTEXITCODE"
     )))
 }
 
@@ -216,9 +221,9 @@ mod tests {
     }
     #[test]
     fn docker_log_arguments_reject_remote_command_injection() {
-        assert!(docker_log_command("id'; Start-Process calc; '", 50, true).is_err());
+        assert!(docker_log_command("id'; Start-Process calc; '", 50, true, None).is_err());
         assert!(
-            docker_log_command("abc123", 50, true)
+            docker_log_command("abc123", 50, true, None)
                 .unwrap()
                 .starts_with("powershell.exe -NoLogo -NoProfile -EncodedCommand ")
         );

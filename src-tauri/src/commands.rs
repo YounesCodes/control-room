@@ -15,7 +15,9 @@ use crate::{
         SettingsContract, StreamStarted, SystemdUnit,
     },
     platform,
-    remote::{self, Elevation, LogStreamOptions, RemoteOperationLimiter, StreamManager},
+    remote::{
+        self, Elevation, LogStreamOptions, LogTimeRange, RemoteOperationLimiter, StreamManager,
+    },
     session::SessionManager,
     ssh::{detect_ssh_path, ssh_agent_available, ssh_config_path},
     windows_inspection,
@@ -624,6 +626,7 @@ pub fn start_journal_stream(
     service: String,
     lines: u16,
     follow: bool,
+    time_range: Option<LogTimeRange>,
     sudo_password: Option<String>,
     output: Channel<Response>,
 ) -> Result<StreamStarted, String> {
@@ -637,6 +640,7 @@ pub fn start_journal_stream(
         LogStreamOptions {
             lines,
             follow,
+            time_range,
             elevation,
             output,
         },
@@ -654,6 +658,7 @@ pub fn start_docker_log_stream(
     container: String,
     lines: u16,
     follow: bool,
+    time_range: Option<LogTimeRange>,
     sudo_password: Option<String>,
     output: Channel<Response>,
 ) -> Result<StreamStarted, String> {
@@ -667,6 +672,7 @@ pub fn start_docker_log_stream(
             LogStreamOptions {
                 lines,
                 follow,
+                time_range,
                 elevation: Elevation::None,
                 output,
             },
@@ -680,6 +686,7 @@ pub fn start_docker_log_stream(
         LogStreamOptions {
             lines,
             follow,
+            time_range,
             elevation,
             output,
         },

@@ -32,6 +32,14 @@
   text-transform: uppercase;
 }
 
+.log-controls select:disabled {
+  color: var(--text-faint);
+}
+
+.log-lines-select {
+  min-width: 68px;
+}
+
 .log-source-select {
   display: flex;
   min-width: 180px;
@@ -187,6 +195,78 @@
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-chrome);
   padding: 7px 8px;
+}
+
+.log-range-button {
+  min-width: 106px;
+  min-height: 31px;
+  flex: none;
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+
+.log-range-button[data-active] {
+  border-color: var(--border-strong);
+  background: var(--fill-active);
+}
+
+.log-range-dialog .log-range-form {
+  gap: 13px;
+}
+
+.log-range-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.log-range-presets button {
+  flex: 1 0 auto;
+  padding-inline: 10px;
+  white-space: nowrap;
+}
+
+.log-range-presets [aria-pressed="true"] {
+  border-color: var(--text-muted);
+  background: var(--fill-active);
+  color: var(--text-strong);
+}
+
+.log-range-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.log-range-fields input {
+  width: 100%;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.log-range-fields input[aria-invalid="true"] {
+  border-color: var(--failure);
+}
+
+.log-range-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.log-range-form .inline-error {
+  margin: 0;
+}
+
+.log-range-clear {
+  margin-right: auto;
+}
+
+@media (max-width: 460px) {
+  .log-range-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .log-search {

@@ -730,6 +730,33 @@ describe("LogsPane source switching", () => {
     expect(count("Errors")).toBe("Errors0");
   });
 
+  it("reads a preset time range from the selected Docker container as a snapshot", async () => {
+    mountSources({ type: "docker", id: "container-a" });
+    await userEvent.click(screen.getByRole("button", { name: "Time range" }));
+    const dialog = within(screen.getByRole("dialog", { name: "Log time range" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Last 15 min" }));
+    await userEvent.click(dialog.getByRole("button", { name: "Read logs" }));
+    await waitFor(() => expect(api.startDockerLogStream).toHaveBeenCalledTimes(1));
+    const args = api.startDockerLogStream.mock.calls[0];
+    expect(args.slice(0, 4)).toEqual([connection.id, "container-a", 200, false]);
+    expect(args[6].end - args[6].start).toBe(15 * 60);
+    expect(screen.getByRole("combobox", { name: "Lines" })).toHaveProperty("disabled", true);
+  });
+
+  it("keeps the current read mode if switching to a time range cannot stop the live stream", async () => {
+    await streamOldSource();
+    api.stopLogStream.mockRejectedValueOnce(new Error("Stop failed"));
+    await userEvent.click(screen.getByRole("button", { name: "Time range" }));
+    await userEvent.click(screen.getByRole("button", { name: "Read logs" }));
+    expect(await screen.findByText("Could not stop Log Stream: Stop failed")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Time range" })).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "Receive new lines" })).toHaveProperty(
+      "checked",
+      true,
+    );
+    expect(api.startJournalStream).toHaveBeenCalledTimes(1);
+  });
+
   it("streams the last unit chosen when stops resolve out of order", async () => {
     await streamOldSource();
     const pending: (() => void)[] = [];

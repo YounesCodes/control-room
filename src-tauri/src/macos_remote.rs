@@ -1,6 +1,6 @@
 use crate::{
     models::*,
-    remote::{Elevation, RemoteCommandExecutor},
+    remote::{Elevation, LOG_RANGE_LINES, LogTimeRange, RemoteCommandExecutor},
 };
 use chrono::Utc;
 use parking_lot::Mutex;
@@ -662,7 +662,12 @@ fn parse_firewall(text: &str) -> FirewallStatus {
         collected_at: Utc::now().to_rfc3339(),
     }
 }
-pub(crate) fn log_command(service: &str, lines: u16, follow: bool) -> Result<String, String> {
+pub(crate) fn log_command(
+    service: &str,
+    lines: u16,
+    follow: bool,
+    time_range: Option<LogTimeRange>,
+) -> Result<String, String> {
     if !LOG_TAIL_OPTIONS.contains(&lines) {
         return Err("Unsupported log tail length".into());
     }
@@ -677,18 +682,27 @@ pub(crate) fn log_command(service: &str, lines: u16, follow: bool) -> Result<Str
     if service.len() > 512 || (service != "all" && (!valid_label(label) || !target_ok)) {
         return Err("Invalid launchd service identifier".into());
     }
+    let follow = follow && time_range.is_none();
     let (setup, predicate) = if service == "all" {
         (String::new(), String::new())
     } else {
         let follow_arg = if follow { "-F" } else { "" };
-        let setup = format!(
-            r#"job=$(launchctl print {}) || exit $?;
-stdout=$(printf '%s\n' "$job" | sed -n 's/^[[:space:]]*stdout path = //p'); stderr=$(printf '%s\n' "$job" | sed -n 's/^[[:space:]]*stderr path = //p');
+        let file_setup = if time_range.is_none() {
+            format!(
+                r#"stdout=$(printf '%s\n' "$job" | sed -n 's/^[[:space:]]*stdout path = //p'); stderr=$(printf '%s\n' "$job" | sed -n 's/^[[:space:]]*stderr path = //p');
 set --; for file in "$stdout" "$stderr"; do
  test -n "$file" || continue;
  if test -f "$file"; then test -r "$file" || {{ printf 'Permission denied reading service output\n' >&2; exit 1; }}; set -- "$@" "$file"; fi;
 done;
 if test "$#" -gt 0; then exec /usr/bin/tail -n {lines} {follow_arg} -- "$@"; fi;
+"#
+            )
+        } else {
+            String::new()
+        };
+        let setup = format!(
+            r#"job=$(launchctl print {}) || exit $?;
+{file_setup}
 pid=$(printf '%s\n' "$job" | awk '/^[[:space:]]*pid = [0-9]+$/ {{print $3;exit}}');
 predicate={};
 case "$pid" in ''|*[!0-9]*) ;; *) predicate="($predicate) OR processIdentifier == $pid";; esac;
@@ -700,10 +714,25 @@ case "$pid" in ''|*[!0-9]*) ;; *) predicate="($predicate) OR processIdentifier =
         );
         (setup, " --predicate \"$predicate\"".into())
     };
+    let (bounds, lines) = match time_range {
+        Some(range) => {
+            let (start, end) = range.macos_bounds();
+            (
+                format!("--start {} --end {}", quote(&start), quote(&end)),
+                LOG_RANGE_LINES,
+            )
+        }
+        None => ("--last 1h".into(), lines),
+    };
+    let skip_header = if time_range.is_some() {
+        " | /usr/bin/sed '/^Timestamp[[:space:]]/d; /^Filtering the log data using /d; /^Skipping .* messages,/d'"
+    } else {
+        ""
+    };
     let initial = format!(
         "/bin/bash -o pipefail -c {}",
         quote(&format!(
-            "/usr/bin/log show --last 1h --style syslog --info{predicate} | /usr/bin/tail -n {lines}"
+            "/usr/bin/log show {bounds} --style syslog --info{predicate}{skip_header} | /usr/bin/tail -n {lines}"
         ))
     );
     Ok(command(&if follow {
@@ -788,7 +817,7 @@ mod tests {
         read(
             &c,
             "test_macos_logs",
-            &log_command("system/com.openssh.sshd", 200, false).unwrap(),
+            &log_command("system/com.openssh.sshd", 200, false, None).unwrap(),
             &Elevation::None,
         )
         .unwrap();
@@ -881,7 +910,7 @@ launchctl bootstrap gui/$(id -u) {path}/job.plist || exit $?; printf 'gui/%s/{la
 "#
         );
         let target = read(&c, "macos_test_bootstrap", &setup, &Elevation::None).unwrap();
-        let command = log_command(target.trim(), 200, false).unwrap();
+        let command = log_command(target.trim(), 200, false, None).unwrap();
         let output = read(&c, "macos_test_service_logs", &command, &Elevation::None).unwrap();
         assert!(output.contains("CONTROL_ROOM_LAUNCHD_LOG_OK"));
     }
@@ -902,19 +931,19 @@ launchctl bootstrap gui/$(id -u) {path}/job.plist || exit $?; printf 'gui/%s/{la
             "bad\nname",
             "bad\"label",
         ] {
-            assert!(log_command(s, 200, true).is_err());
+            assert!(log_command(s, 200, true, None).is_err());
         }
         assert!(
-            log_command("system/com.apple.sshd", 200, true)
+            log_command("system/com.apple.sshd", 200, true, None)
                 .unwrap()
                 .contains("log stream")
         );
         assert!(
-            log_command("all", 200, false)
+            log_command("all", 200, false, None)
                 .unwrap()
                 .contains("--last 1h")
         );
-        assert!(log_command("all", 0, false).is_err());
+        assert!(log_command("all", 0, false, None).is_err());
         assert_eq!(quote("a'b"), "'a'\\''b'");
     }
 }

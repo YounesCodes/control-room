@@ -674,7 +674,14 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
             ?.forEach((callback) =>
               callback({ payload: { streamId: "example-stream", notice: "journal-restricted" } }),
             );
-        else args.output.onmessage(new TextEncoder().encode(journalOutput).buffer);
+        else if (state !== "time-range-empty")
+          args.output.onmessage(new TextEncoder().encode(journalOutput).buffer);
+        if (args.timeRange)
+          listeners
+            .get("stream-state-changed")
+            ?.forEach((callback) =>
+              callback({ payload: { streamId: "example-stream", state: "stopped", reason: null } }),
+            );
       }, 20);
       break;
     case "inspect_systemd_unit": {

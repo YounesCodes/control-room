@@ -3,14 +3,24 @@ import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import { runAxe } from "../test/axe";
 import { settings, connection } from "../test/app-fixtures";
-import type { SystemdUnit } from "../types";
+import type { StreamStateEvent, SystemdUnit } from "../types";
+import type { LogTimeBounds } from "../lib/log-time-range";
 import "../styles.css";
 
 const native = vi.hoisted(() => ({
   output: null as ((message: ArrayBuffer) => void) | null,
-  startJournal: vi.fn(async (_connectionId: string, source: string) => ({
-    streamId: `stream-${source}`,
-  })),
+  streamState: null as ((event: { payload: StreamStateEvent }) => void) | null,
+  startJournal: vi.fn(
+    async (
+      _connectionId: string,
+      source: string,
+      _lines: number,
+      _follow: boolean,
+      _password: string | null,
+      _output: unknown,
+      _bounds: LogTimeBounds | null,
+    ) => ({ streamId: `stream-${source}` }),
+  ),
 }));
 vi.mock("@tauri-apps/api/core", () => ({
   Channel: class {
@@ -19,7 +29,12 @@ vi.mock("@tauri-apps/api/core", () => ({
     }
   },
 }));
-vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => undefined }));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: async (event: string, handler: typeof native.streamState) => {
+    if (event === "stream-state-changed") native.streamState = handler;
+    return () => undefined;
+  },
+}));
 vi.mock("../lib/api", () => ({
   api: {
     startJournalStream: native.startJournal,
@@ -126,4 +141,40 @@ it("suggests matching sources as you type and commits only the chosen journal", 
     .element(page.getByText("[systemd Full system journal] stream started"))
     .toBeVisible();
   expect(native.startJournal.mock.calls.map((call) => call[1])).toEqual(["worker.service", "all"]);
+});
+
+it("validates a custom range, reads it from the host and restores follow when cleared", async () => {
+  await mount();
+  const trigger = page.getByRole("button", { name: "Time range", exact: true });
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "Log time range" });
+  await dialog.getByRole("button", { name: "Custom", exact: true }).click();
+  const from = "2026-11-01T09:30";
+  const to = "2026-11-01T10:00";
+  await dialog.getByLabelText("From").fill(to);
+  await dialog.getByLabelText("To").fill(from);
+  await dialog.getByRole("button", { name: "Read logs" }).click();
+  await expect.element(dialog.getByRole("alert")).toHaveTextContent("End must be after start.");
+  expect(native.startJournal.mock.calls).toHaveLength(1);
+  await dialog.getByLabelText("From").fill(from);
+  await dialog.getByLabelText("To").fill(to);
+  const axe = await runAxe(dialog.element());
+  expect(axe.violations.map(({ id }) => id)).toEqual([]);
+  await dialog.getByRole("button", { name: "Read logs" }).click();
+  await expect.element(page.getByText("Reading entries from worker.service…")).toBeVisible();
+  expect(native.startJournal.mock.calls.at(-1)?.[3]).toBe(false);
+  expect(native.startJournal.mock.calls.at(-1)?.[6]).toEqual({
+    start: new Date(from).getTime() / 1000,
+    end: new Date(to).getTime() / 1000,
+  });
+  native.streamState?.({
+    payload: { state: "stopped", streamId: "stream-worker.service", reason: null },
+  });
+  await expect.element(page.getByText("No entries in this time range.")).toBeVisible();
+  const follow = page.getByRole("checkbox", { name: "Receive new lines" });
+  await expect.element(follow).toBeDisabled();
+  await page.getByRole("button", { name: /Time range.*Custom range/ }).click();
+  await dialog.getByRole("button", { name: "Clear range" }).click();
+  await expect.element(follow).toBeChecked();
+  await expect.element(trigger).toHaveFocus();
 });
