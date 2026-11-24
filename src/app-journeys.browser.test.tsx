@@ -2644,7 +2644,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("combobox", { name: "Source", exact: true }).selectOptions("docker");
     await expect
       .element(page.getByRole("combobox", { name: "Container", exact: true }))
-      .toHaveValue(fixtures.container.id);
+      .toHaveValue(fixtures.container.name);
   });
 
   it("recovers from a log stream error and ignores stopped-stream output", async () => {
@@ -3437,7 +3437,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await navigate("Logs");
     await expect
       .element(page.getByRole("combobox", { name: "Service", exact: true }))
-      .toHaveValue("all");
+      .toHaveValue("All unified logs");
     await navigate("Docker");
     await expect
       .element(page.getByRole("heading", { name: "Containers", exact: true }))
@@ -3556,7 +3556,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: /^failed.service/ }).click();
     await page.getByRole("button", { name: "View journal" }).click();
     await expect
-      .element(page.getByRole("combobox", { name: "Unit", exact: true }))
+      .element(page.getByRole("combobox", { name: "Journal", exact: true }))
       .toHaveValue("failed.service");
     await page.getByRole("button", { name: "Start", exact: true }).click();
     await expect.element(page.getByText("Streaming", { exact: true })).toBeVisible();
@@ -3587,7 +3587,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     await page.getByRole("button", { name: "View logs" }).click();
     await expect
       .element(page.getByRole("combobox", { name: "Container", exact: true }))
-      .toHaveValue(fixtures.container.id);
+      .toHaveValue(fixtures.container.name);
   });
 
   it("opens a container terminal from Docker as a leaf under its host", async () => {

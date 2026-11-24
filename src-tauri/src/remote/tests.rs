@@ -753,8 +753,20 @@ fn docker_logs_merge_container_stderr_into_the_stream() {
         "env LC_ALL=C docker logs --tail 200 --follow 'container-1' 2>&1"
     );
     assert_eq!(
-        journal_command("ssh.service", 50, false),
+        journal_command("ssh.service", 50, false).unwrap(),
         "env LC_ALL=C journalctl -u 'ssh.service' -n 50 --no-pager -o short-iso-precise"
+    );
+}
+
+#[test]
+fn full_journal_omits_the_unit_filter_for_snapshots_and_following() {
+    assert_eq!(
+        journal_command("all", 200, false).unwrap(),
+        "env LC_ALL=C journalctl -n 200 --no-pager -o short-iso-precise"
+    );
+    assert_eq!(
+        journal_command("all", 500, true).unwrap(),
+        "env LC_ALL=C journalctl -n 500 --no-pager -o short-iso-precise -f"
     );
 }
 
@@ -854,7 +866,7 @@ fn a_unit_name_a_host_invented_never_reaches_a_journal_command() {
         ));
 
         assert!(
-            validate_systemd_unit_id(unit).is_err(),
+            journal_command(unit, 200, false).is_err(),
             "the log request accepted {unit:?} (listed: {})",
             !listed.is_empty()
         );
@@ -899,7 +911,7 @@ fn every_accepted_unit_id_stays_one_quoted_word_in_its_journal_command() {
             "{unit:?} would close the quoted word around it"
         );
 
-        let command = journal_command(&unit, 200, false);
+        let command = journal_command(&unit, 200, false).unwrap();
         assert!(
             command.contains(&format!("-u '{unit}'")),
             "the unit is not the quoted argument of -u: {command}"

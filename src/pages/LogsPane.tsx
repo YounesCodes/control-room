@@ -13,7 +13,7 @@ import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ArrowDown, Eraser, FileClock, Pause, Play, Square, WrapText, X } from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
-import { Bone, ErrorState, Skeleton, SkeletonLines } from "../components/PanelState";
+import { LogSourcePicker, type LogSourceOption } from "../components/LogSourcePicker";
 import { api, errorMessage } from "../lib/api";
 import { BoundedLogBuffer, logRenderDelay } from "../lib/log-buffer";
 import {
@@ -42,6 +42,7 @@ type SudoPurpose = "sources" | "stream";
 type StreamTarget = { type: LogSourceType; id: string; tail: number; follow: boolean };
 const MAX_EARLY_STREAM_EVENTS = 16;
 const HELD_LINES_DELAY = 400;
+const ALL_JOURNAL = "all";
 const LEVEL_FILTERS: { value: LogLevelFilter; label: string; title?: string }[] = [
   { value: "all", label: "All" },
   {
@@ -159,7 +160,14 @@ export function LogsPane({
   const [sourceType, setSourceType] = useState<LogSourceType>(
     windowsHost ? "docker" : (selectedSource?.type ?? "systemd"),
   );
-  const [sourceId, setSourceId] = useState(selectedSource?.id ?? (macosHost ? "all" : ""));
+  const [sourceId, setSourceId] = useState(
+    selectedSource?.type === sourceType
+      ? selectedSource.id
+      : sourceType === "systemd"
+        ? ALL_JOURNAL
+        : "",
+  );
+  const journalLabel = macosHost ? "All unified logs" : "Full system journal";
   // launchd services are named `domain/label`, not systemd unit names.
   const explicitSystemdSource =
     sourceType === "systemd" &&
@@ -188,7 +196,7 @@ export function LogsPane({
   const pausedRef = useRef(false);
   const streamIdRef = useRef<string | null>(null);
   const streamGenerationRef = useRef(0);
-  const sourceRequestRef = useRef(0);
+  const sourceRequestsRef = useRef({ systemd: 0, docker: 0 });
   const flushTimerRef = useRef<number | null>(null);
   const heldTimerRef = useRef<number | null>(null);
   const lineCacheRef = useRef(new LogLineCache());
@@ -302,7 +310,7 @@ export function LogsPane({
   ) {
     const cache = type === "systemd" ? servicesCacheRef.current : containersCacheRef.current;
     if (!force && isCacheFresh(cache)) return;
-    const request = ++sourceRequestRef.current;
+    const request = ++sourceRequestsRef.current[type];
     if (type === "systemd") {
       onServicesCacheChange({ ...servicesCacheRef.current, loading: true, error: null });
     } else {
@@ -311,16 +319,16 @@ export function LogsPane({
     try {
       if (type === "systemd") {
         const items = await api.listServices(connection.id);
-        if (request !== sourceRequestRef.current) return;
+        if (request !== sourceRequestsRef.current[type]) return;
         onServicesCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
       } else {
         const items = await api.listContainers(connection.id, sudoPassword);
-        if (request !== sourceRequestRef.current) return;
+        if (request !== sourceRequestsRef.current[type]) return;
         onContainersCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
-        setSudoPurpose(null);
+        setSudoPurpose((purpose) => (purpose === "sources" ? null : purpose));
       }
     } catch (caught) {
-      if (request !== sourceRequestRef.current) return;
+      if (request !== sourceRequestsRef.current[type]) return;
       const message = errorMessage(caught);
       if (type === "systemd") {
         onServicesCacheChange({ ...servicesCacheRef.current, loading: false, error: message });
@@ -333,15 +341,16 @@ export function LogsPane({
   useEffect(() => {
     void loadSources(sourceType);
     return () => {
-      sourceRequestRef.current += 1;
+      sourceRequestsRef.current.systemd += 1;
+      sourceRequestsRef.current.docker += 1;
     };
   }, [connection.id]);
 
   useEffect(() => {
-    if (explicitSystemdSource) return;
+    if (sourceType === "systemd" && (sourceId === ALL_JOURNAL || explicitSystemdSource)) return;
     const items = sourceType === "systemd" ? servicesCache.items : containersCache.items;
-    if (macosHost && sourceType === "systemd" && sourceId === "all") return;
-    const next = reconcileSelection(items, sourceId) ?? "";
+    const next =
+      reconcileSelection(items, sourceId) ?? (sourceType === "systemd" ? ALL_JOURNAL : "");
     if (next === sourceId) return;
     setSourceId(next);
     onSourceChange(next ? { type: sourceType, id: next } : null);
@@ -469,9 +478,15 @@ export function LogsPane({
     earlyStateRef.current.clear();
     earlyNoticeRef.current.clear();
     decoderRef.current = new TextDecoder();
-    const targetItems = target.type === "systemd" ? servicesCache.items : containersCache.items;
+    const targetLabel =
+      target.type === "systemd"
+        ? target.id === ALL_JOURNAL
+          ? journalLabel
+          : target.id
+        : (containersCache.items.find((container) => container.id === target.id)?.name ??
+          target.id);
     activeBufferRef.current.append(
-      `${activeBufferRef.current.byteCount ? "\n" : ""}[${target.type} ${sourceLabel(targetItems, target.id)}] stream started\n`,
+      `${activeBufferRef.current.byteCount ? "\n" : ""}[${target.type} ${targetLabel}] stream started\n`,
     );
     flushNow();
 
@@ -561,8 +576,8 @@ export function LogsPane({
 
   function changeType(next: LogSourceType) {
     if (next === sourceType) return;
-    const items = next === "systemd" ? servicesCache.items : containersCache.items;
-    const nextId = macosHost && next === "systemd" ? "all" : (items[0]?.id ?? "");
+    const nextId = next === "systemd" ? ALL_JOURNAL : (containersCache.items[0]?.id ?? "");
+    setSudoPurpose(null);
     setSourceType(next);
     setSourceId(nextId);
     onSourceChange(nextId ? { type: next, id: nextId } : null);
@@ -646,80 +661,47 @@ export function LogsPane({
   }
 
   const sourceCache = sourceType === "systemd" ? servicesCache : containersCache;
-  const sourceOptions =
-    macosHost && sourceType === "systemd"
-      ? [{ id: "all", name: "All unified logs" }, ...sourceCache.items]
-      : sourceCache.items;
-  // macOS hosts can always stream the whole unified log.
-  const sourceListOptional = explicitSystemdSource || (macosHost && sourceType === "systemd");
-  if (sourceCache.loading && !sourceCache.items.length && !sourceListOptional)
-    return (
-      <section className="feature-page logs-page">
-        <header className="page-heading compact-heading">
-          <div className="page-heading-title">
-            <h2>Logs</h2>
-            <Bone shape="caption" width="56px" />
-          </div>
-        </header>
-        <div className="log-controls">
-          <div className="skeleton-field">
-            <Bone shape="caption" width="44px" />
-            <Bone shape="control" width="96px" />
-          </div>
-          <div className="skeleton-field source-select">
-            <Bone shape="caption" width="36px" />
-            <Bone shape="control" width="100%" />
-          </div>
-          <div className="skeleton-field">
-            <Bone shape="caption" width="36px" />
-            <Bone shape="control" width="68px" />
-          </div>
-          <div className="log-transport">
-            <Bone shape="button" width="78px" />
-            <Bone shape="button" width="72px" />
-          </div>
-        </div>
-        <Skeleton label="Finding available log sources…" className="log-panel">
-          <div className="log-view-bar">
-            <Bone shape="control" width="420px" className="log-search" />
-            <Bone shape="control" width="190px" />
-            <Bone shape="icon" />
-          </div>
-          <SkeletonLines count={18} lead />
-        </Skeleton>
-      </section>
-    );
-  if (sourceCache.error && !sourceCache.items.length && !sourceListOptional) {
-    const dockerPermissionError =
-      !windowsHost &&
-      !macosHost &&
-      sourceType === "docker" &&
-      sourceCache.error.toLowerCase().includes("permission denied");
-    return (
-      <>
-        <ErrorState
-          message={sourceCache.error}
-          action={
-            dockerPermissionError ? (
-              <button onClick={() => setSudoPurpose("sources")}>Retry with sudo</button>
-            ) : (
-              <button onClick={() => loadSources(sourceType, true)}>Retry</button>
-            )
-          }
-        />
-        {sudoPurpose === "sources" && (
-          <CredentialDialog
-            connectionLabel={connection.displayName}
-            onClose={() => setSudoPurpose(null)}
-            onSubmit={(password) => loadSources("docker", true, password)}
-          />
-        )}
-      </>
-    );
-  }
-
   const sourceNoun = sourceType === "systemd" ? (macosHost ? "service" : "unit") : "container";
-  const selectedLabel = sourceId ? sourceLabel(sourceOptions, sourceId) : "";
+  const sourceOptions = useMemo<LogSourceOption[]>(() => {
+    if (sourceType === "docker") {
+      return containersCache.items.map((container) => ({
+        id: container.id,
+        label: container.name || container.id,
+        detail: container.image,
+      }));
+    }
+    const options: LogSourceOption[] = [
+      {
+        id: ALL_JOURNAL,
+        label: journalLabel,
+        detail: macosHost ? "System and application messages" : "All units and system messages",
+        journal: true,
+      },
+      ...servicesCache.items.map((unit) => ({
+        id: unit.id,
+        label: unit.id,
+        detail: unit.description !== unit.id ? unit.description : undefined,
+      })),
+    ];
+    if (explicitSystemdSource && !options.some((source) => source.id === sourceId)) {
+      options.push({ id: sourceId, label: sourceId });
+    }
+    return options;
+  }, [
+    sourceType,
+    containersCache.items,
+    servicesCache.items,
+    journalLabel,
+    macosHost,
+    explicitSystemdSource,
+    sourceId,
+  ]);
+  const selectedLabel = sourceOptions.find((source) => source.id === sourceId)?.label ?? sourceId;
+  const dockerPermissionError =
+    !windowsHost &&
+    !macosHost &&
+    sourceType === "docker" &&
+    sourceCache.error?.toLowerCase().includes("permission denied");
   const statusLabel =
     streamStatus === "starting"
       ? "Starting…"
@@ -765,24 +747,15 @@ export function LogsPane({
             <option value="docker">Docker</option>
           </select>
         </label>
-        <label className="source-select">
-          <span>{sourceType === "systemd" ? (macosHost ? "Service" : "Unit") : "Container"}</span>
-          <select
-            value={sourceId}
-            onChange={(event) => selectSource(event.target.value)}
-            disabled={!sourceId}
-          >
-            {!sourceId && <option value="">No {sourceNoun}s found</option>}
-            {explicitSystemdSource && !sourceOptions.some((source) => source.id === sourceId) && (
-              <option value={sourceId}>{sourceId}</option>
-            )}
-            {sourceOptions.map((source) => (
-              <option value={source.id} key={source.id}>
-                {"name" in source ? source.name : source.id}
-              </option>
-            ))}
-          </select>
-        </label>
+        <LogSourcePicker
+          key={sourceType}
+          label={sourceType === "systemd" ? (macosHost ? "Service" : "Journal") : "Container"}
+          placeholder={`Search ${sourceNoun}s`}
+          options={sourceOptions}
+          value={sourceId}
+          status={sourceCache.loading ? `Finding ${sourceNoun}s…` : undefined}
+          onChange={selectSource}
+        />
         <label>
           <span>Lines</span>
           <select
@@ -832,13 +805,29 @@ export function LogsPane({
         </div>
       </div>
       {sourceCache.error && (
-        <p className="inline-warning">Showing saved sources. Refresh failed: {sourceCache.error}</p>
+        <div className="inline-warning" role="status">
+          <span>
+            {sourceCache.items.length
+              ? `Couldn’t refresh ${sourceNoun}s. `
+              : `Couldn’t load ${sourceNoun}s. `}
+            {sourceCache.error}
+          </span>
+          <button
+            className="inline-action"
+            type="button"
+            onClick={() =>
+              dockerPermissionError ? setSudoPurpose("sources") : void loadSources(sourceType, true)
+            }
+          >
+            {dockerPermissionError ? "Retry with sudo" : "Retry"}
+          </button>
+        </div>
       )}
       {journalRestricted && (
         <div className="inline-warning" role="status">
           <span>
-            This account can’t read the system journal, so this unit’s entries may be missing. Use
-            sudo, or add the account to the adm or systemd-journal group.
+            This account can’t read the system journal, so some entries may be missing. Use sudo, or
+            add the account to the adm or systemd-journal group.
           </span>
           {!windowsHost && (
             <button
@@ -1032,9 +1021,4 @@ export function LogsPane({
       )}
     </section>
   );
-}
-
-function sourceLabel(items: { id: string; name?: string }[], id: string): string {
-  const item = items.find((source) => source.id === id);
-  return item?.name ?? id;
 }

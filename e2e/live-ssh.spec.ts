@@ -141,16 +141,12 @@ describe("read-only Ubuntu SSH journeys with independent native processes", () =
     await expect($("aria/Ports graph")).toBeDisplayed();
   });
   it("starts and stops journal streaming and tears down on navigation", async function () {
-    const { saved, caps } = await connect();
+    const { caps } = await connect();
     if (!caps.journaldAvailable) {
       throw new Error("The lab fixture requires journald");
     }
-    const units = await ipc<SystemdUnit[]>("list_services", { connectionId: saved.id });
     await feature("Logs");
-    await $("//label[span[normalize-space()='Unit']]/select").selectByAttribute(
-      "value",
-      units[0].id,
-    );
+    await expect($("input[placeholder='Search units']")).toHaveValue("Full system journal");
     await $("button=Start").click();
     await browser.waitUntil(
       async () => (await runtime()).streamIds.length > 0 || (await $(".inline-error").isExisting()),

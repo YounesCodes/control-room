@@ -604,9 +604,19 @@
       }
     },
     "logs": {
-      "states": ["stopped", "populated", "errors", "search", "restricted"],
+      "states": [
+        "stopped",
+        "populated",
+        "errors",
+        "search",
+        "restricted",
+        "source-search",
+        "source-no-matches"
+      ],
       "ready": ".app-shell",
       "prepare": {
+        "source-search": [{ "role": "combobox", "name": "Journal", "fill": "example" }],
+        "source-no-matches": [{ "role": "combobox", "name": "Journal", "fill": "nginx" }],
         "populated": [
           {
             "role": "button",
@@ -653,7 +663,9 @@
         "populated": ".logs-page .log-line:nth-child(49)",
         "errors": ".log-level-filter [data-level='error'][aria-pressed='true']",
         "search": ".logs-page .log-match-count",
-        "restricted": ".logs-page .inline-warning[role='status']"
+        "restricted": ".logs-page .inline-warning[role='status']",
+        "source-search": ".log-source-list [role='option']:first-child",
+        "source-no-matches": ".log-source-status"
       }
     },
     "loading": {
@@ -749,7 +761,7 @@
         "windows-services": ".windows-services-page .list-panel .skeleton",
         "shell-picker": "[role='dialog'] .skeleton",
         "history": ".history-list.skeleton",
-        "logs": ".logs-page .skeleton",
+        "logs": ".logs-page .log-source-field",
         "docker": ".arch-viewport .skeleton",
         "docker-inspector": ".arch-detail .skeleton",
         "ports": ".arch-viewport .skeleton",

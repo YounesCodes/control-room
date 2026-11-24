@@ -129,6 +129,15 @@ async function chunk(text: string) {
   await act(async () => outputHandler?.(new TextEncoder().encode(text).buffer));
 }
 
+function sourcePicker(name = "Journal") {
+  return screen.getByRole("combobox", { name }) as HTMLInputElement;
+}
+
+async function chooseLogSource(option: string) {
+  await userEvent.click(sourcePicker());
+  await userEvent.click(within(screen.getByRole("listbox")).getByText(option, { exact: true }));
+}
+
 describe("LogsPane reading position", () => {
   beforeEach(() => {
     outputHandler = undefined;
@@ -156,7 +165,7 @@ describe("LogsPane reading position", () => {
         onSourceChange={onSourceChange}
       />,
     );
-    expect((screen.getByRole("combobox", { name: "Unit" }) as HTMLSelectElement).value).toBe(
+    expect((screen.getByRole("combobox", { name: "Journal" }) as HTMLInputElement).value).toBe(
       "network-online.target",
     );
     expect(onSourceChange).not.toHaveBeenCalled();
@@ -188,7 +197,7 @@ describe("LogsPane reading position", () => {
       />,
     );
     expect(screen.getByRole("option", { name: "Unified log" })).toBeTruthy();
-    expect(screen.getByRole("option", { name: "All unified logs" })).toBeTruthy();
+    expect(sourcePicker("Service")).toHaveProperty("value", "All unified logs");
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
     await waitFor(() => expect(api.startJournalStream).toHaveBeenCalled());
     expect(api.startJournalStream.mock.calls[0].slice(0, 2)).toEqual([connection.id, "all"]);
@@ -253,13 +262,13 @@ describe("LogsPane reading position", () => {
     }
     render(<StatefulLogs />);
 
-    await screen.findByText(denied);
+    await screen.findByText(new RegExp(denied));
     await userEvent.click(screen.getByRole("button", { name: "Retry with sudo" }));
     const dialog = await screen.findByRole("dialog");
     await userEvent.type(within(dialog).getByLabelText(/password/i), "example-password");
     await userEvent.click(within(dialog).getByRole("button", { name: "Continue" }));
 
-    await waitFor(() => expect(screen.queryByText(denied)).toBeNull());
+    await waitFor(() => expect(screen.queryByText(new RegExp(denied))).toBeNull());
     expect(api.listContainers).toHaveBeenLastCalledWith(connection.id, "example-password");
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("button", { name: "Start" })).toBeTruthy();
@@ -523,7 +532,7 @@ describe("LogsPane reading aids", () => {
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
     await screen.findByText("Streaming");
     api.startJournalStream.mockResolvedValueOnce({ streamId: "stream-b" });
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Unit" }), "cron.service");
+    await chooseLogSource("cron.service");
     await waitFor(() => expect(api.stopLogStream).toHaveBeenCalledWith("stream-a"));
     await waitFor(() =>
       expect(api.startJournalStream.mock.calls.at(-1)?.slice(0, 2)).toEqual([
@@ -550,7 +559,7 @@ describe("LogsPane reading aids", () => {
         onSourceChange={vi.fn()}
       />,
     );
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Unit" }), "cron.service");
+    await chooseLogSource("cron.service");
     expect(api.startJournalStream).not.toHaveBeenCalled();
     expect(
       screen.getByText(
@@ -597,7 +606,6 @@ describe("LogsPane source switching", () => {
       />,
     );
   }
-  const unitSelect = () => screen.getByRole("combobox", { name: "Unit" });
   const log = () => screen.queryByRole("log");
   const count = (name: string) =>
     screen.getByRole("button", { name: new RegExp(`^${name}`) }).textContent;
@@ -628,7 +636,7 @@ describe("LogsPane source switching", () => {
 
   it("starts the new unit in a fresh view while streaming", async () => {
     await streamOldSource();
-    await userEvent.selectOptions(unitSelect(), "cron.service");
+    await chooseLogSource("cron.service");
     expect(await screen.findByText("[systemd cron.service] stream started")).toBeTruthy();
     expect(log()?.textContent).not.toMatch(/OLD_SOURCE|ssh\.service/);
     expect(count("Errors")).toBe("Errors0");
@@ -642,7 +650,7 @@ describe("LogsPane source switching", () => {
     await streamOldSource();
     await userEvent.click(screen.getByRole("button", { name: "Stop" }));
     await screen.findByText("Stopped");
-    await userEvent.selectOptions(unitSelect(), "cron.service");
+    await chooseLogSource("cron.service");
     expect(log()).toBeNull();
     expect(count("Errors")).toBe("Errors0");
     expect(
@@ -658,7 +666,7 @@ describe("LogsPane source switching", () => {
     await chunk("PARTIAL_OLD_LINE");
     await userEvent.click(screen.getByRole("button", { name: "Pause" }));
     await chunk("\n2026-11-01T09:58:03.000001+00:00 host-a sshd[1]: error: HELD_OLD_LINE\n");
-    await userEvent.selectOptions(unitSelect(), "cron.service");
+    await chooseLogSource("cron.service");
     await screen.findByText("[systemd cron.service] stream started");
     await screen.findByText("Streaming");
     expect(log()?.textContent).not.toMatch(/HELD_OLD_LINE|PARTIAL_OLD_LINE|OLD_SOURCE/);
@@ -669,7 +677,7 @@ describe("LogsPane source switching", () => {
   it("ignores late output and state from the previous unit stream", async () => {
     await streamOldSource();
     const oldOutput = outputHandler;
-    await userEvent.selectOptions(unitSelect(), "cron.service");
+    await chooseLogSource("cron.service");
     await screen.findByText("[systemd cron.service] stream started");
     await act(async () => oldOutput?.(new TextEncoder().encode("error: LATE_OLD_OUTPUT\n").buffer));
     await act(async () =>
@@ -711,10 +719,12 @@ describe("LogsPane source switching", () => {
     await screen.findByText("Streaming");
     await chunk("ERROR API_CONTAINER_FAILURE\n");
     await screen.findByText(/API_CONTAINER_FAILURE/);
-    await userEvent.selectOptions(
-      screen.getByRole("combobox", { name: "Container" }),
-      "container-b",
-    );
+    const picker = sourcePicker("Container");
+    await userEvent.click(picker);
+    await userEvent.type(picker, "container-b");
+    expect(screen.queryByRole("option", { name: "api" })).toBeNull();
+    expect(api.startDockerLogStream).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole("option", { name: "worker" }));
     expect(await screen.findByText("[docker worker] stream started")).toBeTruthy();
     expect(log()?.textContent).not.toContain("API_CONTAINER_FAILURE");
     expect(count("Errors")).toBe("Errors0");
@@ -726,8 +736,8 @@ describe("LogsPane source switching", () => {
     api.stopLogStream.mockImplementation(
       () => new Promise<void>((resolve) => pending.push(() => resolve())),
     );
-    fireEvent.change(unitSelect(), { target: { value: "cron.service" } });
-    fireEvent.change(unitSelect(), { target: { value: "backup.service" } });
+    await chooseLogSource("cron.service");
+    await chooseLogSource("backup.service");
     await waitFor(() => expect(pending.length).toBeGreaterThan(0));
     await act(async () => {
       for (const resolve of [...pending].reverse()) resolve();
@@ -739,7 +749,7 @@ describe("LogsPane source switching", () => {
     const started = api.startJournalStream.mock.calls.map((call) => call[1]);
     expect(started.at(-1)).toBe("backup.service");
     expect(started).not.toContain("cron.service");
-    expect((unitSelect() as HTMLSelectElement).value).toBe("backup.service");
+    expect(sourcePicker().value).toBe("backup.service");
     expect(log()?.textContent).not.toMatch(/cron\.service|OLD_SOURCE/);
   });
 
@@ -748,7 +758,7 @@ describe("LogsPane source switching", () => {
     mountSources();
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
     await screen.findByText("journal access failed for ssh");
-    await userEvent.selectOptions(unitSelect(), "cron.service");
+    await chooseLogSource("cron.service");
     expect(screen.queryByText("journal access failed for ssh")).toBeNull();
   });
 
@@ -792,7 +802,6 @@ describe("LogsPane stream lifecycle while switching", () => {
       ...overrides,
     };
   }
-  const unitSelect = () => screen.getByRole("combobox", { name: "Unit" }) as HTMLSelectElement;
   async function startStreaming() {
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
     await screen.findByText("Streaming");
@@ -820,8 +829,8 @@ describe("LogsPane stream lifecycle while switching", () => {
     api.stopLogStream.mockImplementationOnce(
       () => new Promise<void>((resolve) => (release = () => resolve())),
     );
-    fireEvent.change(unitSelect(), { target: { value: "cron.service" } });
-    fireEvent.change(unitSelect(), { target: { value: "backup.service" } });
+    await chooseLogSource("cron.service");
+    await chooseLogSource("backup.service");
     await act(async () => release());
     await screen.findByText("[systemd backup.service] stream started");
     await screen.findByText("Streaming");
@@ -840,14 +849,14 @@ describe("LogsPane stream lifecycle while switching", () => {
     api.stopLogStream.mockImplementationOnce(
       () => new Promise<void>((resolve) => (release = () => resolve())),
     );
-    unitSelect().focus();
-    await userEvent.selectOptions(unitSelect(), "cron.service");
+    sourcePicker().focus();
+    await chooseLogSource("cron.service");
     expect(screen.getByText("Stopping…")).toBeTruthy();
-    expect(unitSelect().disabled).toBe(false);
-    expect(document.activeElement).toBe(unitSelect());
+    expect(sourcePicker().disabled).toBe(false);
+    expect(document.activeElement).toBe(sourcePicker());
     await act(async () => release());
     await screen.findByText("Streaming");
-    expect(document.activeElement).toBe(unitSelect());
+    expect(document.activeElement).toBe(sourcePicker());
   });
 
   it("cancels a pending restart when Stop is pressed", async () => {
@@ -857,13 +866,13 @@ describe("LogsPane stream lifecycle while switching", () => {
     api.startJournalStream.mockImplementationOnce(
       () => new Promise((resolve) => (finish = resolve)),
     );
-    await userEvent.selectOptions(unitSelect(), "cron.service");
+    await chooseLogSource("cron.service");
     await screen.findByText("Starting…");
     await userEvent.click(screen.getByRole("button", { name: "Stop" }));
     await act(async () => finish({ streamId: "late-cron" }));
     expect(api.stopLogStream).toHaveBeenCalledWith("late-cron");
     expect(screen.getByText("Stopped")).toBeTruthy();
-    await userEvent.selectOptions(unitSelect(), "backup.service");
+    await chooseLogSource("backup.service");
     expect(api.startJournalStream).toHaveBeenCalledTimes(2);
   });
 
@@ -883,7 +892,7 @@ describe("LogsPane stream lifecycle while switching", () => {
       events.handler?.({ payload: { streamId: "stream-1", state: "stopped", reason: null } }),
     );
     await screen.findByText("Stopped");
-    await userEvent.selectOptions(unitSelect(), "cron.service");
+    await chooseLogSource("cron.service");
     expect(api.startJournalStream).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole("log")).toBeNull();
   });
@@ -1019,7 +1028,7 @@ describe("LogsPane restricted journal access", () => {
 
   it("ignores notices from other streams and clears on another unit", async () => {
     await startRestricted();
-    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Unit" }), "cron.service");
+    await chooseLogSource("cron.service");
     await screen.findByText("[systemd cron.service] stream started");
     expect(screen.queryByText(warning)).toBeNull();
     await notice("stream-1");
@@ -1033,7 +1042,7 @@ describe("LogsPane restricted journal access", () => {
 describe("LogsPane source discovery", () => {
   afterEach(cleanup);
 
-  it("sketches the whole tab while finding sources and keeps the picker during a refresh", () => {
+  it("can start the full journal while the unit inventory loads or fails", async () => {
     api.listServices.mockReset().mockReturnValue(new Promise(() => {}));
     const props = {
       connection,
@@ -1051,13 +1060,33 @@ describe("LogsPane source discovery", () => {
         servicesCache={{ items: [], fetchedAt: null, loading: true, error: null }}
       />,
     );
-    expect(screen.getByRole("heading", { name: "Logs" })).toBeTruthy();
-    expect(screen.queryByRole("textbox", { name: "Search loaded lines" })).toBeNull();
-    expect(screen.queryByRole("combobox", { name: "Unit" })).toBeNull();
-    expect(screen.getByRole("status").textContent).toBe("Finding available log sources…");
+    expect(sourcePicker().value).toBe("Full system journal");
+    await userEvent.click(sourcePicker());
+    expect(screen.getByText("Finding units…")).toBeTruthy();
+    expect(screen.getByRole("option", { name: /Full system journal/ })).toBeTruthy();
+    await userEvent.keyboard("{Escape}");
 
-    view.rerender(<LogsPane {...props} servicesCache={{ ...servicesCache, loading: true }} />);
-    expect(screen.getByRole("combobox", { name: "Unit" })).toBeTruthy();
-    expect(screen.queryByText("Finding available log sources…")).toBeNull();
+    view.rerender(
+      <LogsPane
+        {...props}
+        servicesCache={{
+          items: [],
+          fetchedAt: null,
+          loading: false,
+          error: "Inventory unavailable",
+        }}
+      />,
+    );
+    expect(screen.getByText(/Inventory unavailable/)).toBeTruthy();
+    api.startJournalStream.mockClear().mockResolvedValue({ streamId: "stream-a" });
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(await screen.findByText("[systemd Full system journal] stream started")).toBeTruthy();
+    expect(api.startJournalStream.mock.calls[0].slice(0, 5)).toEqual([
+      connection.id,
+      "all",
+      200,
+      true,
+      null,
+    ]);
   });
 });

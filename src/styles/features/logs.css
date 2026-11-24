@@ -23,7 +23,8 @@
   gap: 6px;
 }
 
-.log-controls label > span {
+.log-controls label > span,
+.log-source-label {
   color: var(--text-muted);
   font-size: 10px;
   font-weight: 650;
@@ -31,10 +32,97 @@
   text-transform: uppercase;
 }
 
-.source-select {
+.log-source-select {
+  display: flex;
   min-width: 180px;
   flex: 1;
+  flex-direction: column;
+  gap: 6px;
   max-width: 520px;
+}
+
+.log-source-field {
+  gap: 7px;
+}
+
+.log-source-field input {
+  text-overflow: ellipsis;
+}
+
+.log-source-field button[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.log-source-popup {
+  position: fixed;
+  z-index: 50;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-popover);
+  padding: 4px;
+  animation: popover-in var(--motion-fast) var(--ease);
+}
+
+.log-source-list:not([hidden]) {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.log-source-list [role="option"] {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 5px 8px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.log-source-list [role="option"]:hover,
+.log-source-list [data-active] {
+  background: var(--fill-hover);
+}
+
+.log-source-list [data-active] {
+  border-color: var(--border-strong);
+}
+
+.log-source-list [role="option"] svg {
+  flex: none;
+  color: var(--text-muted);
+}
+
+.log-source-option-text {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.log-source-option-text > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-source-option-text small,
+.log-source-status {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.log-source-status {
+  margin: 0;
+  padding: 8px;
 }
 
 .checkbox-label {
@@ -359,6 +447,14 @@
   line-height: 1.55;
   text-align: center;
   overflow-wrap: anywhere;
+}
+
+@media (max-width: 859px) {
+  .log-source-select,
+  .log-view-bar .log-search {
+    min-width: 0;
+    flex: 1 1 200px;
+  }
 }
 
 @container (max-width: 480px) {

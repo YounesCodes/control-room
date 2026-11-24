@@ -389,11 +389,6 @@ body:has(.resize-divider[aria-orientation="horizontal"].dragging) {
     flex-wrap: wrap;
     gap: 12px;
   }
-  .log-controls .source-select,
-  .log-view-bar .log-search {
-    min-width: 0;
-    flex: 1 1 200px;
-  }
 }
 
 .window-resize-handles {

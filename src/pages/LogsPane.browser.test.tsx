@@ -1,12 +1,17 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import { runAxe } from "../test/axe";
 import { settings, connection } from "../test/app-fixtures";
 import type { SystemdUnit } from "../types";
 import "../styles.css";
 
-const native = vi.hoisted(() => ({ output: null as ((message: ArrayBuffer) => void) | null }));
+const native = vi.hoisted(() => ({
+  output: null as ((message: ArrayBuffer) => void) | null,
+  startJournal: vi.fn(async (_connectionId: string, source: string) => ({
+    streamId: `stream-${source}`,
+  })),
+}));
 vi.mock("@tauri-apps/api/core", () => ({
   Channel: class {
     set onmessage(handler: (message: ArrayBuffer) => void) {
@@ -17,7 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => undefined }));
 vi.mock("../lib/api", () => ({
   api: {
-    startJournalStream: async () => ({ streamId: "stream-a" }),
+    startJournalStream: native.startJournal,
     stopLogStream: async () => undefined,
     listServices: async () => [],
     listContainers: async () => [],
@@ -56,6 +61,7 @@ let container: HTMLDivElement | null = null;
 afterEach(() => {
   root?.unmount();
   container?.remove();
+  native.startJournal.mockClear();
 });
 
 async function mount() {
@@ -68,7 +74,12 @@ async function mount() {
       connection={connection()}
       settings={settings}
       logTailOptions={[200]}
-      servicesCache={{ items: [unit], fetchedAt: Date.now(), loading: false, error: null }}
+      servicesCache={{
+        items: [unit, { ...unit, id: "backup.timer", description: "Nightly snapshots" }],
+        fetchedAt: Date.now(),
+        loading: false,
+        error: null,
+      }}
       containersCache={{ items: [], fetchedAt: Date.now(), loading: false, error: null }}
       selectedSource={{ type: "systemd", id: unit.id }}
       onServicesCacheChange={() => undefined}
@@ -87,4 +98,32 @@ it("has no automatically detectable accessibility violations while streaming", a
   await page.getByRole("button", { name: /^Errors/ }).click();
   const results = await runAxe(container!);
   expect(results.violations.map((violation) => violation.id)).toEqual([]);
+});
+
+it("suggests matching sources as you type and commits only the chosen journal", async () => {
+  await mount();
+  const input = page.getByRole("combobox", { name: "Journal" });
+  await input.fill("nightly");
+  await expect.element(page.getByRole("option", { name: /backup.timer/ })).toBeVisible();
+  await expect
+    .element(page.getByRole("option", { name: "worker.service" }))
+    .not.toBeInTheDocument();
+  expect(native.startJournal.mock.calls.map((call) => call[1])).toEqual(["worker.service"]);
+
+  await input.fill("no matching source");
+  await expect.element(page.getByText("No matching log sources.")).toBeVisible();
+  await userEvent.keyboard("{Escape}");
+  await expect.element(input).toHaveValue("worker.service");
+  await expect.element(page.getByRole("listbox")).not.toBeInTheDocument();
+
+  await input.fill("system journal");
+  await expect.element(page.getByRole("option", { name: /Full system journal/ })).toBeVisible();
+  const results = await runAxe(container!);
+  expect(results.violations.map((violation) => violation.id)).toEqual([]);
+  await userEvent.keyboard("{Enter}");
+  await expect.element(input).toHaveValue("Full system journal");
+  await expect
+    .element(page.getByText("[systemd Full system journal] stream started"))
+    .toBeVisible();
+  expect(native.startJournal.mock.calls.map((call) => call[1])).toEqual(["worker.service", "all"]);
 });

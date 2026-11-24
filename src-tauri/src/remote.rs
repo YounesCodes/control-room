@@ -1299,8 +1299,7 @@ impl StreamManager {
             let command = crate::macos_remote::log_command(service, lines, follow)?;
             return self.start(app, connection, command, elevation, output);
         }
-        let service = validate_systemd_unit_id(service)?;
-        let command = journal_command(service, lines, follow);
+        let command = journal_command(service, lines, follow)?;
         self.start(app, connection, command, elevation, output)
     }
 
@@ -1502,11 +1501,16 @@ impl StreamManager {
     }
 }
 
-fn journal_command(service: &str, lines: u16, follow: bool) -> String {
-    format!(
-        "env LC_ALL=C journalctl -u '{service}' -n {lines} --no-pager -o short-iso-precise{}",
+fn journal_command(service: &str, lines: u16, follow: bool) -> Result<String, String> {
+    let unit = if service == "all" {
+        String::new()
+    } else {
+        format!(" -u '{}'", validate_systemd_unit_id(service)?)
+    };
+    Ok(format!(
+        "env LC_ALL=C journalctl{unit} -n {lines} --no-pager -o short-iso-precise{}",
         if follow { " -f" } else { "" }
-    )
+    ))
 }
 
 /// The shell started inside a container: bash when the image has it, otherwise
