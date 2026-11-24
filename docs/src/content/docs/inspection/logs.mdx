@@ -29,7 +29,7 @@ Scrolling up keeps your reading position. **Jump to latest** returns to new line
 
 If the SSH account can’t read the system journal, Logs says so instead of showing an empty stream. Select **Retry with sudo**, turn on **Elevated commands** in Settings, or add the account to the `adm` or `systemd-journal` group.
 
-Systemd logs come from `journalctl`. Container logs come from `docker logs`. Closing the view stops the stream. Logs stay in memory and the view keeps up to the newest 10,000 lines. For custom journal queries, use the terminal.
+Systemd logs come from `journalctl`. Container logs come from `docker logs`. Control Room strips terminal color codes. Closing the view stops the stream. Logs stay in memory and the view keeps up to the newest 10,000 lines. For custom journal queries, use the terminal.
 
 On Windows hosts, Logs offers Docker containers only. It reads both standard output and error output through the Windows Docker CLI. Windows service event logs are not included.
 
