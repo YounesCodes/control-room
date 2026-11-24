@@ -720,7 +720,6 @@ export function App() {
               );
               const workspace = existing ?? createLocalWorkspace(shell);
               if (!existing) restored.workspaces.push(workspace);
-              workspace.view = "terminal";
               restored.activeWorkspaceId = workspace.id;
               terminalFocusMode = true;
             }
@@ -1220,7 +1219,6 @@ export function App() {
     if (!nextId) return;
     terminalGroupActiveWorkspaceRef.current.set(group.id, nextId);
     setActiveWorkspaceId(nextId);
-    updateWorkspace(nextId, { view: "terminal" });
     setNewTerminalMenuOpen(false);
   }
 
@@ -1230,14 +1228,12 @@ export function App() {
       if (terminalFocusMode) {
         const group = terminalGroupForWorkspace(terminalGroups, workspace.id);
         if (group) terminalGroupActiveWorkspaceRef.current.set(group.id, workspace.id);
-        updateWorkspace(workspace.id, { view: "terminal" });
       }
     });
   }
 
   function splitWithExistingTerminal(workspace: Workspace) {
     if (!activeWorkspace || !terminalFocusMode) return;
-    updateWorkspace(workspace.id, { view: "terminal" });
     const groupId = activeTerminalGroup?.id ?? crypto.randomUUID();
     setTerminalGroups((current) =>
       activeTerminalGroup
@@ -1387,12 +1383,8 @@ export function App() {
 
   function removeTerminalGroup(groupId: string) {
     if (!terminalGroups.some((group) => group.id === groupId)) return;
-    const removingActiveGroup = activeTerminalGroup?.id === groupId;
     terminalGroupActiveWorkspaceRef.current.delete(groupId);
     setTerminalGroups((current) => deleteTerminalGroup(current, groupId));
-    if (terminalFocusMode && removingActiveGroup && activeWorkspaceId) {
-      updateWorkspace(activeWorkspaceId, { view: "terminal" });
-    }
   }
 
   function confirmUngroup(group: TerminalGroup) {
@@ -1638,7 +1630,6 @@ export function App() {
     const split = tabSplitAt(id, x, y);
     setTabSplit(null);
     if (!split?.valid) return;
-    updateWorkspace(id, { view: "terminal" });
     const groupId = activeTerminalGroup?.id ?? crypto.randomUUID();
     setTerminalGroups((current) =>
       activeTerminalGroup

@@ -6,10 +6,10 @@ import {
   settleWorkspaceSession,
   type WorkspaceSession,
 } from "./workspace-session";
-import type { LocalWorkspace, RemoteWorkspace, Workspace } from "../types";
+import type { LocalWorkspace, RemoteWorkspace } from "../types";
 import { emptyCachedList } from "./workspace-cache";
 
-function local(id: string, view: Workspace["view"] = "terminal"): LocalWorkspace {
+function local(id: string): LocalWorkspace {
   return {
     kind: "local",
     id,
@@ -18,7 +18,7 @@ function local(id: string, view: Workspace["view"] = "terminal"): LocalWorkspace
     sessionId: null,
     state: "connected",
     reason: null,
-    view,
+    view: "terminal",
     reconnectToken: 0,
     connectRequested: true,
   };
@@ -101,10 +101,22 @@ describe("Workspace session transitions", () => {
     expect(settleWorkspaceSession(focused)).toBe(focused);
   });
 
+  it("uses Terminal for the active Workspace in Focus Mode", () => {
+    const active = { ...remote("a", "host-a"), view: "files" as const };
+    const inactive = { ...remote("b", "host-b"), view: "services" as const };
+    const normal = session({ workspaces: [active, inactive], activeWorkspaceId: "a" });
+
+    expect(settleWorkspaceSession(normal)).toBe(normal);
+    const focused = settleWorkspaceSession({ ...normal, terminalFocusMode: true });
+    expect(focused.terminalFocusMode).toBe(true);
+    expect(focused.workspaces[0]).toEqual({ ...active, view: "terminal" });
+    expect(focused.workspaces[1]).toBe(inactive);
+  });
+
   it("selects the next pane of the closed Workspace's group in Focus Mode", () => {
     const next = closeWorkspaceInSession(
       session({
-        workspaces: [local("a"), local("b", "services"), local("c"), local("d")],
+        workspaces: [local("a"), local("b"), local("c"), local("d")],
         activeWorkspaceId: "a",
         terminalGroups: [threePaneGroup],
         terminalFocusMode: true,
@@ -112,7 +124,6 @@ describe("Workspace session transitions", () => {
       "a",
     );
     expect(next.activeWorkspaceId).toBe("b");
-    expect(next.workspaces.find((workspace) => workspace.id === "b")?.view).toBe("terminal");
     expect(next.terminalGroups).toHaveLength(1);
     expect(next.terminalFocusMode).toBe(true);
   });

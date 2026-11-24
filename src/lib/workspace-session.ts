@@ -22,12 +22,18 @@ export const emptyWorkspaceSession: WorkspaceSession = {
 };
 
 export function settleWorkspaceSession(session: WorkspaceSession): WorkspaceSession {
-  const focusHasTerminal = session.workspaces.some(
+  if (!session.terminalFocusMode) return session;
+  const activeWorkspace = session.workspaces.find(
     (workspace) => workspace.id === session.activeWorkspaceId,
   );
-  return session.terminalFocusMode && !focusHasTerminal
-    ? { ...session, terminalFocusMode: false }
-    : session;
+  if (!activeWorkspace) return { ...session, terminalFocusMode: false };
+  if (activeWorkspace.view === "terminal") return session;
+  return {
+    ...session,
+    workspaces: session.workspaces.map((workspace) =>
+      workspace === activeWorkspace ? { ...workspace, view: "terminal" } : workspace,
+    ),
+  };
 }
 
 export function closeWorkspaceInSession(session: WorkspaceSession, id: string): WorkspaceSession {
@@ -56,12 +62,7 @@ export function closeWorkspaceInSession(session: WorkspaceSession, id: string): 
     null;
   return {
     ...session,
-    workspaces:
-      keepFocusGroup && nextActive
-        ? remaining.map((item) =>
-            item.id === nextActive.id ? { ...item, view: "terminal" } : item,
-          )
-        : remaining,
+    workspaces: remaining,
     activeWorkspaceId: nextActive?.id ?? null,
     terminalGroups,
   };

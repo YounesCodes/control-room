@@ -259,6 +259,48 @@ async function openSplit(card: "Split right" | "Split down" = "Split right") {
 }
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it("shows the SSH terminal when closing the startup terminal beside a restored Files tab", async () => {
+    currentSettings = {
+      ...currentSettings,
+      localTerminalMode: true,
+      defaultLocalShellId: "command-prompt",
+    };
+    persisted = {
+      ...persisted,
+      activeWorkspaceId: "saved-remote",
+      workspaces: [
+        {
+          id: "saved-remote",
+          label: "Saved SSH host",
+          connectionId: "host-a",
+          localShellId: null,
+          view: "files",
+          historyPaused: false,
+        },
+      ],
+    };
+
+    root.render(<App />);
+    const exitFocus = page.getByRole("button", { name: "Exit terminal focus" });
+    const files = page.getByRole("heading", { name: "Files", exact: true });
+    const tabs = page.getByRole("navigation", { name: "Open Workspaces" });
+    const ssh = tabs.getByRole("button", { name: /Saved SSH host$/ });
+    await expect.element(exitFocus).toBeVisible();
+    await expect.poll(() => sequence).toBe(2);
+    await userEvent.hover(tabs.getByRole("button", { name: "Command Prompt", exact: true }));
+    await tabs.getByRole("button", { name: "Close Command Prompt Workspace" }).click();
+    await page.getByRole("button", { name: "Stop & close" }).click();
+
+    await expect.element(ssh).toHaveAttribute("aria-current", "page");
+    await expect.element(files).not.toBeInTheDocument();
+    await expect.element(page.getByRole("textbox", { name: "Terminal input" })).toBeVisible();
+    await expect.element(exitFocus).toBeVisible();
+
+    await exitFocus.click();
+    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await expect.element(files).toBeVisible();
+  });
+
   it("closes every local and SSH terminal from a filtered All terminals menu in Focus Mode", async () => {
     await mount();
     await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
