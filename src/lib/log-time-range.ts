@@ -33,6 +33,21 @@ export function parseLocalTime(value: string): number | null {
   return seconds;
 }
 
+export function formatLogDuration(seconds: number): string {
+  let minutes = Math.floor(seconds / 60);
+  const parts: string[] = [];
+  for (const [unit, size] of [
+    ["day", 1440],
+    ["hour", 60],
+    ["minute", 1],
+  ] as const) {
+    const count = Math.floor(minutes / size);
+    if (count > 0) parts.push(`${count} ${unit}${count === 1 ? "" : "s"}`);
+    minutes %= size;
+  }
+  return parts.join(", ");
+}
+
 export function logTimeLabel(range: LogTimeRange | null): string {
   if (!range) return "Time range";
   if (range.mode === "custom") return "Custom range";

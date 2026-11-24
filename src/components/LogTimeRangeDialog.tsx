@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import {
+  formatLogDuration,
   localTimeInput,
   LOG_TIME_PRESETS,
   logTimeBounds,
@@ -25,6 +26,10 @@ export function LogTimeRangeDialog({
   const [to, setTo] = useState(() => localTimeInput(initial.end));
   const [error, setError] = useState<string | null>(null);
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const start = parseLocalTime(from);
+  const end = parseLocalTime(to);
+  const duration =
+    start !== null && end !== null && end > start ? formatLogDuration(end - start) : "—";
 
   function apply(event: FormEvent) {
     event.preventDefault();
@@ -32,8 +37,6 @@ export function LogTimeRangeDialog({
       onApply({ mode });
       return;
     }
-    const start = parseLocalTime(from);
-    const end = parseLocalTime(to);
     if (start === null || end === null) {
       setError("Enter a valid start and end date and time.");
     } else if (end <= start) {
@@ -96,7 +99,12 @@ export function LogTimeRangeDialog({
                 />
               </label>
             </div>
-            <p className="log-range-note">Your local time · {zone}</p>
+            <p className="log-range-note log-range-details">
+              <span>Your local time · {zone}</span>
+              <output>
+                Duration · <strong>{duration}</strong>
+              </output>
+            </p>
           </>
         )}
         {error && (

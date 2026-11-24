@@ -623,7 +623,9 @@
         "source-no-matches": [{ "role": "combobox", "name": "Journal", "fill": "nginx" }],
         "time-range-custom": [
           { "role": "button", "name": "Time range" },
-          { "role": "button", "name": "Custom" }
+          { "role": "button", "name": "Custom" },
+          { "selector": ".log-range-fields label:first-child input", "fill": "2026-10-31T08:00" },
+          { "selector": ".log-range-fields label:last-child input", "fill": "2026-11-01T10:00" }
         ],
         "time-range-invalid": [
           { "role": "button", "name": "Time range" },
@@ -690,7 +692,7 @@
         "restricted": ".logs-page .inline-warning[role='status']",
         "source-search": ".log-source-list [role='option']:first-child",
         "source-no-matches": ".log-source-status",
-        "time-range-custom": ".log-range-fields",
+        "time-range-custom": ".log-range-details output >> text=1 day, 2 hours",
         "time-range-invalid": ".log-range-form [role='alert']",
         "time-range-active": ".logs-page .log-line:nth-child(48)",
         "time-range-empty": ".log-empty >> text=No entries in this time range."

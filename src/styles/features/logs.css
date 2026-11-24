@@ -255,6 +255,19 @@
   line-height: 1.5;
 }
 
+.log-range-details {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.log-range-details strong {
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .log-range-form .inline-error {
   margin: 0;
 }
