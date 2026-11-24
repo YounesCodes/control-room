@@ -13,10 +13,10 @@ Choose the last 50, 100, 200, 500, or 1000 lines, then select **Start**. You can
   <a href={logsScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={logsScreenshot.src}
-      alt="Logs streaming a service, with line numbers, highlighted warning and error lines, and the All, Warnings, and Errors filters."
+      alt="Full system journal streaming in Logs, with line numbers and highlighted warnings and errors."
     />
   </a>
-  <figcaption>A service log stream. Example data shown.</figcaption>
+  <figcaption>The full system journal. Example data shown.</figcaption>
 </figure>
 
 **Receive new lines** keeps reading after the initial lines load. **Stop** ends the stream. The view shows one source at a time: choosing another unit or container clears it. While a stream runs, changing the source, line count, or **Receive new lines** restarts it with the new choice in a fresh view. Starting the same source again keeps earlier lines above a divider. **Pause** holds new lines while you read; the stream keeps running, and the status shows how many lines are waiting. **Resume** shows them.

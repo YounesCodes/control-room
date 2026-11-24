@@ -697,6 +697,12 @@ export function LogsPane({
     sourceId,
   ]);
   const selectedLabel = sourceOptions.find((source) => source.id === sourceId)?.label ?? sourceId;
+  const sourceDescription =
+    sourceType === "systemd" && sourceId === ALL_JOURNAL
+      ? macosHost
+        ? "the unified log"
+        : "the full system journal"
+      : selectedLabel;
   const dockerPermissionError =
     !windowsHost &&
     !macosHost &&
@@ -999,9 +1005,9 @@ export function LogsPane({
             ) : (
               <p>
                 {streaming
-                  ? `Waiting for output from ${selectedLabel}…`
+                  ? `Waiting for output from ${sourceDescription}…`
                   : sourceId
-                    ? `Start reads the last ${tail} lines of ${selectedLabel}${follow ? ", then new lines as they arrive" : ""}.`
+                    ? `Start reads the last ${tail} lines of ${sourceDescription}${follow ? ", then new lines as they arrive" : ""}.`
                     : `Choose a ${sourceNoun} to read its logs.`}
               </p>
             )}

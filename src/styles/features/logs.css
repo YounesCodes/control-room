@@ -46,7 +46,19 @@
 }
 
 .log-source-field input {
+  color: var(--text);
   text-overflow: ellipsis;
+}
+
+.log-source-field button {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0;
+}
+
+.log-source-field button:hover {
+  background: var(--fill-hover);
 }
 
 .log-source-field button[aria-expanded="true"] svg {

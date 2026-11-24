@@ -93,7 +93,7 @@ export function LogSourcePicker({
   useEffect(() => {
     if (!open) return;
     const realign = (event: Event) => {
-      if (event.target instanceof Node && popup.current?.contains(event.target)) return;
+      if (event.target instanceof Element && !event.target.contains(field.current)) return;
       show();
     };
     window.addEventListener("resize", close);
