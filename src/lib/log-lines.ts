@@ -1,5 +1,6 @@
 export type LogLevel = "error" | "warning";
-export type LogSegmentRole = "date" | "time" | "zone" | "source" | "message";
+export type LogSegmentRole =
+  "date" | "separator" | "time" | "fraction" | "zone" | "source" | "message";
 export type LogLevelFilter = "all" | LogLevel;
 
 export interface LogSegment {
@@ -17,7 +18,7 @@ export interface ParsedLogLine {
 // eslint-disable-next-line no-control-regex
 const TERMINAL_ESCAPES = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-_]/g;
 const ISO_PREFIX =
-  /^(\d{4}-\d{2}-\d{2}[T ])(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)(Z| ?UTC|[+-]\d{2}:?\d{2})?(?=\s)/;
+  /^(\d{4}-\d{2}-\d{2})([T ])(\d{2}:\d{2}:\d{2})([.,]\d+)?(Z| ?UTC|[+-]\d{2}:?\d{2})?(?=\s)/;
 const JOURNAL_SOURCE = /^(\s+)(\S+ (?:[^\s:[\]]+\[\d+\]|kernel):)(?=\s|$)/;
 const STREAM_MARKER = /^\[(?:systemd|docker) .+\] stream started$/;
 const JOURNAL_MARKER = /^-- .+ --$/;
@@ -85,8 +86,13 @@ export function parseLogLine(raw: string): ParsedLogLine {
   let rest = text;
   const stamp = ISO_PREFIX.exec(rest);
   if (stamp) {
-    segments.push({ role: "date", text: stamp[1] }, { role: "time", text: stamp[2] });
-    if (stamp[3]) segments.push({ role: "zone", text: stamp[3] });
+    segments.push(
+      { role: "date", text: stamp[1] },
+      { role: "separator", text: stamp[2] },
+      { role: "time", text: stamp[3] },
+    );
+    if (stamp[4]) segments.push({ role: "fraction", text: stamp[4] });
+    if (stamp[5]) segments.push({ role: "zone", text: stamp[5] });
     rest = rest.slice(stamp[0].length);
     const source = JOURNAL_SOURCE.exec(rest);
     if (source) {

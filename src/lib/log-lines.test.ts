@@ -16,8 +16,10 @@ describe("parseLogLine", () => {
     const text = "2026-11-01T09:58:12.104233+00:00 example-host worker[1234]: error: job 7 failed";
     const line = parseLogLine(text);
     expect(line.segments.map((segment) => [segment.role, segment.text])).toEqual([
-      ["date", "2026-11-01T"],
-      ["time", "09:58:12.104233"],
+      ["date", "2026-11-01"],
+      ["separator", "T"],
+      ["time", "09:58:12"],
+      ["fraction", ".104233"],
       ["zone", "+00:00"],
       ["source", " example-host worker[1234]:"],
       ["message", " error: job 7 failed"],
@@ -35,7 +37,13 @@ describe("parseLogLine", () => {
 
   it("keeps container lines without a journal source as message text", () => {
     const stamped = parseLogLine("2026-11-01 09:58:12,120 INFO server: listening on :8080");
-    expect(stamped.segments.map((segment) => segment.role)).toEqual(["date", "time", "message"]);
+    expect(stamped.segments.map((segment) => segment.role)).toEqual([
+      "date",
+      "separator",
+      "time",
+      "fraction",
+      "message",
+    ]);
     expect(joined(stamped)).toBe("2026-11-01 09:58:12,120 INFO server: listening on :8080");
     const plain = parseLogLine("GET /health 200");
     expect(plain.segments).toEqual([{ role: "message", text: "GET /health 200" }]);
@@ -70,11 +78,14 @@ describe("parseLogLine", () => {
 
   it("dims a trailing UTC zone in database timestamps", () => {
     const line = parseLogLine("2026-10-13 11:52:54.568 UTC [36] FATAL:  terminating connection");
-    expect(line.segments.slice(0, 3).map((segment) => [segment.role, segment.text])).toEqual([
-      ["date", "2026-10-13 "],
-      ["time", "11:52:54.568"],
+    expect(line.segments.slice(0, 5).map((segment) => [segment.role, segment.text])).toEqual([
+      ["date", "2026-10-13"],
+      ["separator", " "],
+      ["time", "11:52:54"],
+      ["fraction", ".568"],
       ["zone", " UTC"],
     ]);
+    expect(joined(line)).toBe("2026-10-13 11:52:54.568 UTC [36] FATAL:  terminating connection");
     expect(line.level).toBe("error");
   });
 

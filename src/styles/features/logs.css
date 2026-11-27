@@ -442,13 +442,19 @@
 }
 
 .log-date,
+.log-fraction,
 .log-zone,
 .log-source {
   color: var(--text-faint);
 }
 
+.log-separator {
+  margin-inline: 0.3ch;
+  color: color-mix(in srgb, var(--text-faint) 55%, transparent);
+}
+
 .log-time {
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 .log-line[data-level="warning"] {
