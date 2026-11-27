@@ -19,11 +19,17 @@ export interface ParsedLogLine {
 const TERMINAL_ESCAPES = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-_]/g;
 const ISO_PREFIX =
   /^(\d{4}-\d{2}-\d{2})([T ])(\d{2}:\d{2}:\d{2})([.,]\d+)?(Z| ?UTC|[+-]\d{2}:?\d{2})?(?=\s)/;
-const INNER_TIME = String.raw`(\d{4})[-/](\d{2})[-/](\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:[.,](\d+))?(?: ?(Z|UTC|GMT|[+-]\d{2}:?\d{2}))?(?![\d:])`;
-const INNER_STAMP = new RegExp(
-  String.raw`^(\s*(?:[[(]|(?:time|ts|t|timestamp)="?|\{[^{}]{0,60}?"(?:time|timestamp|ts|@timestamp)"\s*:\s*")?)` +
-    INNER_TIME,
-);
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH_NAME = `(?<monthName>${MONTHS.join("|")})`;
+const CLOCK = String.raw`(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?:[.,](?<fraction>\d+))?(?: ?(?<zone>Z|UTC|GMT|[+-]\d{2}:?\d{2}))?(?!\d)`;
+const MESSAGE_TIMES = [
+  String.raw`^(?<lead>\s*(?:[[(]|(?:time|ts|t|timestamp)="?|\{[^{}]{0,60}?"(?:time|timestamp|ts|@timestamp)"\s*:\s*")?)(?<year>\d{4})[-/](?<month>\d{2})[-/](?<day>\d{2})[T ]${CLOCK}`,
+  String.raw`^(?<lead>\s*[[(]?)(?<first>\d{1,2})/(?<second_>\d{1,2})/(?<year>\d{4}|\d{2})[T ]${CLOCK}`,
+  String.raw`^(?<lead>\s*(?:\d+:[A-Za-z] )?[[(]?)(?<day>\d{1,2}) ${MONTH_NAME} (?<year>\d{4}) ${CLOCK}`,
+  String.raw`^(?<lead>\s*[[(]?)${MONTH_NAME} +(?<day>\d{1,2}) ${CLOCK}`,
+].map((source) => new RegExp(source));
+const MESSAGE_TIME_REACH = 100;
+const CLOCK_HINT = /\d:\d{2}:\d{2}/;
 const REPEATED_TIME_WINDOW_MS = 2_000;
 const JOURNAL_SOURCE = /^(\s+)(\S+ (?:[^\s:[\]]+\[\d+\]|kernel):)(?=\s|$)/;
 const STREAM_MARKER = /^\[(?:systemd|docker) .+\] stream started$/;
@@ -89,12 +95,11 @@ interface WallClock {
 }
 
 function wallClock(
-  date: string,
+  [year, month, day]: [number, number, number],
   time: string,
   fraction: string | undefined,
   zone: string | undefined,
 ): WallClock {
-  const [year, month, day] = date.split(/[-/]/).map(Number);
   const [hour, minute, second] = time.split(":").map(Number);
   const millis = fraction ? Number(`0.${fraction.replace(/^[.,]/, "")}`) * 1000 : 0;
   return {
@@ -122,23 +127,40 @@ function repeatsOuterTime(outer: WallClock, inner: WallClock) {
   return candidates.some((candidate) => Math.abs(candidate - instant) <= REPEATED_TIME_WINDOW_MS);
 }
 
-function messageSegments(message: string, outer: WallClock | null): LogSegment[] {
-  const inner = outer && INNER_STAMP.exec(message);
-  if (
-    !inner ||
-    !repeatsOuterTime(
-      outer,
-      wallClock(
-        `${inner[2]}-${inner[3]}-${inner[4]}`,
-        `${inner[5]}:${inner[6]}:${inner[7]}`,
-        inner[8],
-        inner[9],
-      ),
-    )
-  )
+function messageTime(message: string, outerYear: number) {
+  for (const pattern of MESSAGE_TIMES) {
+    const match = pattern.exec(message);
+    const fields = match?.groups;
+    if (!match || !fields) continue;
+    const year = fields.year
+      ? Number(fields.year) + (fields.year.length === 2 ? 2000 : 0)
+      : outerYear;
+    const month = fields.monthName ? MONTHS.indexOf(fields.monthName) + 1 : Number(fields.month);
+    const dates: [number, number, number][] = fields.first
+      ? [
+          [year, Number(fields.first), Number(fields.second_)],
+          [year, Number(fields.second_), Number(fields.first)],
+        ]
+      : [[year, month, Number(fields.day)]];
+    const time = `${fields.hour}:${fields.minute}:${fields.second}`;
+    return {
+      start: fields.lead.length,
+      end: match[0].length,
+      clocks: dates.map((date) => wallClock(date, time, fields.fraction, fields.zone)),
+    };
+  }
+  return null;
+}
+
+function messageSegments(message: string, stamp: RegExpExecArray | null): LogSegment[] {
+  if (!stamp || !CLOCK_HINT.test(message.slice(0, MESSAGE_TIME_REACH)))
     return [{ role: "message", text: message }];
-  const start = inner[1].length;
-  const end = inner[0].length;
+  const [year, month, day] = stamp[1].split("-").map(Number);
+  const inner = messageTime(message, year);
+  const outer = inner && wallClock([year, month, day], stamp[3], stamp[4], stamp[5]);
+  if (!inner || !outer || !inner.clocks.some((clock) => repeatsOuterTime(outer, clock)))
+    return [{ role: "message", text: message }];
+  const { start, end } = inner;
   return [
     { role: "message" as const, text: message.slice(0, start) },
     { role: "repeated-time" as const, text: message.slice(start, end) },
@@ -153,10 +175,8 @@ export function parseLogLine(raw: string): ParsedLogLine {
 
   const segments: LogSegment[] = [];
   let rest = text;
-  let outer: WallClock | null = null;
   const stamp = ISO_PREFIX.exec(rest);
   if (stamp) {
-    outer = wallClock(stamp[1], stamp[3], stamp[4], stamp[5]);
     segments.push(
       { role: "date", text: stamp[1] },
       { role: "separator", text: stamp[2] },
@@ -171,7 +191,7 @@ export function parseLogLine(raw: string): ParsedLogLine {
       rest = rest.slice(source[0].length);
     }
   }
-  if (rest) segments.push(...messageSegments(rest, outer));
+  if (rest) segments.push(...messageSegments(rest, stamp));
   return { text, segments, level: logLevel(rest), marker: false };
 }
 

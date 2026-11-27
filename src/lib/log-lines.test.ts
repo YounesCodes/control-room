@@ -121,6 +121,30 @@ describe("parseLogLine", () => {
     );
   });
 
+  it("recognizes Redis, Python Rich, syslog and colon-terminated message times", () => {
+    expect(
+      repeated(
+        "2026-11-26T22:57:27.096424703Z 1:M 26 Nov 2026 22:57:27.096 * Background saving started",
+      ),
+    ).toBe("26 Nov 2026 22:57:27.096");
+    expect(
+      repeated(
+        "2026-11-26T15:57:58.817741394Z [11/26/26 15:57:58] INFO     INFO:rq.worker:Cleaning",
+      ),
+    ).toBe("11/26/26 15:57:58");
+    expect(repeated("2026-11-26T15:57:58.817741394Z [26/11/2026 15:57:58] ready")).toBe(
+      "26/11/2026 15:57:58",
+    );
+    expect(repeated("2026-11-26T22:52:20.100000+00:00 host cron[9]: Nov 26 22:52:20 run")).toBe(
+      "Nov 26 22:52:20",
+    );
+    expect(
+      repeated(
+        "2026-11-23T14:18:42.792903+00:00 host runsvc.sh[49541]: 2026-11-23 14:18:42Z: Listening for Jobs",
+      ),
+    ).toBe("2026-11-23 14:18:42Z");
+  });
+
   it("compares a zoneless message time with UTC and the host offset", () => {
     expect(
       repeated("2026-11-26T23:52:20.100000+01:00 host app[1]: 2026-11-26 23:52:20 started"),
