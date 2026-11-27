@@ -4,6 +4,7 @@ description: Save SSH hosts and choose how to connect.
 ---
 
 import shellPickerScreenshot from "../../assets/screenshots/shell-picker.png";
+import filesScreenshot from "../../assets/screenshots/file-transfers.png";
 
 A connection saves a host's SSH address and username, and optionally a port and a private key. The address can also be a host name from your `~/.ssh/config`. Control Room uses the key where it is and never copies it.
 
@@ -33,11 +34,28 @@ Listing the shells needs an SSH key or ssh-agent login. Control Room remembers t
 
 The host views always read the host itself. A WSL terminal on a Windows host still shows Windows services and ports.
 
-| Host    | Views                                                |
-| ------- | ---------------------------------------------------- |
-| Linux   | Terminal, Docker, Systemd, Logs, Ports, History      |
-| macOS   | Terminal, Docker, Services, Logs, Ports, History     |
-| Windows | Terminal, Docker, Services, Logs (containers), Ports |
+| Host    | Views                                                       |
+| ------- | ----------------------------------------------------------- |
+| Linux   | Terminal, Files, Docker, Systemd, Logs, Ports, History      |
+| macOS   | Terminal, Files, Docker, Services, Logs, Ports, History     |
+| Windows | Terminal, Files, Docker, Services, Logs (containers), Ports |
+
+## Transfer files
+
+**Files** browses the host's files and copies files between the host and your computer. Files dropped on a host terminal upload to the account's home folder.
+
+<figure class="docs-screenshot">
+  <a href={filesScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={filesScreenshot.src}
+      alt="Files open on an example host, listing a folder's contents with the transfer queue below."
+    />
+  </a>
+</figure>
+
+Transfers use SFTP over your saved connection. The host must have SFTP turned on and accept an SSH key or ssh-agent login. Files uses the SSH account's own permissions and never uses sudo.
+
+Folder downloads include subfolders, empty folders, and hidden files. They skip symbolic links and special files. If a file already exists, you choose whether to replace it. On Windows hosts, a path such as `/C:/Users/Lee` means `C:\Users\Lee`.
 
 ## Groups, tags, and deleting
 

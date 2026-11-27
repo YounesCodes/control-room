@@ -354,6 +354,7 @@ fn default_shell() -> String {
 #[serde(default, rename_all = "camelCase")]
 pub struct AppSettings {
     pub automatic_terminal_titles: bool,
+    pub restore_terminals_on_startup: bool,
     pub host_metrics_enabled: bool,
     pub host_metrics: Vec<HeaderMetric>,
     pub host_metrics_interval_seconds: u16,
@@ -436,6 +437,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             automatic_terminal_titles: true,
+            restore_terminals_on_startup: false,
             host_metrics_enabled: false,
             host_metrics: vec![
                 HeaderMetric::Cpu,

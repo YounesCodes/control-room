@@ -13,6 +13,7 @@ import {
   terminalCommand,
   terminalContains,
   restartApp,
+  setRestoreTerminals,
 } from "./helpers";
 import type { PersistedWorkspaceState } from "../src/types";
 
@@ -115,6 +116,7 @@ describe("Compact native windows and live terminal arrangements", () => {
 
   it("swaps, docks, flips, resizes and restores nested panes through SQLite with live PTYs", async () => {
     await browser.setWindowSize(1180, 700);
+    await setRestoreTerminals(true);
     await openLocal();
     await terminalCommand("echo ARRANGEMENT_SCROLLBACK", "ARRANGEMENT_SCROLLBACK");
     await $("aria/Focus terminal").click();

@@ -9,6 +9,7 @@ import {
   openOfflineConnection,
   openScratchpad,
   restartApp,
+  setRestoreTerminals,
   scratchpadNote,
   runtime,
   terminalCommand,
@@ -116,6 +117,7 @@ describe("Local data in remote Workspaces", () => {
   });
 
   it("deletes every Workspace of a connection and keeps an unrelated local terminal running", async () => {
+    await setRestoreTerminals(true);
     const deleted = await addConnection("Deleted host");
     await openOfflineConnection("Deleted host");
     await openOfflineConnection("Deleted host", true);

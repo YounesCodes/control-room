@@ -293,6 +293,7 @@ export type HeaderMetrics = {
 
 export type AppSettings = {
   automaticTerminalTitles: boolean;
+  restoreTerminalsOnStartup: boolean;
   hostMetricsEnabled: boolean;
   hostMetrics: Array<HeaderMetric>;
   hostMetricsIntervalSeconds: number;
@@ -483,7 +484,7 @@ export type FontProgress = {
 
 export type ScratchpadScope = "connection" | "global" | "local";
 
-export type PersistedWorkspaceView = "terminal" | "services" | "ports" | "docker" | "logs" | "history" | "scratchpad";
+export type PersistedWorkspaceView = "terminal" | "files" | "services" | "ports" | "docker" | "logs" | "history" | "scratchpad";
 
 export const MAX_SCRATCHPAD_CHARS = 16384;
 export const MAX_HISTORY_COMMAND_BYTES = 1048576;

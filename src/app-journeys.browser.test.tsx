@@ -50,7 +50,7 @@ function emit(name: string, payload: any) {
 }
 
 function expectTerminalMenuAlignment(menu: Element) {
-  for (const row of menu.querySelectorAll<HTMLElement>('[role="menuitem"]')) {
+  for (const row of menu.querySelectorAll<HTMLElement>("button[data-match]")) {
     const icon = row.querySelector<HTMLElement>(".session-tab-menu-icon")!;
     const name = row.querySelector<HTMLElement>(".session-tab-menu-name")!;
     expect(row.firstElementChild).toBe(icon);
@@ -144,6 +144,8 @@ async function respond(command: string, args: any = {}) {
       return;
     case "list_services":
       return [fixtures.service, fixtures.failedService];
+    case "list_transfer_folder":
+      return { path: "/home/fixture", entries: [] };
     case "list_containers":
       return [fixtures.container];
     case "inspect_container":
@@ -230,7 +232,7 @@ beforeEach(async () => {
   native.invoke.mockReset();
   sequence = 0;
   streamOutput = null;
-  currentSettings = { ...fixtures.settings };
+  currentSettings = { ...fixtures.settings, restoreTerminalsOnStartup: true };
   persisted = {
     panelSizes: {},
     workspaces: [],
@@ -257,6 +259,173 @@ async function openSplit(card: "Split right" | "Split down" = "Split right") {
 }
 
 describe("complete app journeys with typed IPC fixtures", () => {
+  it("shows the SSH terminal when closing the startup terminal beside a restored Files tab", async () => {
+    currentSettings = {
+      ...currentSettings,
+      localTerminalMode: true,
+      defaultLocalShellId: "command-prompt",
+    };
+    persisted = {
+      ...persisted,
+      activeWorkspaceId: "saved-remote",
+      workspaces: [
+        {
+          id: "saved-remote",
+          label: "Saved SSH host",
+          connectionId: "host-a",
+          localShellId: null,
+          view: "files",
+          historyPaused: false,
+        },
+      ],
+    };
+
+    root.render(<App />);
+    const exitFocus = page.getByRole("button", { name: "Exit terminal focus" });
+    const files = page.getByRole("heading", { name: "Files", exact: true });
+    const tabs = page.getByRole("navigation", { name: "Open Workspaces" });
+    const ssh = tabs.getByRole("button", { name: /Saved SSH host$/ });
+    await expect.element(exitFocus).toBeVisible();
+    await expect.poll(() => sequence).toBe(2);
+    await userEvent.hover(tabs.getByRole("button", { name: "Command Prompt", exact: true }));
+    await tabs.getByRole("button", { name: "Close Command Prompt Workspace" }).click();
+    await page.getByRole("button", { name: "Stop & close" }).click();
+
+    await expect.element(ssh).toHaveAttribute("aria-current", "page");
+    await expect.element(files).not.toBeInTheDocument();
+    await expect.element(page.getByRole("textbox", { name: "Terminal input" })).toBeVisible();
+    await expect.element(exitFocus).toBeVisible();
+
+    await exitFocus.click();
+    await page.getByRole("button", { name: "Files", exact: true }).click();
+    await expect.element(files).toBeVisible();
+  });
+
+  it("closes every local and SSH terminal from a filtered All terminals menu in Focus Mode", async () => {
+    await mount();
+    await page.getByRole("button", { name: "Focus terminal", exact: true }).click();
+    await openSplit();
+    await page.getByRole("button", { name: "New local terminal: Command Prompt" }).click();
+    const picker = page.getByRole("button", { name: "All terminals", exact: true });
+    const menu = page.getByRole("menu", { name: "All terminals menu" });
+    const confirmation = page.getByRole("dialog", { name: "Close all terminals" });
+    const closedSessions = () =>
+      native.invoke.mock.calls
+        .filter(([command]) => command === "close_session")
+        .map(([, { sessionId }]) => sessionId);
+
+    await expect.poll(() => persisted.workspaces.length).toBe(2);
+    await expect.poll(() => sequence).toBe(2);
+    await picker.click();
+    await userEvent.keyboard("nomatch");
+    await expect.element(menu.getByText("No matching terminals")).toBeVisible();
+    expect((await runAxe(menu.element())).violations.map(({ id }) => id)).toEqual([]);
+    await userEvent.keyboard("{ArrowDown}");
+    await expect.element(menu.getByRole("menuitem", { name: "Close all terminals" })).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect.element(picker).toHaveFocus();
+    expect(closedSessions()).toEqual([]);
+
+    await picker.click();
+    await menu.getByRole("menuitem", { name: "Close all terminals" }).click();
+    await confirmation.getByRole("button", { name: "Close all terminals" }).click();
+    await expect.element(picker).not.toBeInTheDocument();
+    await expect
+      .element(page.getByRole("button", { name: "New terminal", exact: true }))
+      .toBeVisible();
+    await expect
+      .element(page.getByRole("button", { name: "Exit terminal focus" }))
+      .not.toBeInTheDocument();
+    expect(new Set(closedSessions())).toEqual(new Set(["session-1", "session-2"]));
+    await expect
+      .poll(() => persisted)
+      .toMatchObject({
+        workspaces: [],
+        terminalGroups: [],
+        activeWorkspaceId: null,
+      });
+  });
+
+  it("reopens saved tabs only when the startup setting is enabled", async () => {
+    const workspaces = [
+      {
+        id: "saved-remote",
+        label: "Previously open",
+        connectionId: "host-a",
+        localShellId: null,
+        view: "terminal" as const,
+        historyPaused: false,
+      },
+    ];
+    currentSettings = { ...fixtures.settings };
+    persisted = {
+      ...persisted,
+      workspaces,
+      activeWorkspaceId: "saved-remote",
+      panelSizes: { connections: 280 },
+    };
+    root.render(<App />);
+    await expect.element(page.getByRole("button", { name: "Open Settings" })).toBeVisible();
+    const picker = page.getByRole("button", { name: "All terminals", exact: true });
+    await expect.element(picker).not.toBeInTheDocument();
+    await expect.poll(() => persisted.workspaces).toEqual([]);
+    expect(persisted.panelSizes?.connections).toBe(280);
+    expect(sequence).toBe(0);
+
+    await page.getByRole("button", { name: "Open Settings" }).click();
+    await page.getByRole("button", { name: "Terminal", exact: true }).click();
+    await page.getByRole("tab", { name: "Tabs & naming" }).click();
+    const restore = page.getByRole("checkbox", {
+      name: "Reopen terminals from the last app session",
+    });
+    await expect.element(restore).not.toBeChecked();
+    await restore.click();
+    await page.getByRole("button", { name: "Save settings" }).click();
+    await expect.poll(() => currentSettings.restoreTerminalsOnStartup).toBe(true);
+    await page.getByRole("button", { name: "Close Settings" }).click();
+    await page
+      .getByRole("button", { name: /Fixture Alpha/ })
+      .first()
+      .click();
+    await expect.poll(() => persisted.workspaces.length).toBe(1);
+    await expect.poll(() => sequence).toBe(1);
+
+    root.unmount();
+    root = createRoot(element);
+    root.render(<App />);
+    await expect.element(picker).toBeVisible();
+    await expect.poll(() => sequence).toBe(2);
+  });
+
+  it("routes a native file drop on a terminal to the saved host home", async () => {
+    overrides.set("transfer_file", () => "complete");
+    await mount();
+    await expect.element(page.getByRole("textbox", { name: "Terminal input" })).toBeVisible();
+    const pane = element.querySelector<HTMLElement>(".terminal-workspace-pane-visible")!;
+    const { left, top, width, height } = pane.getBoundingClientRect();
+    const position = {
+      x: (left + width / 2) * devicePixelRatio,
+      y: (top + height / 2) * devicePixelRatio,
+    };
+    emit("tauri://drag-enter", { position, paths: ["/local/drop.txt"] });
+    expect(pane.hasAttribute("data-file-hover")).toBe(true);
+    emit("tauri://drag-drop", { position, paths: ["/local/drop.txt"] });
+    await expect.element(page.getByRole("heading", { name: "Files", exact: true })).toBeVisible();
+    expect(native.invoke).toHaveBeenCalledWith(
+      "transfer_file",
+      expect.objectContaining({
+        connectionId: "host-a",
+        spec: expect.objectContaining({
+          remotePath: ".",
+          localPath: "/local/drop.txt",
+          replace: false,
+        }),
+      }),
+    );
+    await page.getByRole("button", { name: "Clear finished" }).click();
+    expect((await runAxe(element.querySelector(".files-page")!)).violations).toEqual([]);
+  });
   it("keeps navigation reachable on both sides of the compact breakpoint", async () => {
     await mount();
     await expect.element(page.getByRole("textbox", { name: "Terminal input" })).toBeInTheDocument();
@@ -3163,6 +3332,47 @@ describe("complete app journeys with typed IPC fixtures", () => {
     },
   );
 
+  it("clears the sidebar host color after a mouse dismissal and restores keyboard focus", async () => {
+    const capabilities = { ...fixtures.capabilities(), osId: "windows" };
+    overrides.set("get_cached_capabilities", () => capabilities);
+    overrides.set("discover_remote_shells", () => ({
+      platform: "windows",
+      shells: [{ id: "powershell", label: "Windows PowerShell" }],
+      capabilities,
+    }));
+    root.render(<App />);
+    const host = page.getByRole("button", { name: /Fixture Alpha/ }).first();
+    const dialog = page.getByRole("dialog", { name: "Connect to Fixture Alpha" });
+    const mark = host.getByRole("img", { name: /Windows/ });
+    await expect.element(mark).toBeVisible();
+    await settleMotion(mark.element());
+    const idleColor = getComputedStyle(mark.element()).color;
+    await userEvent.hover(host);
+    await settleMotion(mark.element());
+    const hoverColor = getComputedStyle(mark.element()).color;
+    expect(hoverColor).not.toBe(idleColor);
+
+    await host.click();
+    await expect.element(dialog.getByRole("radio", { name: "Windows PowerShell" })).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect.element(dialog).not.toBeInTheDocument();
+    await expect.element(host).toHaveFocus();
+    expect(host.element().matches(":focus-visible")).toBe(false);
+    expect(host.element().closest(".host-row")?.matches(":hover, .active")).toBe(false);
+    await settleMotion(mark.element());
+    expect(getComputedStyle(mark.element()).color).toBe(idleColor);
+
+    await userEvent.keyboard("{Enter}");
+    await expect.element(dialog).toBeVisible();
+    await userEvent.keyboard("{Escape}");
+    await expect.element(dialog).not.toBeInTheDocument();
+    await expect.element(host).toHaveFocus();
+    expect(host.element().matches(":focus-visible")).toBe(true);
+    await settleMotion(mark.element());
+    expect(getComputedStyle(mark.element()).color).toBe(hoverColor);
+    expect(native.invoke.mock.calls.some(([command]) => command === "start_session")).toBe(false);
+  });
+
   it("opens a Mac shell and exposes native inspection without Linux boot controls", async () => {
     const capabilities = {
       ...fixtures.capabilities(),
@@ -3291,8 +3501,9 @@ describe("complete app journeys with typed IPC fixtures", () => {
       Array.from(element.querySelectorAll<HTMLButtonElement>(".feature-nav button")).map((button) =>
         button.textContent?.trim(),
       ),
-    ).toEqual(["Terminal", "Docker", "Systemd", "Logs", "Ports", "History"]);
+    ).toEqual(["Terminal", "Files", "Docker", "Systemd", "Logs", "Ports", "History"]);
     for (const [view, heading] of [
+      ["Files", "Files"],
       ["Docker", "Containers"],
       ["Systemd", "Systemd"],
       ["Logs", "Logs"],

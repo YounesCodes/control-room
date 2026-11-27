@@ -35,6 +35,7 @@ import {
   LayoutPanelLeft,
   Copy,
   FileClock,
+  FolderOpen,
   FolderCog,
   History,
   BookOpen,
@@ -48,11 +49,14 @@ import {
   Settings,
   ShieldAlert,
   SquareTerminal,
-  StickyNote,
+  NotebookPen,
   Trash2,
   X,
 } from "lucide-react";
 import { ConfirmDialog } from "./components/ConfirmDialog";
+import { FilesPane } from "./pages/FilesPane";
+import { uploadFiles } from "./lib/file-transfers";
+import { useFileDrop } from "./hooks/use-file-drop";
 import { HostMetrics } from "./components/HostMetrics";
 import { displayedHeaderMetrics } from "./lib/header-metrics";
 import { UpdateIndicator } from "./components/UpdateIndicator";
@@ -83,7 +87,11 @@ import { TerminalLayoutControls } from "./components/TerminalLayoutControls";
 import { useTerminalLayoutMotion } from "./hooks/use-terminal-layout-motion";
 import { useWorkspacePersistence } from "./hooks/use-workspace-persistence";
 import { useWorkspaceSession } from "./hooks/use-workspace-session";
-import { closeWorkspaceInSession, removeConnectionFromSession } from "./lib/workspace-session";
+import {
+  closeWorkspaceInSession,
+  emptyWorkspaceSession,
+  removeConnectionFromSession,
+} from "./lib/workspace-session";
 import { useLatestHandlers } from "./hooks/use-latest-handlers";
 import { usePopoverExit } from "./hooks/use-popover-exit";
 import { api, errorMessage } from "./lib/api";
@@ -220,6 +228,7 @@ const navigation: {
   icon: ComponentType<{ size?: number; strokeWidth?: number }>;
 }[] = [
   { id: "terminal", label: "Terminal", icon: SquareTerminal },
+  { id: "files", label: "Files", icon: FolderOpen },
   { id: "docker", label: "Docker", icon: DockerIcon },
   { id: "services", label: "Systemd", icon: Server },
   { id: "logs", label: "Logs", icon: FileClock },
@@ -344,6 +353,9 @@ const WorkspaceInspection = memo(function WorkspaceInspection({
   const connection = workspace.connectionSnapshot;
   return (
     <>
+      {workspace.view === "files" && (
+        <FilesPane key={id} workspaceId={id} connection={connection} />
+      )}
       {workspace.view === "services" &&
         (windowsHost ? (
           <Suspense fallback={<LoadingState label="Loading Windows services..." />}>
@@ -686,19 +698,18 @@ export function App() {
           const detectedShells = localShellCatalog.profiles;
           setLocalShells(detectedShells);
           setAdministratorTerminalStatus(localShellCatalog.administratorStatus);
+          const startupSettings =
+            settingsResult.status === "fulfilled" ? settingsResult.value.current : null;
           let terminalFocusMode = false;
           const restored = restoreWorkspaceState(
             connectionsResult.status === "fulfilled" ? connectionsResult.value : [],
-            workspaceStateResult.status === "fulfilled"
+            startupSettings?.restoreTerminalsOnStartup &&
+              workspaceStateResult.status === "fulfilled"
               ? workspaceStateResult.value
               : { workspaces: [], activeWorkspaceId: null, terminalLayout: null },
             detectedShells,
           );
-          if (
-            settingsResult.status === "fulfilled" &&
-            settingsResult.value.current.localTerminalMode
-          ) {
-            const startupSettings = settingsResult.value.current;
+          if (startupSettings?.localTerminalMode) {
             const shell = defaultLocalShell(
               offeredLocalShells(detectedShells, startupSettings.hiddenLocalShells ?? []),
               startupSettings.defaultLocalShellId ?? null,
@@ -709,7 +720,6 @@ export function App() {
               );
               const workspace = existing ?? createLocalWorkspace(shell);
               if (!existing) restored.workspaces.push(workspace);
-              workspace.view = "terminal";
               restored.activeWorkspaceId = workspace.id;
               terminalFocusMode = true;
             }
@@ -718,7 +728,9 @@ export function App() {
             setPanelSizes(restorePanelSizes(workspaceStateResult.value.panelSizes));
           workspaceSession.restore({ ...restored, terminalFocusMode });
           setWorkspacePersistenceReady(
-            connectionsResult.status === "fulfilled" && workspaceStateResult.status === "fulfilled",
+            startupSettings !== null &&
+              connectionsResult.status === "fulfilled" &&
+              workspaceStateResult.status === "fulfilled",
           );
           if (workspaceStateResult.status === "rejected") {
             setActionError(
@@ -795,7 +807,9 @@ export function App() {
       ? navigation.filter((item) => item.id === "terminal")
       : windowsWorkspace
         ? navigation
-            .filter((item) => ["terminal", "services", "ports", "docker", "logs"].includes(item.id))
+            .filter((item) =>
+              ["terminal", "files", "services", "ports", "docker", "logs"].includes(item.id),
+            )
             .map((item) => (item.id === "services" ? { ...item, label: "Services" } : item))
         : macosWorkspace
           ? navigation.map((item) =>
@@ -806,6 +820,21 @@ export function App() {
     ? (connections.find((connection) => connection.id === activeRemoteWorkspace.connectionId) ??
       null)
     : null;
+  useFileDrop(
+    workspaces.some(isRemoteWorkspace),
+    (id, folder, paths) => {
+      const workspace = workspaces.find((item) => item.id === id);
+      if (!workspace || !isRemoteWorkspace(workspace) || workspace.container || settingsOpen)
+        return;
+      uploadFiles(workspace.connectionSnapshot, folder, paths);
+      if (workspace.view !== "files") {
+        exitTerminalFocus();
+        setActiveWorkspaceId(id);
+        updateRemoteWorkspace(id, { view: "files" });
+      }
+    },
+    setActionError,
+  );
   const offeredShells = offeredLocalShells(
     localShells,
     settingsContract?.current.hiddenLocalShells ?? [],
@@ -899,11 +928,12 @@ export function App() {
   const existingSplitCandidates = terminalFocusMode
     ? ungroupedWorkspaces.filter((workspace) => workspace.id !== activeWorkspaceId)
     : [];
+  const persistedSession = settingsContract?.current.restoreTerminalsOnStartup
+    ? { workspaces, activeWorkspaceId, terminalGroups }
+    : emptyWorkspaceSession;
   useWorkspacePersistence({
+    ...persistedSession,
     ready: workspacePersistenceReady,
-    workspaces,
-    activeWorkspaceId,
-    terminalGroups,
     panelSizes,
     onError: setActionError,
   });
@@ -1189,7 +1219,6 @@ export function App() {
     if (!nextId) return;
     terminalGroupActiveWorkspaceRef.current.set(group.id, nextId);
     setActiveWorkspaceId(nextId);
-    updateWorkspace(nextId, { view: "terminal" });
     setNewTerminalMenuOpen(false);
   }
 
@@ -1199,14 +1228,12 @@ export function App() {
       if (terminalFocusMode) {
         const group = terminalGroupForWorkspace(terminalGroups, workspace.id);
         if (group) terminalGroupActiveWorkspaceRef.current.set(group.id, workspace.id);
-        updateWorkspace(workspace.id, { view: "terminal" });
       }
     });
   }
 
   function splitWithExistingTerminal(workspace: Workspace) {
     if (!activeWorkspace || !terminalFocusMode) return;
-    updateWorkspace(workspace.id, { view: "terminal" });
     const groupId = activeTerminalGroup?.id ?? crypto.randomUUID();
     setTerminalGroups((current) =>
       activeTerminalGroup
@@ -1356,12 +1383,8 @@ export function App() {
 
   function removeTerminalGroup(groupId: string) {
     if (!terminalGroups.some((group) => group.id === groupId)) return;
-    const removingActiveGroup = activeTerminalGroup?.id === groupId;
     terminalGroupActiveWorkspaceRef.current.delete(groupId);
     setTerminalGroups((current) => deleteTerminalGroup(current, groupId));
-    if (terminalFocusMode && removingActiveGroup && activeWorkspaceId) {
-      updateWorkspace(activeWorkspaceId, { view: "terminal" });
-    }
   }
 
   function confirmUngroup(group: TerminalGroup) {
@@ -1416,7 +1439,7 @@ export function App() {
       setRemoteShellRequest({ connection, split: false, provisionalId: workspaceId, discovery });
     },
     close(workspaceId) {
-      void performCloseWorkspace(workspaceId);
+      void performCloseWorkspaces([workspaceId]);
     },
   });
 
@@ -1607,7 +1630,6 @@ export function App() {
     const split = tabSplitAt(id, x, y);
     setTabSplit(null);
     if (!split?.valid) return;
-    updateWorkspace(id, { view: "terminal" });
     const groupId = activeTerminalGroup?.id ?? crypto.randomUUID();
     setTerminalGroups((current) =>
       activeTerminalGroup
@@ -1685,22 +1707,44 @@ export function App() {
             : `Disconnect the SSH session and close “${duplicateLabel(workspace)}”?`,
         confirmLabel: local ? "Stop & close" : "Disconnect & close",
         danger: true,
-        onConfirm: () => void performCloseWorkspace(id),
+        onConfirm: () => void performCloseWorkspaces([id]),
       });
       return;
     }
-    void performCloseWorkspace(id);
+    void performCloseWorkspaces([id]);
   }
 
-  async function performCloseWorkspace(id: string) {
-    const workspace = workspaceSession.current().workspaces.find((item) => item.id === id);
-    if (!workspace || closingWorkspaceIdsRef.current.has(id)) return;
-    closingWorkspaceIdsRef.current.add(id);
-    provisionalTerminals.forget(id);
+  function closeAllTerminals() {
+    setConfirmState({
+      title: "Close all terminals",
+      message: "Close every terminal, stop local shells, and disconnect SSH sessions?",
+      confirmLabel: "Close all terminals",
+      danger: true,
+      onConfirm: () => void performCloseWorkspaces(workspaces.map((workspace) => workspace.id)),
+    });
+  }
+
+  async function performCloseWorkspaces(ids: string[]) {
+    const workspaceIds = new Set(ids);
+    const closing = workspaceSession
+      .current()
+      .workspaces.filter(
+        ({ id }) => workspaceIds.has(id) && !closingWorkspaceIdsRef.current.has(id),
+      );
+    if (closing.length === 0) return;
+    for (const { id } of closing) {
+      closingWorkspaceIdsRef.current.add(id);
+      provisionalTerminals.forget(id);
+    }
     setActionError(null);
-    if (workspace.sessionId) await api.closeSession(workspace.sessionId).catch(() => undefined);
-    workspaceSession.commit((current) => closeWorkspaceInSession(current, id));
-    closingWorkspaceIdsRef.current.delete(id);
+    const sessions = closing.flatMap(({ sessionId }) =>
+      sessionId ? [api.closeSession(sessionId).catch(() => undefined)] : [],
+    );
+    if (sessions.length) await Promise.all(sessions);
+    workspaceSession.commit((current) =>
+      closing.reduce((next, { id }) => closeWorkspaceInSession(next, id), current),
+    );
+    for (const { id } of closing) closingWorkspaceIdsRef.current.delete(id);
   }
 
   function deleteConnection(connection: SavedConnection) {
@@ -2705,6 +2749,7 @@ export function App() {
               activeTabId={settingsOpen ? null : activeWorkspaceId}
               arrangementKey={tabArrangementKey}
               items={workspaceTabOptions}
+              onCloseAll={closeAllTerminals}
               onReorder={moveTabTo}
               onDragOut={splitAvailable ? tabDragOut : undefined}
               menuAlwaysShown
@@ -2935,7 +2980,7 @@ export function App() {
                     aria-haspopup="dialog"
                     aria-expanded={scratchpadOpen}
                   >
-                    <StickyNote size={15} />
+                    <NotebookPen size={15} />
                   </button>
                   <button
                     className="session-strip-button"
@@ -3084,6 +3129,16 @@ export function App() {
                           .join(" ")}
                         key={workspace.id}
                         data-workspace-id={workspace.id}
+                        data-file-workspace={
+                          terminalVisible && isRemoteWorkspace(workspace) && !workspace.container
+                            ? workspace.id
+                            : undefined
+                        }
+                        data-drop-label={
+                          isRemoteWorkspace(workspace)
+                            ? `Upload to ${workspace.connectionSnapshot.displayName} · Home folder`
+                            : undefined
+                        }
                         aria-hidden={!terminalVisible || undefined}
                         style={
                           terminalSplitMode && terminalVisible && paneRect

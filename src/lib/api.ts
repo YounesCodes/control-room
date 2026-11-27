@@ -1,5 +1,6 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { beginHostOperation } from "./host-processing";
+import type { FileJob, RemoteFolder, TransferProgress } from "./file-transfers";
 import type {
   AppSettings,
   FontCatalog,
@@ -101,6 +102,27 @@ function invokeHostOperation<T>(
 }
 
 export const api = {
+  listTransferFolder: (connectionId: string, folder: string | null) =>
+    invoke<RemoteFolder>("list_transfer_folder", { connectionId, folder }),
+  chooseTransferPaths: (direction: FileJob["direction"]) =>
+    invoke<string[]>("choose_transfer_paths", { direction }),
+  cancelTransfer: (id: string) => invoke<void>("cancel_transfer", { id }),
+  transferFile: (job: FileJob, progress: Channel<TransferProgress>) => {
+    const { destination, username, port, identityFile } = job.connection;
+    return invoke<"complete" | "exists">("transfer_file", {
+      connectionId: job.connection.id,
+      expectedTarget: [destination, username, port, identityFile],
+      spec: {
+        id: job.id,
+        direction: job.direction,
+        remotePath: job.remotePath,
+        localPath: job.localPath,
+        replace: job.replace,
+        folder: job.folder,
+      },
+      progress,
+    });
+  },
   openDocumentation: () => invoke<void>("open_documentation"),
   openReleases: () => invoke<void>("open_releases"),
   readClipboard: () => invoke<string | null>("read_clipboard"),

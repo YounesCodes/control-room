@@ -1013,6 +1013,7 @@ fn settings_saved_by_v0_7_0_still_load_after_a_field_was_removed() {
         "an unrelated preference must not be reset by removing another field"
     );
     assert!(!loaded.local_terminal_mode);
+    assert!(!loaded.restore_terminals_on_startup);
     assert_eq!(loaded.default_local_shell_id, None);
     assert!(
         loaded.hidden_local_shells.is_empty(),
@@ -1026,12 +1027,14 @@ fn local_terminal_mode_settings_round_trip_and_validate_default() {
     let database = Database::open(&directory.path().join("control-room.db")).unwrap();
     let mut settings = AppSettings {
         local_terminal_mode: true,
+        restore_terminals_on_startup: true,
         default_local_shell_id: Some("git-bash".into()),
         ..AppSettings::default()
     };
     database.save_settings(&settings).unwrap();
     let loaded = database.get_settings().unwrap();
     assert!(loaded.local_terminal_mode);
+    assert!(loaded.restore_terminals_on_startup);
     assert_eq!(loaded.default_local_shell_id, Some("git-bash".into()));
     settings.default_local_shell_id = Some("cmd.exe".into());
     assert_eq!(

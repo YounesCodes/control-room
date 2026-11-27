@@ -1,6 +1,6 @@
 [package]
 name = "control-room"
-version = "0.9.8"
+version = "0.9.9"
 description = "A desktop SSH client with Linux, Windows, and macOS host inspection"
 authors = ["Younes"]
 edition = "2024"
@@ -15,6 +15,7 @@ desktop-e2e = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+tempfile = "3"
 chrono = { version = "0.4", features = ["serde"] }
 parking_lot = "0.12"
 portable-pty = "0.9"
@@ -55,7 +56,6 @@ tauri-plugin-wdio-webdriver = { version = "1.5", optional = true }
 [dev-dependencies]
 tauri = { version = "2", features = ["test"] }
 proptest = { version = "1.12", default-features = false, features = ["std"] }
-tempfile = "3"
 ts-rs = "12.0.1"
 
 # Keep file and line info for this crate's panics and backtraces, but skip

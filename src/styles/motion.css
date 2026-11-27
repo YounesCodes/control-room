@@ -204,7 +204,7 @@
 .session-tab-wrap:focus-within .identity-mark,
 .session-tab-wrap.active .identity-mark,
 .host-row:hover .identity-mark,
-.host-row:focus-within .identity-mark,
+.host-row:has(:focus-visible) .identity-mark,
 .host-row.active .identity-mark,
 .host-row.menu-open .identity-mark,
 .host-child-row:hover .identity-mark,

@@ -72,6 +72,7 @@ const connection: SavedConnection = {
 };
 const settings: AppSettings = {
   automaticTerminalTitles: true,
+  restoreTerminalsOnStartup: false,
   hostMetricsEnabled: false,
   hostMetrics: ["cpu", "ram", "gpu", "diskIo", "uptime"],
   hostMetricsIntervalSeconds: 5,

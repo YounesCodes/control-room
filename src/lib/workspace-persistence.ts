@@ -70,7 +70,8 @@ export function restoreWorkspaceState(
         ...createRemoteWorkspace(connection, saved.remoteShell),
         ...reconnecting,
         view:
-          saved.remoteShell && !["terminal", "services", "ports", "docker", "logs"].includes(view)
+          saved.remoteShell &&
+          !["terminal", "files", "services", "ports", "docker", "logs"].includes(view)
             ? "terminal"
             : view,
         historyPaused: saved.historyPaused,

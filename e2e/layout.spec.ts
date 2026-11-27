@@ -9,6 +9,7 @@ import {
   openConnectionDialog,
   openOfflineConnection,
   restartApp,
+  setRestoreTerminals,
   focusElement,
   pressBoundaryKey,
   openScratchpad,
@@ -92,6 +93,7 @@ describe("Resizable panels in the native app", () => {
   });
 
   it("saves content widths, shares them across hosts, restores and resets through SQLite", async () => {
+    await setRestoreTerminals(true);
     const create = async (name: string) => {
       await openConnectionDialog();
       await $("input[aria-label='Display name']").setValue(name);
@@ -159,6 +161,7 @@ describe("Resizable panels in the native app", () => {
   });
 
   it("saves Hosts and Capabilities heights across native restarts and resets them", async () => {
+    await setRestoreTerminals(true);
     await addConnection("Layout host");
     await openOfflineConnection("Layout host");
     await feature("History");

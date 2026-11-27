@@ -76,6 +76,7 @@ interface WorkspaceTabScrollerProps {
   menuLabel?: string;
   menuAlwaysShown?: boolean;
   trailing?: ReactNode;
+  onCloseAll?: () => void;
   onReorder?: (id: string, targetIndex: number) => void;
   onDragOut?: TabDragOut;
 }
@@ -161,6 +162,7 @@ export function WorkspaceTabScroller({
   menuLabel = "All terminals",
   menuAlwaysShown = false,
   trailing,
+  onCloseAll,
   onReorder,
   onDragOut,
 }: WorkspaceTabScrollerProps) {
@@ -939,8 +941,25 @@ export function WorkspaceTabScroller({
                 rows
               );
             })}
+            {matches.length === 0 && (
+              <p className="session-tab-menu-empty">No matching terminals</p>
+            )}
+            {onCloseAll && (
+              <div className="session-tab-menu-footer" role="none">
+                <button
+                  role="menuitem"
+                  type="button"
+                  aria-haspopup="dialog"
+                  onClick={() => {
+                    closeMenu();
+                    onCloseAll();
+                  }}
+                >
+                  Close all terminals
+                </button>
+              </div>
+            )}
           </div>
-          {matches.length === 0 && <p className="session-tab-menu-empty">No matching terminals</p>}
         </div>
       )}
     </div>

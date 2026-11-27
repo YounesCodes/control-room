@@ -112,6 +112,7 @@ import type {
 
 const settings: AppSettings = {
   automaticTerminalTitles: true,
+  restoreTerminalsOnStartup: true,
   hostMetricsEnabled: false,
   hostMetrics: ["cpu", "ram", "gpu", "diskIo", "uptime"],
   hostMetricsIntervalSeconds: 5,

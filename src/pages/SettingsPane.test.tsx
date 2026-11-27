@@ -25,6 +25,7 @@ import type { AppUpdateState } from "../lib/app-update";
 
 const settings: AppSettings = {
   automaticTerminalTitles: true,
+  restoreTerminalsOnStartup: false,
   hostMetricsEnabled: false,
   hostMetrics: ["cpu", "ram", "gpu", "diskIo", "uptime"],
   hostMetricsIntervalSeconds: 5,

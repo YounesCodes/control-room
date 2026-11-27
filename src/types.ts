@@ -145,7 +145,8 @@ export interface SystemdExplorerState {
 }
 
 export type ConnectionState = "connecting" | SessionState;
-export type WorkspaceView = "terminal" | "services" | "ports" | "docker" | "logs" | "history";
+export type WorkspaceView =
+  "terminal" | "files" | "services" | "ports" | "docker" | "logs" | "history";
 
 export interface CachedList<T> {
   items: T[];

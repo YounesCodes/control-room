@@ -26,8 +26,9 @@ pub(crate) const MAX_HISTORY_COMMAND_BYTES: usize = 1024 * 1024;
 pub(crate) const MAX_HISTORY_CWD_BYTES: usize = 32_767;
 pub(crate) const MAX_SCRATCHPAD_CHARS: usize = 16_384;
 pub(crate) const SCRATCHPAD_SCOPES: [&str; 3] = ["connection", "global", "local"];
-pub(crate) const PERSISTED_WORKSPACE_VIEWS: [&str; 7] = [
+pub(crate) const PERSISTED_WORKSPACE_VIEWS: [&str; 8] = [
     "terminal",
+    "files",
     "services",
     "ports",
     "docker",

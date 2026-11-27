@@ -79,6 +79,7 @@ function ModalFixture({ long = false }: { long?: boolean }) {
 
 const settings: AppSettings = {
   automaticTerminalTitles: true,
+  restoreTerminalsOnStartup: false,
   hostMetricsEnabled: false,
   hostMetrics: ["cpu", "ram", "gpu", "diskIo", "uptime"],
   hostMetricsIntervalSeconds: 5,

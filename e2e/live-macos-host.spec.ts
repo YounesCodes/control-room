@@ -1,6 +1,14 @@
 import "./isolation";
 import { $, browser, expect } from "@wdio/globals";
-import { addConnection, feature, ipc, restartApp, runtime, terminalCommand } from "./helpers";
+import {
+  addConnection,
+  feature,
+  ipc,
+  restartApp,
+  runtime,
+  setRestoreTerminals,
+  terminalCommand,
+} from "./helpers";
 import type { DockerContainer, HostCapabilities, ListeningSocket, SystemdUnit } from "../src/types";
 
 async function connect(shell = "zsh") {
@@ -94,6 +102,7 @@ describe("macOS SSH host journeys against a real Mac", () => {
   });
 
   it("restores the selected Mac shell after restarting the app", async () => {
+    await setRestoreTerminals(true);
     await connect();
     await restartApp();
     await browser.waitUntil(

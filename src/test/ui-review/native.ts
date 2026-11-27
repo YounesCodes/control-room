@@ -149,6 +149,7 @@ if (state === "overflow") {
   units[0].description = "Synthetic long description. ".repeat(15);
 }
 const workspaceView = {
+  files: "files",
   systemd: "services",
   sidebar: "services",
   scratchpad: "terminal",
@@ -171,7 +172,8 @@ const workspaceView = {
     ports: "ports",
     "ports-discovering": "ports",
   }[state],
-}[scenario] as "services" | "terminal" | "ports" | "docker" | "logs" | "history" | undefined;
+}[scenario] as
+  "files" | "services" | "terminal" | "ports" | "docker" | "logs" | "history" | undefined;
 const containers = [
   {
     ...container,
@@ -450,6 +452,51 @@ export const save = async () => null;
 export async function invoke<T>(command: string, args: Record<string, any> = {}): Promise<T> {
   let result: unknown;
   switch (command) {
+    case "choose_transfer_paths":
+      result =
+        state === "overflow" && args.direction === "upload"
+          ? Array.from({ length: 8 }, (_, index) => `/example/archive-${index + 1}.zip`)
+          : args.direction === "upload"
+            ? ["/example/release.tar.gz"]
+            : ["/example/downloads"];
+      break;
+    case "list_transfer_folder":
+      if (state === "loading") return pending();
+      if (state === "error" && args.folder)
+        throw { message: "Permission denied on the host", permissionDenied: true };
+      result = {
+        path: args.folder ?? "/home/fixture",
+        entries:
+          state === "empty"
+            ? []
+            : state === "overflow"
+              ? Array.from({ length: 120 }, (_, index) => ({
+                  name: `project-${String(index + 1).padStart(3, "0")}`,
+                  kind: "folder",
+                  size: null,
+                }))
+              : [
+                  { name: "backups", kind: "folder", size: null },
+                  { name: "projects", kind: "folder", size: null },
+                  { name: "reports", kind: "folder", size: null },
+                  { name: "deploy.log", kind: "file", size: 162408 },
+                  { name: "release.tar.gz", kind: "file", size: 78643200 },
+                  { name: ".profile", kind: "file", size: 768 },
+                ],
+      };
+      break;
+    case "transfer_file":
+      if (state === "transfer-error") throw "Permission denied on the host";
+      if (state === "folder-download") {
+        args.progress.onmessage({ bytes: 28311552, total: null, bytesPerSecond: 5242880 });
+        return pending();
+      }
+      if (state === "in-progress" || state === "overflow") {
+        args.progress.onmessage({ bytes: 28311552, total: 78643200, bytesPerSecond: 5242880 });
+        return pending();
+      }
+      result = state === "overwrite-prompt" && !args.spec.replace ? "exists" : "complete";
+      break;
     case "get_environment_info":
       if (loading === "ssh-diagnostics") return pending();
       result = {
@@ -574,7 +621,10 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       const desktop = (value: typeof settings) =>
         linux ? { ...value, terminalFontFamily: "monospace" } : value;
       result = {
-        current: desktop(metricsSettings),
+        current: desktop({
+          ...metricsSettings,
+          restoreTerminalsOnStartup: scenario !== "settings",
+        }),
         defaults: desktop(settings),
         logTailOptions: [50, 100, 200, 500, 1000],
       };

@@ -9,8 +9,9 @@ Control Room uses the OpenSSH client on your computer. Commands you type in a te
 
 Systemd, Ports, Docker, and Logs only read from the host. They never edit files, change firewall rules, or start or stop services and containers.
 
-Two features do change things on the host:
+Three features do change things on the host:
 
+- **Files** uploads files with your SSH account's permissions, and can replace a file that already exists after you confirm.
 - **Open terminal** in Docker opens a shell inside a container. Commands you type there can change the container.
 - **History** adds a small block to your shell startup file on the host. See [Command history](/control-room/tools/history/).
 
