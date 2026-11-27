@@ -1087,9 +1087,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(color(localMark)).toBe(neutral);
     await userEvent.hover(betaRow.element());
     await expect.poll(() => color(betaMark)).toBe("rgb(215, 10, 83)");
-    await userEvent.keyboard("{Home}");
-    await expect.element(alphaRow).toHaveFocus();
-    await userEvent.keyboard("{End}");
+    await userEvent.keyboard("{ArrowDown}");
     await expect.element(localRow).toHaveFocus();
     await expect.poll(() => color(alphaMark)).toBe(neutral);
     await userEvent.hover(alphaRow.element().querySelector("span:last-child")!);
@@ -1171,7 +1169,7 @@ describe("complete app journeys with typed IPC fixtures", () => {
       expect(node.scrollWidth).toBeLessThanOrEqual(node.clientWidth);
       if (count === 5) expect(node.scrollHeight).toBeLessThanOrEqual(node.clientHeight);
       else expect(node.scrollHeight).toBeGreaterThan(node.clientHeight);
-      await userEvent.keyboard("{End}");
+      await userEvent.keyboard("{ArrowUp}");
       const last = menu.getByRole("button", { name: "Local terminals: Git Bash" });
       await expect.element(last).toHaveFocus();
       await expect
@@ -4093,11 +4091,11 @@ describe("complete app journeys with typed IPC fixtures", () => {
     expect(document.activeElement).toBe(
       page.getByRole("menuitem", { name: "Disable on this connection" }).element(),
     );
-    await userEvent.keyboard("{End}");
+    await userEvent.keyboard("{ArrowUp}");
     expect(document.activeElement).toBe(
       page.getByRole("menuitem", { name: "Remove from remote Bash" }).element(),
     );
-    await userEvent.keyboard("{Home}{ArrowDown}");
+    await userEvent.keyboard("{ArrowDown}{ArrowDown}");
     expect(document.activeElement).toBe(
       page.getByRole("menuitem", { name: "Clear saved history" }).element(),
     );

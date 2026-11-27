@@ -5,24 +5,35 @@ const pages = [
   "connections/",
   "terminal/",
   "local-terminals/",
-  "workspaces/",
-  "start-here/introduction/",
-  "start-here/requirements/",
   "start-here/quick-start/",
   "reference/security/",
   "start-here/installation/",
   "reference/keyboard-shortcuts/",
   "inspection/docker/",
   "inspection/logs/",
-  "inspection/overview/",
   "inspection/ports/",
   "inspection/services/",
   "tools/history/",
-  "tools/scratchpad/",
   "reference/settings/",
-  "help/faq/",
   "help/troubleshooting/",
 ];
+
+const movedPages = {
+  "start-here/introduction/": "/control-room/",
+  "start-here/requirements/": "/control-room/start-here/installation/",
+  "inspection/overview/": "/control-room/inspection/services/",
+  "workspaces/": "/control-room/terminal/",
+  "tools/scratchpad/": "/control-room/tools/history/",
+  "help/faq/": "/control-room/reference/security/",
+};
+
+for (const [route, target] of Object.entries(movedPages)) {
+  test(`${route}: an old page URL redirects to its new page`, async ({ page }) => {
+    await page.goto(route);
+    await expect(page).toHaveURL((url) => url.pathname === target);
+    await expect(page.locator("h1")).toBeVisible();
+  });
+}
 
 for (const route of pages) {
   test(`${route || "home"}: documentation links and section targets resolve`, async ({ page }) => {
@@ -67,6 +78,15 @@ for (const theme of ["dark", "light"]) {
         const metrics = await page.evaluate(async () => {
           const article = document.querySelector(".sl-markdown-content")!;
           await Promise.all([...article.querySelectorAll("img")].map((img) => img.decode()));
+          await Promise.all(
+            [...article.querySelectorAll("video")].map((video) =>
+              video.readyState >= 1
+                ? null
+                : new Promise((resolve) =>
+                    video.addEventListener("loadedmetadata", resolve, { once: true }),
+                  ),
+            ),
+          );
           const toc = document.querySelector(".right-sidebar")!;
           const interFaces = await document.fonts.load('400 16px "Inter Local"', "Control Room");
           return {
@@ -80,6 +100,9 @@ for (const theme of ["dark", "light"]) {
             imagesLoaded: [...article.querySelectorAll("img")].every(
               (img) => img.complete && img.naturalWidth > 0,
             ),
+            videosLoaded: [...article.querySelectorAll("video")].every(
+              (video) => video.videoWidth > 0,
+            ),
           };
         });
         expect(metrics.page).toBeLessThanOrEqual(metrics.viewport);
@@ -88,6 +111,7 @@ for (const theme of ["dark", "light"]) {
         expect(metrics.bodyFont).toContain("Inter Local");
         expect(metrics.interLoaded).toBe(true);
         expect(metrics.imagesLoaded).toBe(true);
+        expect(metrics.videosLoaded).toBe(true);
         await page.screenshot({
           path: testInfo.outputPath(`${route.replaceAll("/", "-") || "home"}.png`),
         });
@@ -133,4 +157,59 @@ test("search, theme, anchors and mobile navigation retain native behavior", asyn
   const id = await heading.getAttribute("id");
   await page.goto(`reference/security/#${id}`);
   await expect(heading).toBeInViewport();
+});
+
+for (const motion of ["no-preference", "reduce"] as const) {
+  test(`demo videos follow the ${motion} motion preference`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: motion });
+    await page.goto("inspection/logs/");
+    const video = page.locator(".docs-demo video");
+    await expect(video).toHaveAttribute("aria-label", /Start/);
+    await expect(video).toHaveAttribute("poster", /logs-poster/);
+    await expect
+      .poll(() => video.evaluate((element: HTMLVideoElement) => element.paused))
+      .toBe(motion === "reduce");
+    expect(await video.evaluate((element: HTMLVideoElement) => element.controls)).toBe(
+      motion === "reduce",
+    );
+  });
+}
+
+test("llms.txt lists every page and llms-full.txt holds each page as plain Markdown", async ({
+  request,
+}) => {
+  const index = await request.get("llms.txt");
+  expect(index.headers()["content-type"]).toContain("text/plain");
+  const indexText = await index.text();
+  const full = await (await request.get("llms-full.txt")).text();
+  for (const route of pages) {
+    const url = `https://younescodes.github.io/control-room/${route}`;
+    expect(indexText).toContain(`(${url})`);
+    expect(full).toContain(`Source: ${url}\n`);
+  }
+  for (const leftover of [
+    "import ",
+    "<figure",
+    "<DemoVideo",
+    "<LinkButton",
+    "<div",
+    "](/control-room",
+    "](#",
+  ]) {
+    expect(full).not.toContain(leftover);
+  }
+});
+
+test("each agent prompt copies in full", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto("start-here/installation/");
+  const prompts = page.locator(".expressive-code").filter({ hasText: "younescodes.github.io" });
+  await expect(prompts).toHaveCount(1);
+  for (const prompt of await prompts.all()) {
+    await prompt.hover();
+    await prompt.getByRole("button", { name: /copy/i }).click();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    expect(copied).toBe((await prompt.locator("pre").innerText()).trim());
+    expect(copied).toContain("https://younescodes.github.io/control-room/start-here/installation/");
+  }
 });

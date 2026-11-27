@@ -1,41 +1,46 @@
 ---
 title: Command history and notes
-description: Save optional shell command history and write your own notes.
+description: Save the commands you run on a host, and keep notes beside your terminals.
 ---
 
 import historyScreenshot from "../../../assets/screenshots/history.png";
+import scratchpadScreenshot from "../../../assets/screenshots/scratchpad.png";
 
-**Enhanced History** is optional. It records commands from new interactive Bash sessions on Linux or macOS, and zsh sessions on macOS. It does not import the account's existing `.bash_history`.
+## Command history
 
-Open **History** for the host and select **Enable Enhanced History**. Control Room adds a marked block to the remote account's `~/.bashrc` and a script under `~/.local/share/control-room/`. Capture also needs **Enable Enhanced History globally** in Settings to be on.
-
-Only sessions opened after the integration is enabled report entries. If the tab's terminal is already open when you enable capture, History offers **Restart terminal**, which starts a new shell that loads the integration. Restarting stops anything running in that terminal; choose **Not now** to keep it and restart later.
-
-If History offers **Update Bash integration**, select it and restart the terminal so it loads the updated script.
+**History** can save each command you run on a Linux or Mac host, with its folder, time, and result. It is off until you turn it on. It works in Bash, and in zsh on macOS. Commands from before you turn it on are not imported.
 
 <figure class="docs-screenshot">
   <a href={historyScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={historyScreenshot.src}
-      alt="Command History with command blocks, working directories, exit results, and a More actions menu."
+      alt="History with saved commands, each showing when it ran, whether it succeeded, and its folder."
     />
   </a>
-  <figcaption>Saved commands from Bash sessions. Example data shown.</figcaption>
 </figure>
 
-Commands that Bash excludes from its history, such as space-prefixed commands with `HISTCONTROL=ignorespace`, are skipped. The integration reports:
+To turn it on:
 
-- the command line
-- working directory
-- start and finish times
-- exit code
+1. Open **History** for the host and select **Enable Enhanced History**.
+2. If a terminal is already open, select **Restart terminal**. This stops anything running in it. Choose **Not now** to restart later.
 
-Entries are stored on your computer and appear in History automatically when a command finishes. You can search, copy, or delete them, and paste a command into the terminal without running it. A multiline command asks first when the shell would run its lines as they arrive. **Pause** stops capture for the current tab. Open the **More actions** menu at the top right for **Disable on this connection**, **Clear saved history**, and **Remove from remote Bash**.
+Turning it on adds a small marked block to `~/.bashrc` on the host, and to `~/.zshrc` on macOS. It also adds a script under `~/.local/share/control-room/`. To undo this, open **More actions** and choose **Remove from remote Bash**, or **Remove from remote shells** on macOS. This affects every connection that uses the same account on that host.
 
-**Remove from remote Bash** removes the marked block and script. If several connections use the same remote account, removal affects all of them. **Clear saved history** deletes only this connection's saved entries on your machine.
+**Pause** stops saving for the current tab. **Clear saved history** deletes the commands saved on your computer for this host.
 
-Command lines may contain secrets. The local database is not encrypted secret storage, so enable History only if saving those commands is appropriate. Local shells are not recorded.
+Commands that start with a space are skipped if Bash is set to ignore them (`HISTCONTROL=ignorespace`). Commands can contain passwords or keys, and history is saved without encryption. Turn it on only if that is acceptable. The global switch is in [Settings](/control-room/reference/settings/#logs--history).
 
-**Scratchpad** is for notes you write yourself. Each connection has a note, and there is one shared note for the app. See [Scratchpad](/control-room/tools/scratchpad/) for details.
+## Scratchpad
 
-For Mac hosts, enabling history installs separate Bash and zsh scripts with marked blocks in `~/.bashrc` and `~/.zshrc`. **Remove from remote shells** removes both integrations. Existing prompt hooks remain in place. Stock macOS Bash reports times at one-second precision; zsh reports milliseconds. Fish sessions are not recorded.
+**Scratchpad** is a plain-text note that you write yourself. Each host has one, each local terminal tab has one, and there is one **Global** note shared by the whole app. Notes save as you type.
+
+<figure class="docs-screenshot">
+  <a href={scratchpadScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={scratchpadScreenshot.src}
+      alt="The Scratchpad note open beside the terminal toolbar, with Connection and Global tabs, Copy, and Paste into terminal."
+    />
+  </a>
+</figure>
+
+If you paste a note with several lines into a shell that would run each one, Control Room asks first. Notes are saved on your computer without encryption.

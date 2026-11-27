@@ -271,15 +271,13 @@ h1#_top,
   text-decoration: none;
 }
 
-.docs-screenshot img {
+.docs-screenshot img,
+.docs-screenshot video {
   display: block;
   width: 100%;
   height: auto;
 }
 
-/* These are 1440x900 captures of a dense interface. In a prose column their
-   labels render under 6px, so the figure links to the file at full size and
-   says so on hover. */
 .docs-screenshot a:hover img,
 .docs-screenshot a:focus-visible img {
   opacity: 0.88;
@@ -288,19 +286,6 @@ h1#_top,
 .docs-screenshot a:focus-visible {
   outline: 2px solid var(--sl-color-accent);
   outline-offset: -2px;
-}
-
-.docs-screenshot figcaption::after {
-  content: " Select the image to open it at full size.";
-  color: var(--sl-color-gray-3);
-}
-
-.docs-screenshot figcaption {
-  padding: 0.65rem 0.8rem;
-  border-top: 1px solid var(--sl-color-gray-5);
-  color: var(--sl-color-gray-2);
-  font-size: 0.8rem;
-  line-height: 1.45;
 }
 
 .docs-home .sl-steps {

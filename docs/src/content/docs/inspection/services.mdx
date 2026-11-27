@@ -1,50 +1,40 @@
 ---
 title: Systemd
-description: Inspect Linux systemd units, Windows services, or macOS launchd jobs.
+description: Look at Linux systemd units, Windows services, or macOS launchd jobs.
 ---
 
-Systemd lists the host's loaded system services, timers, mounts, and sockets. Rows show the unit name, description, and state. No unit is selected initially; select one to inspect it or enable **Dependency graph**. Refresh keeps your choice. Failed units appear first; inactive and disabled units are not failures.
+import servicesScreenshot from "../../../assets/screenshots/services.png";
 
-**Focused** starts with services, timers, sockets, and path watchers, hiding routine systemd, D-Bus, login-session, and module-loader units. Failed units of every type remain visible. Choose **All units** beside it to include system services, mounts, devices, targets, and every other collected type. The count shows visible units out of the total when they differ. Search and specific type filters include the full inventory. This choice stays with the workspace; dependency graphs always include all reported unit types.
+On a Linux host, **Systemd** lists the host's services, timers, sockets, and other units. Failed units come first. This view only reads. It never starts or stops anything.
 
-Select the failed count to find failures. **Find units** expands search inside the toolbar. Its X clears a query; with an empty field, it hides search. **Filter and sort units** opens state, type, and sort controls below its icon. The heading tooltip shows all counts and collection time for the collected system scope.
+<figure class="docs-screenshot">
+  <a href={servicesScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={servicesScreenshot.src}
+      alt="The Systemd unit list with a failed unit at the top and the details of worker.service on the right."
+    />
+  </a>
+</figure>
 
-Select a row or graph node to open its inspector. In the inventory, use **Up** and **Down** to switch units and update the inspector, following the current filters and sort order. These keys also work when the inspector itself has focus. It shows essential runtime details for the unit type, or failure evidence for a failed unit. Expand **Configuration** or **Advanced** when needed. Use **Dependency graph** to investigate dependencies in the graph. Close the inspector with **Close details**, **Escape**, or by clicking the selected item again. Closing clears its selection and highlight. Missing or unsupported values appear as **Unavailable**.
+By default the list hides routine system units. Choose **All units** to see them. A unit's details include its unit file and everything systemd reports about it. An open service refreshes its memory and runtime details every three seconds.
 
-**Configuration** reads unit files and drop-ins directly from the inspector. **Advanced** contains enablement, conditions, assertions, and further runtime details. Its **Effective properties** section reads the manager's current properties. These can differ from files awaiting a daemon reload. Both reads happen on demand.
+## Find out why a unit failed
 
-Switching between **Explorer** and **Dependency graph** remembers whether each view's inspector was open, its expanded sections, and scroll positions. Returning restores details as you left them for that unit. Explicitly closing details clears the selection and both views' open states.
+**Failure evidence** shows how a failed unit ended, such as an exit code or signal. **View journal** opens its logs in [Logs](/control-room/inspection/logs/).
 
-An open service inspector refreshes memory and runtime details every three seconds. Updates pause when the app window is hidden and stop when the inspector closes. If a read fails, the last collected values stay visible with the error.
+## Dependency graph
 
-Unit files and effective properties use syntax colors to distinguish sections, keys, quoted values, paths, and variables. Long commands such as **ExecStart** use the full inspector width. The original host text remains intact when selected and copied.
+**Dependency graph** shows how a unit relates to other units, up to 25 at a time. The lines can show:
 
-## Explore dependencies
+- **Dependencies.** Units this one pulls in. A solid line means it requires the unit. A dashed line means it only wants it.
+- **Ordering.** Units that start before or after this one. Arrows point from first to last.
+- **Activation.** Units that start this one, such as a socket that starts a service.
 
-Choose **Dependency graph** beside **Explorer** to open a dependency graph with up to six neighbors. The selected unit appears beside the action; its tooltip shows the full name and relationship types. The root label names the unit being graphed. The inventory count stays the same in both views. Inventory row clicks only toggle the inspector. The graph inspector stays closed until you select a node. Drag to pan, use the wheel or zoom buttons, and choose **Fit to view** to see the full diagram. Double-click a graph node to refocus. Use its **Expand** button to read another neighborhood, or **Show more** to reveal more known neighbors.
+Systemd shows system units only, not user units. It uses `systemctl` on the host.
 
-Choose one relationship category:
+## Windows and Mac hosts
 
-- **Dependencies** shows Requires and Wants. They pull in other units.
-- **Ordering** shows After and Before. Arrows point from the earlier unit to the later unit; ordering alone does not pull in a unit.
-- **Activation** shows Triggers, such as a socket activating a service.
+On these hosts the view is called **Services**.
 
-Relationships in the same direction share a connector. The bottom-left key explains arrow direction. Dependencies also shows line samples: solid means Requires is present, dashed means Wants only. Ordering and Activation use solid arrows. Hover or focus an edge to read its reported evidence, including combined Requires and Wants. Reverse dependencies come from systemd's properties; unit names alone never establish a relationship.
-
-**Find dependencies** searches known relationships and keeps paths to matches. Selecting a node zooms directly to that unit and opens its inspector. Click the selected node again to close it and fit the visible graph, or use **Close details** or **Escape**. The legend and zoom controls stay in a separate footer beneath the graph. Show more, Show less, and branch expansion or collapse smoothly fit the visible graph, leaving room for an open inspector. Pan or zoom to take control; pending reads will not override your view or selected-node focus until the next expansion action. **Fit to view** restores the overview. The graph shows at most 25 units and allows 24 expanded neighborhoods. Search or refocus to explore beyond that limit.
-
-Use **Show less** to reduce the visible set. Expanded nodes keep a visible **Collapse** button. Collapsing a branch removes its deeper units unless another expanded path still reaches them. Use **Expand** to reopen a collapsed branch.
-
-## Investigate a failure
-
-Select the failed count, then a unit. **Failure evidence** shows the systemd result and recorded exit status or signal. **View journal** in the inspector footer opens the full Logs view for that unit. Journal entries and related units are evidence, not a diagnosis.
-
-**Ports** is under **Advanced** when relevant evidence is available. It appears only for a service or socket with a confirmed listening port owned by that unit. Mounts, timers, and units without confirmed port ownership omit the shortcut. Opening Advanced checks the shared listener inventory when needed. Ports shows endpoints linked to the unit; its unit label returns to Systemd. Selection, filters, and graph expansion survive switching views, workspace navigation, and refreshes. A filtered selection offers a way to reveal it.
-
-Systemd reads system units with `systemctl`; it does not include user units or change service state. Details and evidence show permission errors separately. Evidence reads are limited to 128 KiB, with truncation reported. Refresh retries failed reads and keeps saved evidence visible when available.
-
-## Windows services
-
-On Windows hosts, the navigation shows **Services**. Search or filter the service inventory by state, then select a service to see its name, status, startup mode, and process ID. **Refresh** reads it again. This view does not start or stop services or open Windows event logs.
-
-On macOS hosts, **Services** lists loaded launchd daemons in the system domain and agents in the SSH account's user and graphical domains when accessible. Filter by daemon or agent, search by service target, and select **View logs**. Running jobs show their PID. Jobs waiting for a trigger are inactive; a nonzero last exit state appears as failed. This is the loaded inventory, not every installed plist, and the view does not start or stop jobs.
+- **Windows.** Shows each service's name, status, startup type, and process ID.
+- **macOS.** Shows loaded launchd daemons and agents. Running jobs show their process ID.

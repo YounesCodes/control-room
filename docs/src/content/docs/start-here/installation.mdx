@@ -1,54 +1,82 @@
 ---
 title: Install and update
-description: Install Control Room on Windows or Linux and keep it up to date.
+description: Install Control Room, check what your computer and hosts need, and keep the app up to date.
 ---
 
-Download a package from the [latest GitHub release](https://github.com/YounesCodes/control-room/releases/latest).
+Your agent can install Control Room for you. Give it the following prompt:
 
-To check a download, save `SHA256SUMS.txt` from the same release into the same folder and run the command for your system from that folder:
+```text wrap
+Install Control Room on this computer by following https://younescodes.github.io/control-room/start-here/installation/
+```
 
-- **Windows (PowerShell):** `(Get-Content SHA256SUMS.txt) -match (Get-FileHash .\<filename>.exe).Hash` prints the package's line if the file matches, and nothing if it does not.
-- **Linux:** `sha256sum --ignore-missing -c SHA256SUMS.txt` prints `OK` for each matching package.
-- **macOS:** `shasum -a 256 --ignore-missing -c SHA256SUMS.txt` prints `OK` for each matching package.
+_Agents can read all of these docs as plain text at [llms-full.txt](https://younescodes.github.io/control-room/llms-full.txt), or start from the index at [llms.txt](https://younescodes.github.io/control-room/llms.txt)._
 
 ## Windows
 
-Control Room runs on Windows 11 x64 and uses the Windows OpenSSH Client.
+Control Room runs on 64-bit Windows 11. It uses the OpenSSH Client that comes with Windows. If SSH is missing, turn on **OpenSSH Client** in Windows optional features.
 
-1. Download the `.exe` installer from the [latest GitHub release](https://github.com/YounesCodes/control-room/releases/latest).
-2. Run the installer, then open Control Room from the Start menu.
+1. Download the `.exe` installer.
+2. Run it. It installs for your user and does not need administrator access.
+3. Open Control Room from the Start menu.
 
-The installer runs for your Windows user and does not need administrator access. The release is unsigned, so Windows may show an unrecognized-publisher warning.
+The installer is not signed, so Windows may warn about an unknown publisher. Select **More info**, then **Run anyway**.
 
 ## Linux
 
-Ubuntu 24.04 LTS x86_64 is the initial Linux desktop target.
-
-- **Debian package.** From your downloads folder, run `sudo apt install ./<filename>.deb` with the name of the downloaded package. Open Control Room from the applications menu.
-- **AppImage.** Install `libfuse2t64`, `openssh-client`, and `xdg-utils` if needed. Run `chmod +x <filename>.AppImage`, then `./<filename>.AppImage`. Keep the AppImage in a folder your user can write to if you want in-app updates.
-
-On Linux the database is at `$XDG_DATA_HOME/app.controlroom.desktop/control-room.db`. If `XDG_DATA_HOME` is unset, the data directory defaults to `~/.local/share`. Both package formats use the same data directory.
-
-If your window manager does not support dragging the undecorated window from its edges, use its system move or resize shortcut. The automated desktop check runs under X11 with Openbox.
+- **Debian package.** Run `sudo apt install ./<filename>.deb` in the folder where you saved it. This also installs what the app needs. Open Control Room from your applications menu.
+- **AppImage.** Install `libfuse2t64`, `openssh-client`, and `xdg-utils` if you don't have them. Run `chmod +x <filename>.AppImage`, then `./<filename>.AppImage`. Keep the file in a folder you can write to, so the app can update itself.
 
 ## macOS preview
 
-The macOS port supports Intel and Apple Silicon. Download the DMG for your Mac from a release that includes one: `aarch64` for Apple Silicon, `x64` for Intel. Open it and drag Control Room to Applications. You can also use the matching test bundle from the [macOS workflow](https://github.com/YounesCodes/control-room/actions/workflows/macos.yml), or build it with Node.js 24.22.1 or a newer LTS release, Rust stable, and Xcode Command Line Tools. Run `npm ci`, then `npm run tauri build`, and open `src-tauri/target/release/bundle/macos/Control Room.app`. macOS includes the OpenSSH client.
+There is no macOS download yet. To try the preview, build it on a Mac with macOS 12 or newer. You need Node.js 24.22.1 or a newer LTS release, Rust stable, and the Xcode Command Line Tools.
 
-Mac builds are signed ad-hoc and not notarized by Apple, so macOS blocks the first launch with a warning that it could not verify the app. To open it once:
+```sh
+npm ci
+npm run tauri build
+```
 
-- **macOS 15 or newer:** Open Control Room and close the warning. Go to **System Settings > Privacy & Security**, find the message about Control Room near the bottom, select **Open Anyway**, and confirm.
-- **macOS 12 to 14:** Control-click Control Room in Applications, choose **Open**, then select **Open** in the warning.
-- **Terminal:** `xattr -dr com.apple.quarantine "/Applications/Control Room.app"` clears the download flag that causes the warning.
+Then open `src-tauri/target/release/bundle/macos/Control Room.app`.
 
-After that, Control Room opens normally, including after in-app updates.
+Signed-in GitHub users can also download a test build from the [macOS workflow](https://github.com/YounesCodes/control-room/actions/workflows/macos.yml). These builds are not notarized by Apple, so macOS blocks the first launch. To allow it once:
+
+- **macOS 15 or newer.** Try to open Control Room, then close the warning. Go to **System Settings > Privacy & Security** and select **Open Anyway**.
+- **macOS 12 to 14.** Control-click the app, choose **Open**, then select **Open** again.
+
+## What the host needs
+
+The host is the computer you connect to. It needs an SSH server that accepts your login.
+
+- **Linux.** Install an SSH server, such as `openssh-server`.
+- **macOS.** Turn on **Remote Login** in System Settings.
+- **Windows 10 or 11.** Turn on OpenSSH Server.
+
+The terminal can sign in with a password. The host views, and the shell list on Windows and Mac hosts, sign in on their own in the background, so they can't ask for a password. They need an SSH key or ssh-agent.
+
+On Linux, each host view needs a tool on the host. If a tool is missing, only that view is unavailable.
+
+| View    | Needs                    |
+| ------- | ------------------------ |
+| Systemd | systemd                  |
+| Logs    | journald or Docker       |
+| Ports   | `ss` from iproute2       |
+| Docker  | Docker, and access to it |
+| History | Bash                     |
+
+Control Room recognizes Debian, Ubuntu, Rocky Linux, AlmaLinux, Oracle Linux, CentOS Stream, Amazon Linux 2023, Fedora Server, openSUSE Leap, Arch Linux, and Alpine Linux. Alpine uses OpenRC instead of systemd, so it has no Systemd view.
+
+Windows and macOS hosts use tools that come with the system. On Windows, Docker needs `docker.exe` and a running Docker engine the SSH account can use. Docker that runs only inside WSL is not shown.
 
 ## Updates
 
-The Windows installer, Linux AppImage, and Mac app check GitHub Releases while the app is open. When an update is available, select the download icon in the title bar to see the version and changes. Its tooltip says **Update available**. The download starts when you ask for it. A ring shows download progress. Control Room verifies the update's signature before installation.
+The Windows installer and the Linux AppImage check for updates while the app is open. When one is ready, a download icon appears in the title bar. Select it to see what changed, then download the update. The app checks the update's signature before it installs it.
 
-**Restart to update** asks for confirmation because it ends active terminals and log streams. Your saved connections and tabs remain. After the restart, the tabs open fresh terminal sessions. You can also check manually in Settings, even if automatic checks are off.
+**Restart to update** closes your terminals and log streams. Your saved hosts and tabs stay, and the tabs start new sessions after the restart. To check by hand, use **Check for updates** in **Settings > App & Diagnostics**.
 
-For the Debian package, open **Settings > App & Diagnostics > Open releases** and install the newer `.deb` the same way. The package update preserves your local data.
+The Debian package does not update itself. Select **Open releases** in **Settings > App & Diagnostics**, download the new `.deb`, and install it the same way. Your data is kept.
 
-Next, [add your first connection](/control-room/start-here/quick-start/).
+## Check a download
+
+To make sure a file downloaded correctly, save `SHA256SUMS.txt` from the same release into the same folder. Then run this from that folder:
+
+- **Windows (PowerShell).** `(Get-Content SHA256SUMS.txt) -match (Get-FileHash .\<filename>.exe).Hash` prints a line if the file is good, and nothing if it isn't.
+- **Linux.** `sha256sum --ignore-missing -c SHA256SUMS.txt` prints `OK` for a good file.

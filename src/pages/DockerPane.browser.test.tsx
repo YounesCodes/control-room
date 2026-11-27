@@ -348,16 +348,3 @@ it("frames a container opened from Ports and keeps details and logs usable at mi
   await page.getByRole("button", { name: "Fit to view" }).click();
   await page.screenshot({ path: "../../test-results/docker-graph.png" });
 });
-
-it("reveals the final node with keyboard navigation without selecting it", async () => {
-  await page.viewport(1100, 760);
-  renderPane();
-  await page.getByRole("button", { name: /gateway-1.*running/ }).click();
-  await userEvent.keyboard("{Escape}");
-  await userEvent.keyboard("{End}");
-  const nodes = document.querySelectorAll<HTMLButtonElement>(".arch-chip");
-  expect(document.activeElement).toBe(nodes[nodes.length - 1]);
-  expect(screen.queryByRole("complementary")).toBeNull();
-  await userEvent.keyboard("{Enter}");
-  await waitFor(() => expectBesideInspector(nodes[nodes.length - 1]));
-});

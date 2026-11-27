@@ -414,12 +414,6 @@ export function InspectionGraph({
                             navigateSelection(event.key, item.id);
                             return;
                           }
-                          if (!["Home", "End"].includes(event.key)) return;
-                          const nodes = [...nodeRefs.current.values()];
-                          const next = event.key === "Home" ? 0 : nodes.length - 1;
-                          event.preventDefault();
-                          nodes[next]?.focus();
-                          if (nodes[next]) revealNode(nodes[next]);
                         }}
                         onFocus={(event) => {
                           // Moving the canvas between mousedown and mouseup makes the mouseup miss the chip.

@@ -3,78 +3,64 @@ title: Connections
 description: Save SSH hosts and choose how to connect.
 ---
 
-import connectionScreenshot from "../../assets/screenshots/connection-editor.png";
+import shellPickerScreenshot from "../../assets/screenshots/shell-picker.png";
 import filesScreenshot from "../../assets/screenshots/file-transfers.png";
 
-A connection saves the SSH address and username for a Linux, Windows, or macOS host. Select it in the sidebar to open a terminal. The first time, the terminal starts while Control Room detects the host's platform. A Linux shell appears as soon as either finishes. Windows and Mac hosts then show the shell picker, and the shell you pick replaces that first terminal.
+A connection saves a host's SSH address and username, and optionally a port and a private key. The address can also be a host name from your `~/.ssh/config`. Control Room uses the key where it is and never copies it.
 
-Select **Add connection** in the sidebar. To change one, open its menu and choose **Edit connection**.
+**Test structured access** checks that the host views can sign in without a password prompt.
+
+Control Room uses the OpenSSH client on your computer, so your keys, `~/.ssh/config`, and ssh-agent work as usual. On Linux and macOS, the host views share one SSH connection and close it after a minute of no use. This replaces any `ControlMaster` setting in your SSH config for those views. Terminals always open their own connection.
+
+If you change the address, username, port, or key, Control Room forgets what it learned about the old host. Open terminals stay connected until you reconnect.
+
+## Windows and Mac hosts
+
+On Windows and Mac hosts, you choose a shell before the terminal opens.
 
 <figure class="docs-screenshot">
-  <a href={connectionScreenshot.src} target="_blank" rel="noreferrer">
-    <img src={connectionScreenshot.src} alt="The Add connection form." />
+  <a href={shellPickerScreenshot.src} target="_blank" rel="noreferrer">
+    <img
+      src={shellPickerScreenshot.src}
+      alt="The Connect to Example host dialog for a Mac host, listing zsh and Bash with a Connect button."
+    />
   </a>
-  <figcaption>Connection fields. Example data shown.</figcaption>
 </figure>
 
-Enter a display name, SSH destination, and username. **Port** (1–65535) and **Private key** are optional; leave them empty to use your SSH defaults. The key stays in its existing location and is never copied into Control Room. Control Room uses your system OpenSSH client and your normal SSH configuration.
+- **Windows** lists Windows PowerShell, Command Prompt, PowerShell 7, Git Bash, other shells it finds, your Windows Terminal profiles, and each WSL distribution.
+- **macOS** lists zsh, Bash, and fish if it is installed.
 
-**Test structured access** checks whether the inspection views can connect without an SSH password prompt. It does not save the connection. The terminal can still use an interactive password login if that test fails.
+Listing the shells needs an SSH key or ssh-agent login. Control Room remembers the list and the shell you picked.
 
-On Linux and macOS, the inspection views reuse one SSH connection per target and keep it open for a minute after their last call. Terminals always open their own connection. For inspection calls, this replaces any `ControlMaster`, `ControlPath` or `ControlPersist` setting in your SSH config. Windows opens a new connection for each call.
+The host views always read the host itself. A WSL terminal on a Windows host still shows Windows services and ports.
 
-Changing a connection's destination, username, port, or key clears its cached host facts and inspection results. Open terminals keep their existing sessions until you reconnect. A remote shell selected for the previous target is cleared.
+| Host    | Views                                                       |
+| ------- | ----------------------------------------------------------- |
+| Linux   | Terminal, Files, Docker, Systemd, Logs, Ports, History      |
+| macOS   | Terminal, Files, Docker, Services, Logs, Ports, History     |
+| Windows | Terminal, Files, Docker, Services, Logs (containers), Ports |
 
 ## Transfer files
 
-Open a saved host and select **Files** in the sidebar. The browser starts in the SSH account's home folder. The breadcrumbs above the file list show the current path. Select any ancestor to open it.
-
-To type or paste an absolute path, select **Edit path**, enter the path, and press Enter. Click a folder suggestion or select it with the arrow keys and press Enter. If there's one suggestion, press Tab to complete it and keep typing. Enable **Show hidden files** to see names beginning with a dot.
-
-Select **Upload files** to choose one or more local files, or drop them into the open folder. Dropping files on a host terminal uploads them to that account's home folder, including when the terminal is in a split. **Filter this folder** narrows the list and highlights matches in file and folder names.
-
-Select a file or use the **Download folder** arrow beside a folder, then choose where to save it. Folder downloads include nested folders, empty folders, and hidden files. They skip symbolic links and special files. If the folder name already exists locally, choose a different download location.
-
-**Transfers** shows progress, speed, and a cancel button. Use **Show all** to expand the queue. You can switch views while files copy. When a file already exists, select **Review** to replace it or keep the existing copy.
+**Files** browses the host's files and copies files between the host and your computer. Files dropped on a host terminal upload to the account's home folder.
 
 <figure class="docs-screenshot">
   <a href={filesScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={filesScreenshot.src}
-      alt="Files showing the current folder in breadcrumbs and two matching results below the filter."
+      alt="Files open on an example host, listing a folder's contents with the transfer queue below."
     />
   </a>
-  <figcaption>
-    The path stays visible while filtering the open folder. Example host and files.
-  </figcaption>
 </figure>
 
-Transfers use SFTP with your saved SSH connection. The host must enable SFTP and accept your key or SSH agent without a password prompt. Access follows the SSH account's file permissions, including when sudo is enabled for host inspection. On Windows hosts, a path such as `/C:/Users/Lee` refers to the account's Windows files.
+Transfers use SFTP over your saved connection. The host must have SFTP turned on and accept an SSH key or ssh-agent login. Files uses the SSH account's own permissions and never uses sudo.
 
-## Windows 10 and 11 hosts
+Folder downloads include subfolders, empty folders, and hidden files. They skip symbolic links and special files. If a file already exists, you choose whether to replace it. On Windows hosts, a path such as `/C:/Users/Lee` means `C:\Users\Lee`.
 
-Enable the Windows OpenSSH Server and save the host as a normal SSH connection. Shell detection needs an accepted host key and key or agent authentication that works without a prompt.
+## Groups, tags, and deleting
 
-When you open a new terminal for a Windows host, choose a shell from the grouped list. It offers Windows PowerShell, Command Prompt, PowerShell 7 and Git Bash when found, other supported shells on the account's PATH, and each available WSL distribution. Select **Connect** to open that shell inside Control Room. Control Room saves the list with the host's details, so after the first detection the picker opens with the saved list at once and checks for changes in the background. **Refresh available shells** checks right away.
+Put a host in a group and give it up to five tags. Groups and tags are saved only on your computer.
 
-Installed Windows Terminal profiles that launch a supported shell also appear in the picker. The profile's command and arguments run over SSH. Its graphical window, colors, and other desktop settings remain in Windows Terminal.
+**Delete connection** also closes that host's tabs and deletes its saved command history.
 
-Reconnect and restored tabs reuse their chosen shell. **New terminal** lets you choose another shell on the same host. If a selected shell was removed, open a new terminal and choose an available one.
-
-Windows hosts offer Terminal, Files, Services, Ports, Docker, and container Logs. Scratchpad opens from the terminal toolbar. Docker has its own sidebar entry, as on Linux hosts. Docker and Logs require the Windows Docker CLI and daemon access for the SSH account; their views report when either is unavailable. Optional header metrics show Windows resource readings. Inspection always reads Windows itself, including when the terminal runs WSL. WSL uses the distribution's default user and shell. Enhanced History is unavailable on these connections.
-
-## macOS hosts
-
-Enable **Remote Login** in macOS System Settings and allow your SSH account. Save the Mac like any other SSH host. Shell discovery and inspection require an accepted host key and key or agent authentication that works without a prompt.
-
-Choose zsh, Bash, or an installed fish shell, then select **Connect**. Once the Mac's details are saved, the picker opens with the saved shell list and checks for changes in the background. Reconnect and restored tabs retain the selected shell. Mac hosts offer Terminal, Files, Services, Ports, Docker, Logs, History, and Scratchpad. Inspection reads macOS even when another shell is selected.
-
-The SSH account can inspect its own launchd agent domains and the system service inventory. Reading other processes, protected logs, or Packet Filter rules may need sudo. Docker requires an installed CLI and an accessible daemon in the account's selected Docker context.
-
-## Organize and remove hosts
-
-Put a connection in one group and add up to five tags to help find it. Groups and tags are stored on your computer; they do not change the host. Search finds names, addresses, groups, and tags.
-
-**Delete connection** also removes its open host tabs and saved command history. Local terminal tabs are unaffected.
-
-If SSH or the access test fails, see [Troubleshooting](/control-room/help/troubleshooting/).
+If a connection fails, see [Troubleshooting](/control-room/help/troubleshooting/).

@@ -9,7 +9,12 @@ import {
   socket,
 } from "../app-fixtures";
 import { systemdInspection } from "../systemd-fixtures";
-import type { PersistedWorkspaceState } from "../../types";
+import type {
+  EstablishedConnections,
+  FirewallStatus,
+  ListeningSocket,
+  PersistedWorkspaceState,
+} from "../../types";
 import registry from "./scenarios.json";
 
 const params = new URLSearchParams(location.search);
@@ -21,6 +26,103 @@ const pending = <T>() => new Promise<T>(() => {});
 const windowsHost = loading === "windows-services" || loading === "shell-picker";
 const firstMacConnection = scenario === "dialogs" && state === "mac-shell-picker";
 const newHostTerminal = loading === "new-host-terminal";
+const portsPopulated = scenario === "ports" && state === "populated";
+const portsCollectedAt = "2026-11-01T09:59:58Z";
+const populatedPorts: ListeningSocket[] = [
+  {
+    ...socket,
+    id: "tcp:0.0.0.0:22",
+    port: 22,
+    processName: "sshd",
+    processId: 812,
+    systemdUnit: "ssh.service",
+  },
+  {
+    ...socket,
+    id: "tcp:[::]:22",
+    addressFamily: "ipv6",
+    localAddress: "::",
+    port: 22,
+    processName: "sshd",
+    processId: 812,
+    systemdUnit: "ssh.service",
+  },
+  {
+    ...socket,
+    id: "tcp:0.0.0.0:443",
+    port: 443,
+    processName: "docker-proxy",
+    processId: 2210,
+    systemdUnit: "docker.service",
+  },
+  {
+    ...socket,
+    id: "tcp:127.0.0.1:5432",
+    localAddress: "127.0.0.1",
+    port: 5432,
+    processName: "postgres",
+    processId: 1045,
+    systemdUnit: "postgresql.service",
+  },
+  {
+    ...socket,
+    id: "udp:127.0.0.53:53",
+    protocol: "udp",
+    localAddress: "127.0.0.53",
+    port: 53,
+    processName: "systemd-resolve",
+    processId: 601,
+    systemdUnit: "systemd-resolved.service",
+  },
+];
+const populatedConnections: EstablishedConnections = {
+  groups: [
+    {
+      key: "tcp:443:docker-proxy",
+      protocol: "tcp",
+      localPort: 443,
+      processName: "docker-proxy",
+      processId: 2210,
+      systemdUnit: "docker.service",
+      established: 12,
+      remoteAddressCount: 3,
+      remotes: [
+        { address: "203.0.113.24", count: 7 },
+        { address: "198.51.100.9", count: 4 },
+        { address: "192.0.2.31", count: 1 },
+      ],
+    },
+    {
+      key: "tcp:22:sshd",
+      protocol: "tcp",
+      localPort: 22,
+      processName: "sshd",
+      processId: 812,
+      systemdUnit: "ssh.service",
+      established: 1,
+      remoteAddressCount: 1,
+      remotes: [{ address: "192.0.2.15", count: 1 }],
+    },
+  ],
+  totalEstablished: 13,
+  truncated: false,
+  collectedAt: portsCollectedAt,
+};
+const populatedFirewall: FirewallStatus = {
+  backend: "ufw",
+  available: true,
+  active: true,
+  defaultIncoming: "deny",
+  rules: [22, 443].map((port) => ({
+    to: `${port}/tcp`,
+    port,
+    protocol: "tcp",
+    action: "ALLOW",
+    from: "Anywhere",
+    ipv6: false,
+  })),
+  collectedAt: portsCollectedAt,
+};
 if (
   !Object.hasOwn(registry.scenarios, scenario) ||
   !registry.scenarios[scenario as keyof typeof registry.scenarios].states.includes(state)
@@ -421,14 +523,24 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       break;
     case "list_containers":
       if (loading === "docker" || loading?.startsWith("ports")) return pending();
-      if (scenario === "pages" || loading) {
+      if (scenario === "pages" || loading || portsPopulated) {
         result = containers;
         break;
       }
       throw new Error(portsTimeout);
     case "inspect_container":
       if (loading === "docker-inspector") return pending();
-      result = { ...containerDetails, id: args.container ?? containerDetails.id };
+      {
+        const inspected = containers.find((item) => item.id === args.containerId);
+        result = {
+          ...containerDetails,
+          id: args.containerId ?? containerDetails.id,
+          name: inspected?.name ?? containerDetails.name,
+          imageReference: inspected?.image ?? containerDetails.imageReference,
+          state: inspected?.state ?? containerDetails.state,
+          running: (inspected?.state ?? containerDetails.state) === "running",
+        };
+      }
       break;
     case "start_docker_log_stream":
       result = { streamId: "example-stream" };
@@ -457,6 +569,10 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       break;
     case "list_ports":
       if (loading === "ports") return pending();
+      if (portsPopulated) {
+        result = populatedPorts;
+        break;
+      }
       if (loading === "ports-discovering") {
         result = [
           socket,
@@ -468,6 +584,10 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
     case "inspect_connections":
     case "inspect_firewall":
       if (loading) return pending();
+      if (portsPopulated) {
+        result = command === "inspect_connections" ? populatedConnections : populatedFirewall;
+        break;
+      }
       throw new Error(portsQueueBusy);
     case "sample_header_metrics":
       if (scenario === "metrics") return (await trendSample()) as T;
