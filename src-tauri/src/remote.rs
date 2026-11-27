@@ -1286,7 +1286,7 @@ impl LogTimeRange {
     }
 
     pub(crate) fn docker_args(self) -> String {
-        format!("--since {} --until {} --timestamps", self.start, self.end)
+        format!("--since {} --until {}", self.start, self.end)
     }
 
     pub(crate) fn macos_bounds(self) -> (String, String) {
@@ -1603,11 +1603,12 @@ pub(crate) fn docker_log_args(
     follow: bool,
     time_range: Option<LogTimeRange>,
 ) -> String {
-    match time_range {
+    let read = match time_range {
         Some(range) => range.docker_args(),
         None if follow => format!("--tail {lines} --follow"),
         None => format!("--tail {lines}"),
-    }
+    };
+    format!("{read} --timestamps")
 }
 
 fn docker_log_command(

@@ -750,7 +750,11 @@ fn container_listing_requests_only_selected_compose_labels() {
 fn docker_logs_merge_container_stderr_into_the_stream() {
     assert_eq!(
         docker_log_command("container-1", 200, true, None),
-        "env LC_ALL=C docker logs --tail 200 --follow 'container-1' 2>&1"
+        "env LC_ALL=C docker logs --tail 200 --follow --timestamps 'container-1' 2>&1"
+    );
+    assert_eq!(
+        docker_log_command("container-1", 50, false, None),
+        "env LC_ALL=C docker logs --tail 50 --timestamps 'container-1' 2>&1"
     );
     assert_eq!(
         journal_command("ssh.service", 50, false, None).unwrap(),
