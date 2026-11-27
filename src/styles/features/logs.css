@@ -448,6 +448,15 @@
   color: var(--text-faint);
 }
 
+.log-stamp {
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  padding-inline: 0.5ch;
+  margin-right: 0.5ch;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
 .log-separator {
   margin-inline: 0.3ch;
   color: color-mix(in srgb, var(--text-faint) 55%, transparent);

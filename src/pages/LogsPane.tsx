@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -33,6 +34,7 @@ import {
   LogLineCache,
   lineMatches,
   type LogLevelFilter,
+  type LogSegmentRole,
   type ParsedLogLine,
 } from "../lib/log-lines";
 import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
@@ -84,23 +86,34 @@ const rangeDateFormat = new Intl.DateTimeFormat(undefined, {
 const CHUNK_LINES = 100;
 const LINE_HEIGHT = 1.55;
 type LogRowData = { number: number; line: ParsedLogLine };
+const TIMESTAMP_ROLES = new Set<LogSegmentRole>(["date", "separator", "time", "fraction", "zone"]);
 
 function LogRow({ number, line, query }: LogRowData & { query: string }) {
   const parts = query ? highlightSegments(line.segments, query) : null;
-  const content = line.segments.map((segment, index) => {
+  const stamp: ReactNode[] = [];
+  const rest: ReactNode[] = [];
+  line.segments.forEach((segment, index) => {
     const text = parts
       ? parts[index].map((part, partIndex) =>
           part.match ? <mark key={partIndex}>{part.text}</mark> : part.text,
         )
       : segment.text;
-    return segment.role === "message" ? (
-      <Fragment key={index}>{text}</Fragment>
-    ) : (
-      <span key={index} className={`log-${segment.role}`}>
-        {text}
-      </span>
-    );
+    const element =
+      segment.role === "message" ? (
+        <Fragment key={index}>{text}</Fragment>
+      ) : (
+        <span key={index} className={`log-${segment.role}`}>
+          {text}
+        </span>
+      );
+    (TIMESTAMP_ROLES.has(segment.role) ? stamp : rest).push(element);
   });
+  const content = (
+    <>
+      {stamp.length > 0 && <span className="log-stamp">{stamp}</span>}
+      {rest}
+    </>
+  );
   return (
     <div
       className="log-line"
