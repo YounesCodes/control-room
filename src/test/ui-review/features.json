@@ -881,7 +881,19 @@
       "capture": [
         {
           "scenario": "logs",
-          "states": ["stopped", "populated", "errors", "search", "restricted"]
+          "states": [
+            "stopped",
+            "populated",
+            "errors",
+            "search",
+            "restricted",
+            "source-search",
+            "source-no-matches",
+            "time-range-custom",
+            "time-range-invalid",
+            "time-range-active",
+            "time-range-empty"
+          ]
         },
         {
           "scenario": "pages",
