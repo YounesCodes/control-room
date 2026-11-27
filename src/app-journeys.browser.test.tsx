@@ -3492,8 +3492,13 @@ describe("complete app journeys with typed IPC fixtures", () => {
       .toBeVisible();
     await navigate("Logs");
     await expect
-      .element(page.getByText("Docker is not installed on this host.", { exact: true }))
+      .element(
+        page.getByText("Couldn’t load containers. Docker is not installed on this host.", {
+          exact: true,
+        }),
+      )
       .toBeVisible();
+    await expect.element(page.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
     expect(native.invoke.mock.calls.some(([command]) => command === "list_services")).toBe(false);
   });
 

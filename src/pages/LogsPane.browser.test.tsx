@@ -12,13 +12,15 @@ const native = vi.hoisted(() => ({
   streamState: null as ((event: { payload: StreamStateEvent }) => void) | null,
   startJournal: vi.fn(
     async (
-      _connectionId: string,
-      source: string,
-      _lines: number,
-      _follow: boolean,
-      _password: string | null,
-      _output: unknown,
-      _bounds: LogTimeBounds | null,
+      ...[, source]: [
+        connectionId: string,
+        source: string,
+        lines: number,
+        follow: boolean,
+        password: string | null,
+        output: unknown,
+        bounds: LogTimeBounds | null,
+      ]
     ) => ({ streamId: `stream-${source}` }),
   ),
 }));

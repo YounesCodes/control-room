@@ -226,6 +226,7 @@ export function LogsPane({
   const heldTimerRef = useRef<number | null>(null);
   const lineCacheRef = useRef(new LogLineCache());
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const rangeButtonRef = useRef<HTMLButtonElement>(null);
   const disposedRef = useRef(false);
   const startingRef = useRef(false);
   const startRequestRef = useRef(0);
@@ -623,8 +624,13 @@ export function LogsPane({
       void start(null, { type: sourceType, id: sourceId, timeRange, ...options }, true);
   }
 
-  function applyTimeRange(next: LogTimeRange | null) {
+  function closeRangeDialog() {
     setRangeDialogOpen(false);
+    rangeButtonRef.current?.focus();
+  }
+
+  function applyTimeRange(next: LogTimeRange | null) {
+    closeRangeDialog();
     if (sourceId && (next || wantsStreamRef.current)) {
       void start(null, { type: sourceType, id: sourceId, tail, follow, timeRange: next }, true);
     } else {
@@ -928,6 +934,7 @@ export function LogsPane({
       <div className="log-panel">
         <div className="log-view-bar">
           <button
+            ref={rangeButtonRef}
             className="secondary-button compact-button log-range-button"
             type="button"
             aria-haspopup="dialog"
@@ -1108,7 +1115,7 @@ export function LogsPane({
         <LogTimeRangeDialog
           value={timeRange}
           launchd={macosHost && sourceType === "systemd" && sourceId !== ALL_JOURNAL}
-          onClose={() => setRangeDialogOpen(false)}
+          onClose={closeRangeDialog}
           onApply={applyTimeRange}
         />
       )}
