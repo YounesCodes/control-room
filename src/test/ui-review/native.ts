@@ -188,14 +188,16 @@ const journalMessages = [
   "worker: retrying job 99172 in 5s (attempt 2 of 5)",
   'worker: request payload={"id":99172,"tenant":"example","items":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],"trace":"0f4c2a9e7b1d4c6a8e3f5b2d9c7a1e4f"} status=retry',
   "worker: batch 4813 finished in 2.07s",
-  "worker: debug: heartbeat ok",
+  'time="{time}" level=debug msg="worker: heartbeat ok"',
 ];
 const journalOutput = Array.from({ length: 48 }, (_, index) => {
   const second = String(index % 60).padStart(2, "0");
   const micros = String(104233 + index * 7919).slice(0, 6);
-  return `2026-11-01T09:58:${second}.${micros}+00:00 example-host worker[1234]: ${
-    journalMessages[index % journalMessages.length]
-  }
+  const message = journalMessages[index % journalMessages.length].replace(
+    "{time}",
+    `2026-11-01T09:58:${second}.${micros}Z`,
+  );
+  return `2026-11-01T09:58:${second}.${micros}+00:00 example-host worker[1234]: ${message}
 `;
 }).join("");
 const containerTerminals =
@@ -434,11 +436,11 @@ export async function invoke<T>(command: string, args: Record<string, any> = {})
       result = { streamId: "example-stream" };
       setTimeout(() => {
         const lines = [
-          "Nov 01 09:58:02 example worker[1234]: Starting worker.service",
-          "Nov 01 09:58:03 example worker[1234]: Connected to queue example",
-          "Nov 01 09:59:41 example worker[1234]: warning: retrying job 41",
-          "Nov 01 09:59:44 example worker[1234]: job 41 finished",
-          "Nov 01 10:00:00 example worker[1234]: Idle, waiting for jobs",
+          "2026-11-01T09:58:02.104233871Z 2026-11-01 09:58:02,101 INFO Starting worker",
+          "2026-11-01T09:58:03.220114502Z Connected to queue example",
+          "2026-11-01T09:59:41.004512300Z 2026-11-01 09:59:40,998 WARNING retrying job 41",
+          "2026-11-01T09:59:44.551200019Z job 41 finished",
+          "2026-11-01T10:00:00.000713332Z Idle, waiting for jobs",
         ];
         args.output.onmessage(new TextEncoder().encode(lines.join("\n") + "\n").buffer);
       }, 0);

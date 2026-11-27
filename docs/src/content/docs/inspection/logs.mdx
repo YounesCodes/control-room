@@ -27,13 +27,13 @@ To look back, open **Time range** and choose a preset or **Custom**. Enter the s
 
 Lines that mention warnings or errors are marked in the margin. **Warnings** and **Errors** show only those lines, with a count for each. A level the line states itself, such as `level=info`, `"log.level": "WARN"`, `[error]`, or `FATAL:`, decides. Otherwise the app looks for words such as `warning`, `error`, `failed`, or `fatal` in the message. It does not read the journal priority.
 
-Search shows the loaded lines that contain your text and highlights each match. Press `Ctrl+F` to search and `Escape` to clear it. Timestamps and host names are dimmed so messages stand out. Line numbers are not copied with the text. You can turn line wrapping off or clear the view.
+Search shows the loaded lines that contain your text and highlights each match. Press `Ctrl+F` to search and `Escape` to clear it. The time of day stands out in each timestamp, and host names are dimmed so messages stand out. When a message starts with its own timestamp for the same moment, that copy is dimmed too. Line numbers are not copied with the text. You can turn line wrapping off or clear the view.
 
 Scrolling up keeps your reading position. **Jump to latest** returns to new lines and shows how many arrived. Focus the log to scroll it with the arrow keys, `Page Up`, `Page Down`, `Home`, and `End`.
 
 If the SSH account can’t read the system journal, Logs says so instead of showing an empty stream. Select **Retry with sudo**, turn on **Elevated commands** in Settings, or add the account to the `adm` or `systemd-journal` group.
 
-Systemd logs come from `journalctl`. Container logs come from `docker logs`. Control Room strips terminal color codes. Closing the view stops the stream. Logs stay in memory and the view keeps up to the newest 10,000 lines. For custom journal queries, use the terminal.
+Systemd logs come from `journalctl`. Container logs come from `docker logs`, and each line shows when Docker received it. Control Room strips terminal color codes. Closing the view stops the stream. Logs stay in memory and the view keeps up to the newest 10,000 lines. For custom journal queries, use the terminal.
 
 On Windows hosts, Logs offers Docker containers only. It reads both standard output and error output through the Windows Docker CLI. Windows service event logs are not included.
 

@@ -89,6 +89,63 @@ describe("parseLogLine", () => {
     expect(line.level).toBe("error");
   });
 
+  const repeated = (text: string) =>
+    parseLogLine(text).segments.find((segment) => segment.role === "repeated-time")?.text;
+
+  it("dims a message timestamp that repeats the journal or Docker time", () => {
+    const journal =
+      '2026-11-26T22:52:20.663410+00:00 debian-docker dockerd[766]: time="2026-11-26T22:52:20.663123456Z" level=warning msg="slow"';
+    const line = parseLogLine(journal);
+    expect(line.segments.slice(-3)).toEqual([
+      { role: "message", text: ' time="' },
+      { role: "repeated-time", text: "2026-11-26T22:52:20.663123456Z" },
+      { role: "message", text: '" level=warning msg="slow"' },
+    ]);
+    expect(joined(line)).toBe(journal);
+    expect(line.level).toBe("warning");
+    expect(
+      repeated(
+        "2026-11-26T22:52:21.002000000Z 2026-11-26 22:52:20.663 UTC [36] LOG:  checkpoint starting",
+      ),
+    ).toBe("2026-11-26 22:52:20.663 UTC");
+    expect(
+      repeated('2026-11-26T22:52:20.700000000Z {"level":"info","time":"2026-11-26T22:52:20Z"}'),
+    ).toBe("2026-11-26T22:52:20Z");
+    expect(
+      repeated(
+        "2026-11-26T22:52:20.700000000Z 2026/11/26 22:52:20 [error] 29#29: connect() failed",
+      ),
+    ).toBe("2026/11/26 22:52:20");
+    expect(repeated("2026-11-26T22:52:20.700000000Z [2026-11-26 22:52:20,120] INFO ready")).toBe(
+      "2026-11-26 22:52:20,120",
+    );
+  });
+
+  it("compares a zoneless message time with UTC and the host offset", () => {
+    expect(
+      repeated("2026-11-26T23:52:20.100000+01:00 host app[1]: 2026-11-26 23:52:20 started"),
+    ).toBe("2026-11-26 23:52:20");
+    expect(
+      repeated("2026-11-26T23:52:20.100000+01:00 host app[1]: 2026-11-26 22:52:20 started"),
+    ).toBe("2026-11-26 22:52:20");
+    expect(
+      repeated("2026-11-26T23:52:20.100000+01:00 host app[1]: 2026-11-26T22:52:20+01:00 started"),
+    ).toBeUndefined();
+  });
+
+  it("keeps a message timestamp that records a different moment", () => {
+    expect(
+      repeated("2026-11-26T22:52:25.000000000Z 2026-11-26 22:52:20 queued job 7"),
+    ).toBeUndefined();
+    expect(repeated("2026-11-26 22:52:20 2026-11-26 22:52:20 no source")).toBe(
+      "2026-11-26 22:52:20",
+    );
+    expect(repeated("GET /health 2026-11-26 22:52:20")).toBeUndefined();
+    expect(
+      repeated("2026-11-26T22:52:20.000000000Z request 2026-11-26 22:52:20 finished"),
+    ).toBeUndefined();
+  });
+
   it("marks Control Room stream starts and journalctl separators", () => {
     expect(parseLogLine("[systemd worker.service] stream started").marker).toBe(true);
     expect(parseLogLine("[docker api] stream started").marker).toBe(true);

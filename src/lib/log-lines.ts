@@ -1,6 +1,6 @@
 export type LogLevel = "error" | "warning";
 export type LogSegmentRole =
-  "date" | "separator" | "time" | "fraction" | "zone" | "source" | "message";
+  "date" | "separator" | "time" | "fraction" | "zone" | "source" | "repeated-time" | "message";
 export type LogLevelFilter = "all" | LogLevel;
 
 export interface LogSegment {
@@ -19,6 +19,12 @@ export interface ParsedLogLine {
 const TERMINAL_ESCAPES = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-_]/g;
 const ISO_PREFIX =
   /^(\d{4}-\d{2}-\d{2})([T ])(\d{2}:\d{2}:\d{2})([.,]\d+)?(Z| ?UTC|[+-]\d{2}:?\d{2})?(?=\s)/;
+const INNER_TIME = String.raw`(\d{4})[-/](\d{2})[-/](\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:[.,](\d+))?(?: ?(Z|UTC|GMT|[+-]\d{2}:?\d{2}))?(?![\d:])`;
+const INNER_STAMP = new RegExp(
+  String.raw`^(\s*(?:[[(]|(?:time|ts|t|timestamp)="?|\{[^{}]{0,60}?"(?:time|timestamp|ts|@timestamp)"\s*:\s*")?)` +
+    INNER_TIME,
+);
+const REPEATED_TIME_WINDOW_MS = 2_000;
 const JOURNAL_SOURCE = /^(\s+)(\S+ (?:[^\s:[\]]+\[\d+\]|kernel):)(?=\s|$)/;
 const STREAM_MARKER = /^\[(?:systemd|docker) .+\] stream started$/;
 const JOURNAL_MARKER = /^-- .+ --$/;
@@ -77,6 +83,69 @@ export function logLevel(message: string): LogLevel | null {
   return null;
 }
 
+interface WallClock {
+  ms: number;
+  offsetMinutes: number | null;
+}
+
+function wallClock(
+  date: string,
+  time: string,
+  fraction: string | undefined,
+  zone: string | undefined,
+): WallClock {
+  const [year, month, day] = date.split(/[-/]/).map(Number);
+  const [hour, minute, second] = time.split(":").map(Number);
+  const millis = fraction ? Number(`0.${fraction.replace(/^[.,]/, "")}`) * 1000 : 0;
+  return {
+    ms: Date.UTC(year, month - 1, day, hour, minute, second, millis),
+    offsetMinutes: zoneOffsetMinutes(zone),
+  };
+}
+
+function zoneOffsetMinutes(zone: string | undefined): number | null {
+  const value = zone?.trim();
+  if (!value) return null;
+  if (value === "Z" || value === "UTC" || value === "GMT") return 0;
+  const offset = /^([+-])(\d{2}):?(\d{2})$/.exec(value);
+  if (!offset) return null;
+  return (offset[1] === "-" ? -1 : 1) * (Number(offset[2]) * 60 + Number(offset[3]));
+}
+
+function repeatsOuterTime(outer: WallClock, inner: WallClock) {
+  const outerOffset = outer.offsetMinutes ?? 0;
+  const instant = outer.ms - outerOffset * 60_000;
+  const candidates =
+    inner.offsetMinutes === null
+      ? [inner.ms, inner.ms - outerOffset * 60_000]
+      : [inner.ms - inner.offsetMinutes * 60_000];
+  return candidates.some((candidate) => Math.abs(candidate - instant) <= REPEATED_TIME_WINDOW_MS);
+}
+
+function messageSegments(message: string, outer: WallClock | null): LogSegment[] {
+  const inner = outer && INNER_STAMP.exec(message);
+  if (
+    !inner ||
+    !repeatsOuterTime(
+      outer,
+      wallClock(
+        `${inner[2]}-${inner[3]}-${inner[4]}`,
+        `${inner[5]}:${inner[6]}:${inner[7]}`,
+        inner[8],
+        inner[9],
+      ),
+    )
+  )
+    return [{ role: "message", text: message }];
+  const start = inner[1].length;
+  const end = inner[0].length;
+  return [
+    { role: "message" as const, text: message.slice(0, start) },
+    { role: "repeated-time" as const, text: message.slice(start, end) },
+    { role: "message" as const, text: message.slice(end) },
+  ].filter((segment) => segment.text);
+}
+
 export function parseLogLine(raw: string): ParsedLogLine {
   const text = cleanLogText(raw);
   if (STREAM_MARKER.test(text) || JOURNAL_MARKER.test(text))
@@ -84,8 +153,10 @@ export function parseLogLine(raw: string): ParsedLogLine {
 
   const segments: LogSegment[] = [];
   let rest = text;
+  let outer: WallClock | null = null;
   const stamp = ISO_PREFIX.exec(rest);
   if (stamp) {
+    outer = wallClock(stamp[1], stamp[3], stamp[4], stamp[5]);
     segments.push(
       { role: "date", text: stamp[1] },
       { role: "separator", text: stamp[2] },
@@ -100,7 +171,7 @@ export function parseLogLine(raw: string): ParsedLogLine {
       rest = rest.slice(source[0].length);
     }
   }
-  if (rest) segments.push({ role: "message", text: rest });
+  if (rest) segments.push(...messageSegments(rest, outer));
   return { text, segments, level: logLevel(rest), marker: false };
 }
 
