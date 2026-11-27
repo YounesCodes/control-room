@@ -842,25 +842,9 @@ export function LogsPane({
             ))}
           </select>
         </label>
-        <label
-          className="checkbox-label"
-          title={timeRange ? "Clear the time range to follow new lines" : undefined}
-        >
-          <input
-            type="checkbox"
-            checked={!timeRange && follow}
-            disabled={Boolean(timeRange)}
-            onChange={(event) => {
-              const next = event.target.checked;
-              setFollow(next);
-              changeReadOptions({ tail, follow: next });
-            }}
-          />{" "}
-          Receive new lines
-        </label>
         <div className="log-transport">
           <button
-            className="secondary-button compact-button log-start"
+            className={`${streamStatus === "stopped" ? "primary-button" : "secondary-button"} compact-button log-start`}
             type="button"
             onClick={() => void (streamStatus === "stopped" ? start() : stopStream())}
             disabled={streamStatus === "stopping" || (streamStatus === "stopped" && !sourceId)}
@@ -878,6 +862,22 @@ export function LogsPane({
             {paused ? <Play size={14} /> : <Pause size={14} />} {paused ? "Resume" : "Pause"}
           </button>
         </div>
+        <label
+          className="checkbox-label"
+          title={timeRange ? "Clear the time range to follow new lines" : undefined}
+        >
+          <input
+            type="checkbox"
+            checked={!timeRange && follow}
+            disabled={Boolean(timeRange)}
+            onChange={(event) => {
+              const next = event.target.checked;
+              setFollow(next);
+              changeReadOptions({ tail, follow: next });
+            }}
+          />{" "}
+          Receive new lines
+        </label>
       </div>
       {sourceCache.error && (
         <div className="inline-warning" role="status">
