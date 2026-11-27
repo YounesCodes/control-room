@@ -420,6 +420,7 @@
 }
 
 .log-output-wrapped .log-line {
+  padding-block: 3px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -475,22 +476,6 @@
   background: color-mix(in srgb, var(--failure) 9%, transparent);
   box-shadow: inset 2px 0 var(--failure);
   color: color-mix(in srgb, var(--failure) 30%, var(--text-strong));
-}
-
-.log-output-wrapped .log-line:not([data-marker]) {
-  box-shadow: inset 0 -1px var(--border-subtle);
-}
-
-.log-output-wrapped .log-line[data-level="warning"] {
-  box-shadow:
-    inset 2px 0 var(--warning),
-    inset 0 -1px var(--border-subtle);
-}
-
-.log-output-wrapped .log-line[data-level="error"] {
-  box-shadow:
-    inset 2px 0 var(--failure),
-    inset 0 -1px var(--border-subtle);
 }
 
 .log-line[data-level="warning"]::before {
