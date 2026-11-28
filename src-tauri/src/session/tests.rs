@@ -17,7 +17,8 @@ use crate::models::{SessionEndCategory, SessionState};
 use super::{
     CONNECTED_MARKER, MAX_UNACKNOWLEDGED_OUTPUT_BYTES, OUTPUT_READ_BUFFER_BYTES, OutputFlow,
     SessionManager, SessionMode, StartupTiming, TERMINAL_TYPE, TerminalFailureDetector,
-    TerminalFailureHint, classify_local_exit, classify_session_exit, interactive_shell_command,
+    TerminalFailureHint, TerminalInput, classify_local_exit, classify_session_exit,
+    interactive_shell_command,
 };
 
 #[cfg(windows)]
@@ -27,6 +28,41 @@ use super::resize_pty;
 use super::map_pty_kill_result;
 
 type Classification = (Option<TerminalFailureHint>, bool);
+
+#[derive(Clone, Default)]
+struct RecordedInput(Arc<parking_lot::Mutex<Vec<u8>>>);
+
+impl std::io::Write for RecordedInput {
+    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().extend_from_slice(data);
+        Ok(data.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn resize_absorbers_wait_for_the_next_input_and_precede_it() {
+    let recorded = RecordedInput::default();
+    let mut input = TerminalInput::new(Box::new(recorded.clone()), Some(b"<absorb>"));
+    input.resized();
+    input.resized();
+    assert!(recorded.0.lock().is_empty());
+    input.write(b"e").unwrap();
+    input.write(b"cho").unwrap();
+    assert_eq!(recorded.0.lock().as_slice(), b"<absorb><absorb>echo");
+}
+
+#[test]
+fn shells_without_a_resize_absorber_receive_input_unchanged() {
+    let recorded = RecordedInput::default();
+    let mut input = TerminalInput::new(Box::new(recorded.clone()), None);
+    input.resized();
+    input.write(b"ls").unwrap();
+    assert_eq!(recorded.0.lock().as_slice(), b"ls");
+}
 
 fn observe_chunked(stream: &[u8], boundaries: &[usize]) -> Classification {
     let mut detector = TerminalFailureDetector::default();
@@ -1088,7 +1124,6 @@ fn closing_git_bash_ends_its_real_shell_and_releases_the_pseudoconsole() {
 fn git_bash_keeps_the_first_key_typed_after_a_resize() {
     const READLINE_READY: &[u8] = b"\x1b[?2004h";
     const READLINE_BLOCKED_IN_READ: Duration = Duration::from_millis(200);
-    const PAUSE_BEFORE_TYPING: Duration = Duration::from_millis(150);
     const PAUSE_AFTER_FIRST_KEY: Duration = Duration::from_millis(60);
     let shell = crate::local_shell::resolve_installed("git-bash").unwrap();
     let pair = native_pty_system().openpty(PtySize::default()).unwrap();
@@ -1098,7 +1133,10 @@ fn git_bash_keeps_the_first_key_typed_after_a_resize() {
         .unwrap();
     drop(pair.slave);
     let mut reader = pair.master.try_clone_reader().unwrap();
-    let mut writer = pair.master.take_writer().unwrap();
+    let mut input = TerminalInput::new(
+        pair.master.take_writer().unwrap(),
+        shell.input_after_resize(),
+    );
     let (sender, receiver) = mpsc::channel();
     std::thread::spawn(move || {
         let mut buffer = [0_u8; 4096];
@@ -1111,7 +1149,7 @@ fn git_bash_keeps_the_first_key_typed_after_a_resize() {
     });
     let mut output = Vec::new();
     let mut answered_queries = 0;
-    let mut wait_for = |writer: &mut Box<dyn Write + Send>, done: &dyn Fn(&[u8]) -> bool| {
+    let mut wait_for = |input: &mut TerminalInput, done: &dyn Fn(&[u8]) -> bool| {
         let deadline = Instant::now() + Duration::from_secs(20);
         while !done(&output) && Instant::now() < deadline {
             if let Ok(chunk) = receiver.recv_timeout(Duration::from_millis(20)) {
@@ -1122,8 +1160,7 @@ fn git_bash_keeps_the_first_key_typed_after_a_resize() {
                 .filter(|window| *window == b"\x1b[6n")
                 .count();
             while answered_queries < query_count {
-                writer.write_all(b"\x1b[1;1R").unwrap();
-                writer.flush().unwrap();
+                input.write(b"\x1b[1;1R").unwrap();
                 answered_queries += 1;
             }
         }
@@ -1140,27 +1177,23 @@ fn git_bash_keeps_the_first_key_typed_after_a_resize() {
             .count()
     };
 
-    for (attempt, cols) in [(1, 100), (2, 90), (3, 110)] {
-        wait_for(&mut writer, &|output| ready_prompts(output) >= attempt);
+    for (attempt, cols, pause_before_typing) in [
+        (1, 100, Duration::from_millis(150)),
+        (2, 90, Duration::ZERO),
+        (3, 110, Duration::from_millis(150)),
+        (4, 95, Duration::ZERO),
+    ] {
+        wait_for(&mut input, &|output| ready_prompts(output) >= attempt);
         std::thread::sleep(READLINE_BLOCKED_IN_READ);
-        resize_pty(
-            pair.master.as_ref(),
-            writer.as_mut(),
-            cols,
-            24,
-            shell.input_after_resize(),
-        )
-        .unwrap();
-        std::thread::sleep(PAUSE_BEFORE_TYPING);
-        writer.write_all(b"e").unwrap();
-        writer.flush().unwrap();
+        resize_pty(pair.master.as_ref(), &mut input, cols, 24).unwrap();
+        std::thread::sleep(pause_before_typing);
+        input.write(b"e").unwrap();
         std::thread::sleep(PAUSE_AFTER_FIRST_KEY);
-        writer
-            .write_all(format!("cho KEPT_''{attempt}\r").as_bytes())
+        input
+            .write(format!("cho KEPT_''{attempt}\r").as_bytes())
             .unwrap();
-        writer.flush().unwrap();
         let marker = format!("KEPT_{attempt}");
-        wait_for(&mut writer, &|output| {
+        wait_for(&mut input, &|output| {
             String::from_utf8_lossy(output).contains(&marker)
         });
     }
