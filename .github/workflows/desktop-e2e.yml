@@ -43,6 +43,18 @@ jobs:
         if: matrix.shard == 1
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --features desktop-e2e --lib e2e::tests
       - run: npm run test:desktop:build
+      - name: Match msedgedriver to the WebView2 runtime
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $runtime = (Get-ItemProperty -LiteralPath $key).pv
+          $current = (Get-Command msedgedriver.exe -ErrorAction SilentlyContinue | ForEach-Object { & $_.Source --version }) -join ''
+          if ($current -match "WebDriver $($runtime.Split('.')[0])\.") { exit 0 }
+          $directory = Join-Path $env:RUNNER_TEMP "msedgedriver-$runtime"
+          $archive = "$directory.zip"
+          Invoke-WebRequest -Uri "https://msedgedriver.microsoft.com/$runtime/edgedriver_win64.zip" -OutFile $archive
+          Expand-Archive -LiteralPath $archive -DestinationPath $directory -Force
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value $directory
       - name: Check desktop driver environment
         shell: pwsh
         run: |
