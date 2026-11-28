@@ -49,7 +49,7 @@ import {
   Settings,
   ShieldAlert,
   SquareTerminal,
-  StickyNote,
+  NotebookPen,
   Trash2,
   X,
 } from "lucide-react";
@@ -2980,7 +2980,7 @@ export function App() {
                     aria-haspopup="dialog"
                     aria-expanded={scratchpadOpen}
                   >
-                    <StickyNote size={15} />
+                    <NotebookPen size={15} />
                   </button>
                   <button
                     className="session-strip-button"
