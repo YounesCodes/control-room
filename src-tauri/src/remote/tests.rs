@@ -749,13 +749,67 @@ fn container_listing_requests_only_selected_compose_labels() {
 #[test]
 fn docker_logs_merge_container_stderr_into_the_stream() {
     assert_eq!(
-        docker_log_command("container-1", 200, true),
-        "env LC_ALL=C docker logs --tail 200 --follow 'container-1' 2>&1"
+        docker_log_command("container-1", 200, true, None),
+        "env LC_ALL=C docker logs --tail 200 --follow --timestamps 'container-1' 2>&1"
     );
     assert_eq!(
-        journal_command("ssh.service", 50, false),
+        docker_log_command("container-1", 50, false, None),
+        "env LC_ALL=C docker logs --tail 50 --timestamps 'container-1' 2>&1"
+    );
+    assert_eq!(
+        journal_command("ssh.service", 50, false, None).unwrap(),
         "env LC_ALL=C journalctl -u 'ssh.service' -n 50 --no-pager -o short-iso-precise"
     );
+}
+
+#[test]
+fn full_journal_omits_the_unit_filter_for_snapshots_and_following() {
+    assert_eq!(
+        journal_command("all", 200, false, None).unwrap(),
+        "env LC_ALL=C journalctl -n 200 --no-pager -o short-iso-precise"
+    );
+    assert_eq!(
+        journal_command("all", 500, true, None).unwrap(),
+        "env LC_ALL=C journalctl -n 500 --no-pager -o short-iso-precise -f"
+    );
+}
+
+#[test]
+fn log_time_range_queries_host_history_without_following() {
+    let range = LogTimeRange {
+        start: 1_793_521_800,
+        end: 1_793_523_600,
+    }
+    .validate()
+    .unwrap();
+    assert_eq!(
+        journal_command("ssh.service", 50, true, Some(range)).unwrap(),
+        "env LC_ALL=C journalctl -u 'ssh.service' -n 10000 --since=@1793521800 --until=@1793523600 --no-pager -o short-iso-precise"
+    );
+    assert_eq!(
+        docker_log_command("container-1", 50, true, Some(range)),
+        "env LC_ALL=C docker logs --since 1793521800 --until 1793523600 --timestamps 'container-1' 2>&1"
+    );
+    let mac =
+        crate::macos_remote::log_command("system/com.apple.sshd", 50, true, Some(range)).unwrap();
+    assert!(mac.contains("--start") && mac.contains("--end") && mac.contains("+0000"));
+    assert!(mac.contains("tail -n 10000"));
+    assert!(!mac.contains("log stream") && !mac.contains("stdout path"));
+}
+
+#[test]
+fn log_time_range_rejects_inverted_or_unrepresentable_bounds() {
+    for range in [
+        LogTimeRange { start: -1, end: 1 },
+        LogTimeRange { start: 2, end: 1 },
+        LogTimeRange { start: 2, end: 2 },
+        LogTimeRange {
+            start: 1,
+            end: i64::MAX,
+        },
+    ] {
+        assert!(range.validate().is_err());
+    }
 }
 
 #[test]
@@ -854,7 +908,7 @@ fn a_unit_name_a_host_invented_never_reaches_a_journal_command() {
         ));
 
         assert!(
-            validate_systemd_unit_id(unit).is_err(),
+            journal_command(unit, 200, false, None).is_err(),
             "the log request accepted {unit:?} (listed: {})",
             !listed.is_empty()
         );
@@ -899,7 +953,7 @@ fn every_accepted_unit_id_stays_one_quoted_word_in_its_journal_command() {
             "{unit:?} would close the quoted word around it"
         );
 
-        let command = journal_command(&unit, 200, false);
+        let command = journal_command(&unit, 200, false, None).unwrap();
         assert!(
             command.contains(&format!("-u '{unit}'")),
             "the unit is not the quoted argument of -u: {command}"
@@ -947,7 +1001,7 @@ fn a_container_id_a_host_invented_never_reaches_a_docker_command() {
             validate_container_id(container).is_ok(),
             "{container:?} is an ordinary container identifier"
         );
-        let command = docker_log_command(container, 200, true);
+        let command = docker_log_command(container, 200, true, None);
         assert!(
             command.contains(&format!("'{container}'")),
             "the container is not the quoted argument: {command}"

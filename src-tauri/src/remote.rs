@@ -1264,8 +1264,40 @@ struct ManagedStream {
 pub struct LogStreamOptions {
     pub lines: u16,
     pub follow: bool,
+    pub time_range: Option<LogTimeRange>,
     pub elevation: Elevation,
     pub output: Channel<Response>,
+}
+
+pub(crate) const LOG_RANGE_LINES: u16 = 10_000;
+
+#[derive(Clone, Copy, serde::Deserialize)]
+pub struct LogTimeRange {
+    start: i64,
+    end: i64,
+}
+
+impl LogTimeRange {
+    fn validate(self) -> Result<Self, String> {
+        if self.start < 0 || self.start >= self.end || self.end > 253_402_300_799 {
+            return Err("Invalid log time range".into());
+        }
+        Ok(self)
+    }
+
+    pub(crate) fn docker_args(self) -> String {
+        format!("--since {} --until {}", self.start, self.end)
+    }
+
+    pub(crate) fn macos_bounds(self) -> (String, String) {
+        let format = |seconds| {
+            chrono::DateTime::from_timestamp(seconds, 0)
+                .expect("validated log time")
+                .format("%Y-%m-%d %H:%M:%S%z")
+                .to_string()
+        };
+        (format(self.start), format(self.end))
+    }
 }
 
 #[derive(Clone, Default)]
@@ -1291,16 +1323,17 @@ impl StreamManager {
         let LogStreamOptions {
             lines,
             follow,
+            time_range,
             elevation,
             output,
         } = options;
         validate_tail(lines)?;
+        let time_range = time_range.map(LogTimeRange::validate).transpose()?;
         if crate::macos_remote::is_host(connection)? {
-            let command = crate::macos_remote::log_command(service, lines, follow)?;
+            let command = crate::macos_remote::log_command(service, lines, follow, time_range)?;
             return self.start(app, connection, command, elevation, output);
         }
-        let service = validate_systemd_unit_id(service)?;
-        let command = journal_command(service, lines, follow);
+        let command = journal_command(service, lines, follow, time_range)?;
         self.start(app, connection, command, elevation, output)
     }
 
@@ -1314,12 +1347,14 @@ impl StreamManager {
         let LogStreamOptions {
             lines,
             follow,
+            time_range,
             elevation,
             output,
         } = options;
         let container = validate_container_id(container)?;
         validate_tail(lines)?;
-        let command = docker_log_command(container, lines, follow);
+        let time_range = time_range.map(LogTimeRange::validate).transpose()?;
+        let command = docker_log_command(container, lines, follow, time_range);
         let mac = crate::macos_remote::is_host(connection)?;
         let command = if mac {
             crate::macos_remote::command(&command)
@@ -1338,10 +1373,12 @@ impl StreamManager {
         options: LogStreamOptions,
     ) -> Result<StreamStarted, String> {
         validate_tail(options.lines)?;
+        let time_range = options.time_range.map(LogTimeRange::validate).transpose()?;
         let command = crate::windows_inspection::docker_log_command(
             container,
             options.lines,
             options.follow,
+            time_range,
         )?;
         self.start(app, connection, command, Elevation::None, options.output)
     }
@@ -1502,11 +1539,32 @@ impl StreamManager {
     }
 }
 
-fn journal_command(service: &str, lines: u16, follow: bool) -> String {
-    format!(
-        "env LC_ALL=C journalctl -u '{service}' -n {lines} --no-pager -o short-iso-precise{}",
-        if follow { " -f" } else { "" }
-    )
+fn journal_command(
+    service: &str,
+    lines: u16,
+    follow: bool,
+    time_range: Option<LogTimeRange>,
+) -> Result<String, String> {
+    let unit = if service == "all" {
+        String::new()
+    } else {
+        format!(" -u '{}'", validate_systemd_unit_id(service)?)
+    };
+    let read = match time_range {
+        Some(range) => format!(
+            "-n {LOG_RANGE_LINES} --since=@{} --until=@{}",
+            range.start, range.end
+        ),
+        None => format!("-n {lines}"),
+    };
+    Ok(format!(
+        "env LC_ALL=C journalctl{unit} {read} --no-pager -o short-iso-precise{}",
+        if follow && time_range.is_none() {
+            " -f"
+        } else {
+            ""
+        }
+    ))
 }
 
 /// The shell started inside a container: bash when the image has it, otherwise
@@ -1540,11 +1598,27 @@ pub(crate) fn docker_exec_command(
     })
 }
 
-fn docker_log_command(container: &str, lines: u16, follow: bool) -> String {
-    format!(
-        "env LC_ALL=C docker logs --tail {lines}{} '{container}' 2>&1",
-        if follow { " --follow" } else { "" }
-    )
+pub(crate) fn docker_log_args(
+    lines: u16,
+    follow: bool,
+    time_range: Option<LogTimeRange>,
+) -> String {
+    let read = match time_range {
+        Some(range) => range.docker_args(),
+        None if follow => format!("--tail {lines} --follow"),
+        None => format!("--tail {lines}"),
+    };
+    format!("{read} --timestamps")
+}
+
+fn docker_log_command(
+    container: &str,
+    lines: u16,
+    follow: bool,
+    time_range: Option<LogTimeRange>,
+) -> String {
+    let read = docker_log_args(lines, follow, time_range);
+    format!("env LC_ALL=C docker logs {read} '{container}' 2>&1")
 }
 
 fn read_stream_diagnostics(

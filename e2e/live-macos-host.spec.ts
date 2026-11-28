@@ -59,7 +59,7 @@ describe("macOS SSH host journeys against a real Mac", () => {
     await $(".ports-page .arch-chip").waitForExist({ timeout: 30_000 });
     await expect($(".ports-page")).toHaveText(expect.stringContaining("22"));
     await feature("Logs");
-    await $("//label[span[normalize-space()='Service']]/select").selectByAttribute("value", "all");
+    await expect($("input[placeholder='Search services']")).toHaveValue("All unified logs");
     await $("button=Start").click();
     await browser.waitUntil(async () => (await runtime()).streamIds.length === 1, {
       timeout: 30_000,

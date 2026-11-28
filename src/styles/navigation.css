@@ -739,7 +739,6 @@
   right: 14px;
   display: flex;
   max-width: min(520px, calc(100% - 28px));
-  align-items: center;
   gap: 12px;
   margin: 0;
   box-shadow: var(--shadow-popover);

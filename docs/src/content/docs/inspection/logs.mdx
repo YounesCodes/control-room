@@ -5,30 +5,36 @@ description: Read recent service or container logs.
 
 import logsScreenshot from "../../../assets/screenshots/logs.png";
 
-In **Logs**, choose a systemd unit or Docker container, choose the last 50, 100, 200, 500, or 1000 lines, then select **Start**. You can also open logs from a selected service or container.
+On Linux, **Logs** opens with **Full system journal** selected. To narrow the stream, type a systemd unit's name or description in **Journal** and choose a suggestion. For Docker logs, switch **Source** to **Docker**, then search by container name, ID, or image. Suggestions update as you type. Use the arrow keys and Enter to select a result, or Escape to keep the current source.
+
+Choose the last 50, 100, 200, 500, or 1000 lines, then select **Start**. You can also open logs from a selected service or container.
+
+To look back, open **Time range** and choose a preset or **Custom**. Enter the start and end dates and times in your computer’s time zone. **Duration** updates as you edit either value. Select **Read logs** to query the host and see up to the newest 10,000 matching lines. Choose **Clear range** to return to the line count and live-follow controls.
 
 <figure class="docs-screenshot">
   <a href={logsScreenshot.src} target="_blank" rel="noreferrer">
     <img
       src={logsScreenshot.src}
-      alt="Logs streaming a service, with line numbers, highlighted warning and error lines, and the All, Warnings, and Errors filters."
+      alt="Full system journal snapshot with the Last 15 min range selected."
     />
   </a>
-  <figcaption>A service log stream. Example data shown.</figcaption>
+  <figcaption>
+    The full system journal filtered to the last 15 minutes. Example data shown.
+  </figcaption>
 </figure>
 
 **Receive new lines** keeps reading after the initial lines load. **Stop** ends the stream. The view shows one source at a time: choosing another unit or container clears it. While a stream runs, changing the source, line count, or **Receive new lines** restarts it with the new choice in a fresh view. Starting the same source again keeps earlier lines above a divider. **Pause** holds new lines while you read; the stream keeps running, and the status shows how many lines are waiting. **Resume** shows them.
 
 Lines that mention warnings or errors are marked in the margin. **Warnings** and **Errors** show only those lines, with a count for each. A level the line states itself, such as `level=info`, `"log.level": "WARN"`, `[error]`, or `FATAL:`, decides. Otherwise the app looks for words such as `warning`, `error`, `failed`, or `fatal` in the message. It does not read the journal priority.
 
-Search shows the loaded lines that contain your text and highlights each match. Press `Ctrl+F` to search and `Escape` to clear it. Timestamps and host names are dimmed so messages stand out. Line numbers are not copied with the text. You can turn line wrapping off or clear the view.
+Search shows the loaded lines that contain your text and highlights each match. Press `Ctrl+F` to search and `Escape` to clear it. The time of day stands out in each timestamp, and host names are dimmed so messages stand out. When a message starts with its own timestamp for the same moment, that copy is dimmed too. Line numbers are not copied with the text. You can turn line wrapping off or clear the view.
 
 Scrolling up keeps your reading position. **Jump to latest** returns to new lines and shows how many arrived. Focus the log to scroll it with the arrow keys, `Page Up`, `Page Down`, `Home`, and `End`.
 
 If the SSH account can’t read the system journal, Logs says so instead of showing an empty stream. Select **Retry with sudo**, turn on **Elevated commands** in Settings, or add the account to the `adm` or `systemd-journal` group.
 
-Systemd logs come from `journalctl`; container logs come from `docker logs`. Terminal color codes are removed. Closing the view stops the stream. Fetched logs stay in memory and are not saved. The view keeps up to the newest 10,000 lines. For a different journal query, use the terminal.
+Systemd logs come from `journalctl`. Container logs come from `docker logs`, and each line shows when Docker received it. Control Room strips terminal color codes. Closing the view stops the stream. Logs stay in memory and the view keeps up to the newest 10,000 lines. For custom journal queries, use the terminal.
 
 On Windows hosts, Logs offers Docker containers only. It reads both standard output and error output through the Windows Docker CLI. Windows service event logs are not included.
 
-On macOS, choose **Unified log** and **All unified logs**, or select a launchd service. Service reads use configured standard output and error files when available. Otherwise they read unified-log entries for the running PID and launchd messages naming that service. Unified-log history covers up to the last hour before following new entries. Protected output may require sudo. The Mac's retention and privacy settings determine which entries are available.
+On macOS, choose **Unified log** and **All unified logs**, or select a launchd service. Service reads use configured standard output and error files when available. When those files are unavailable or you choose a time range, Control Room reads unified-log entries for the running PID and launchd messages naming that service. The default unified-log history covers up to the last hour before following new entries. Protected output may require sudo. The Mac's retention and privacy settings determine which entries are available.

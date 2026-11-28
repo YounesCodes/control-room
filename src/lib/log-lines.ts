@@ -1,5 +1,6 @@
 export type LogLevel = "error" | "warning";
-export type LogSegmentRole = "date" | "time" | "zone" | "source" | "message";
+export type LogSegmentRole =
+  "date" | "separator" | "time" | "fraction" | "zone" | "source" | "repeated-time" | "message";
 export type LogLevelFilter = "all" | LogLevel;
 
 export interface LogSegment {
@@ -17,7 +18,19 @@ export interface ParsedLogLine {
 // eslint-disable-next-line no-control-regex
 const TERMINAL_ESCAPES = /\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-_]/g;
 const ISO_PREFIX =
-  /^(\d{4}-\d{2}-\d{2}[T ])(\d{2}:\d{2}:\d{2}(?:[.,]\d+)?)(Z| ?UTC|[+-]\d{2}:?\d{2})?(?=\s)/;
+  /^(\d{4}-\d{2}-\d{2})([T ])(\d{2}:\d{2}:\d{2})([.,]\d+)?(Z| ?UTC|[+-]\d{2}:?\d{2})?(?=\s)/;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH_NAME = `(?<monthName>${MONTHS.join("|")})`;
+const CLOCK = String.raw`(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?:[.,](?<fraction>\d+))?(?: ?(?<zone>Z|UTC|GMT|[+-]\d{2}:?\d{2}))?(?!\d)`;
+const MESSAGE_TIMES = [
+  String.raw`^(?<lead>\s*(?:[[(]|(?:time|ts|t|timestamp)="?|\{[^{}]{0,60}?"(?:time|timestamp|ts|@timestamp)"\s*:\s*")?)(?<year>\d{4})[-/](?<month>\d{2})[-/](?<day>\d{2})[T ]${CLOCK}`,
+  String.raw`^(?<lead>\s*[[(]?)(?<first>\d{1,2})/(?<second_>\d{1,2})/(?<year>\d{4}|\d{2})[T ]${CLOCK}`,
+  String.raw`^(?<lead>\s*(?:\d+:[A-Za-z] )?[[(]?)(?<day>\d{1,2}) ${MONTH_NAME} (?<year>\d{4}) ${CLOCK}`,
+  String.raw`^(?<lead>\s*[[(]?)${MONTH_NAME} +(?<day>\d{1,2}) ${CLOCK}`,
+].map((source) => new RegExp(source));
+const MESSAGE_TIME_REACH = 100;
+const CLOCK_HINT = /\d:\d{2}:\d{2}/;
+const REPEATED_TIME_WINDOW_MS = 2_000;
 const JOURNAL_SOURCE = /^(\s+)(\S+ (?:[^\s:[\]]+\[\d+\]|kernel):)(?=\s|$)/;
 const STREAM_MARKER = /^\[(?:systemd|docker) .+\] stream started$/;
 const JOURNAL_MARKER = /^-- .+ --$/;
@@ -76,6 +89,85 @@ export function logLevel(message: string): LogLevel | null {
   return null;
 }
 
+interface WallClock {
+  ms: number;
+  offsetMinutes: number | null;
+}
+
+function wallClock(
+  [year, month, day]: [number, number, number],
+  time: string,
+  fraction: string | undefined,
+  zone: string | undefined,
+): WallClock {
+  const [hour, minute, second] = time.split(":").map(Number);
+  const millis = fraction ? Number(`0.${fraction.replace(/^[.,]/, "")}`) * 1000 : 0;
+  return {
+    ms: Date.UTC(year, month - 1, day, hour, minute, second, millis),
+    offsetMinutes: zoneOffsetMinutes(zone),
+  };
+}
+
+function zoneOffsetMinutes(zone: string | undefined): number | null {
+  const value = zone?.trim();
+  if (!value) return null;
+  if (value === "Z" || value === "UTC" || value === "GMT") return 0;
+  const offset = /^([+-])(\d{2}):?(\d{2})$/.exec(value);
+  if (!offset) return null;
+  return (offset[1] === "-" ? -1 : 1) * (Number(offset[2]) * 60 + Number(offset[3]));
+}
+
+function repeatsOuterTime(outer: WallClock, inner: WallClock) {
+  const outerOffset = outer.offsetMinutes ?? 0;
+  const instant = outer.ms - outerOffset * 60_000;
+  const candidates =
+    inner.offsetMinutes === null
+      ? [inner.ms, inner.ms - outerOffset * 60_000]
+      : [inner.ms - inner.offsetMinutes * 60_000];
+  return candidates.some((candidate) => Math.abs(candidate - instant) <= REPEATED_TIME_WINDOW_MS);
+}
+
+function messageTime(message: string, outerYear: number) {
+  for (const pattern of MESSAGE_TIMES) {
+    const match = pattern.exec(message);
+    const fields = match?.groups;
+    if (!match || !fields) continue;
+    const year = fields.year
+      ? Number(fields.year) + (fields.year.length === 2 ? 2000 : 0)
+      : outerYear;
+    const month = fields.monthName ? MONTHS.indexOf(fields.monthName) + 1 : Number(fields.month);
+    const dates: [number, number, number][] = fields.first
+      ? [
+          [year, Number(fields.first), Number(fields.second_)],
+          [year, Number(fields.second_), Number(fields.first)],
+        ]
+      : [[year, month, Number(fields.day)]];
+    const time = `${fields.hour}:${fields.minute}:${fields.second}`;
+    return {
+      start: fields.lead.length,
+      end: match[0].length,
+      clocks: dates.map((date) => wallClock(date, time, fields.fraction, fields.zone)),
+    };
+  }
+  return null;
+}
+
+function messageSegments(message: string, stamp: RegExpExecArray | null): LogSegment[] {
+  if (!stamp || !CLOCK_HINT.test(message.slice(0, MESSAGE_TIME_REACH)))
+    return [{ role: "message", text: message }];
+  const [year, month, day] = stamp[1].split("-").map(Number);
+  const inner = messageTime(message, year);
+  const outer = inner && wallClock([year, month, day], stamp[3], stamp[4], stamp[5]);
+  if (!inner || !outer || !inner.clocks.some((clock) => repeatsOuterTime(outer, clock)))
+    return [{ role: "message", text: message }];
+  const { start, end } = inner;
+  return [
+    { role: "message" as const, text: message.slice(0, start) },
+    { role: "repeated-time" as const, text: message.slice(start, end) },
+    { role: "message" as const, text: message.slice(end) },
+  ].filter((segment) => segment.text);
+}
+
 export function parseLogLine(raw: string): ParsedLogLine {
   const text = cleanLogText(raw);
   if (STREAM_MARKER.test(text) || JOURNAL_MARKER.test(text))
@@ -85,8 +177,13 @@ export function parseLogLine(raw: string): ParsedLogLine {
   let rest = text;
   const stamp = ISO_PREFIX.exec(rest);
   if (stamp) {
-    segments.push({ role: "date", text: stamp[1] }, { role: "time", text: stamp[2] });
-    if (stamp[3]) segments.push({ role: "zone", text: stamp[3] });
+    segments.push(
+      { role: "date", text: stamp[1] },
+      { role: "separator", text: stamp[2] },
+      { role: "time", text: stamp[3] },
+    );
+    if (stamp[4]) segments.push({ role: "fraction", text: stamp[4] });
+    if (stamp[5]) segments.push({ role: "zone", text: stamp[5] });
     rest = rest.slice(stamp[0].length);
     const source = JOURNAL_SOURCE.exec(rest);
     if (source) {
@@ -94,7 +191,7 @@ export function parseLogLine(raw: string): ParsedLogLine {
       rest = rest.slice(source[0].length);
     }
   }
-  if (rest) segments.push({ role: "message", text: rest });
+  if (rest) segments.push(...messageSegments(rest, stamp));
   return { text, segments, level: logLevel(rest), marker: false };
 }
 

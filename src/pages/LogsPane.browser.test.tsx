@@ -1,12 +1,29 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 import { createRoot, type Root } from "react-dom/client";
 import { runAxe } from "../test/axe";
 import { settings, connection } from "../test/app-fixtures";
-import type { SystemdUnit } from "../types";
+import type { StreamStateEvent, SystemdUnit } from "../types";
+import type { LogTimeBounds } from "../lib/log-time-range";
 import "../styles.css";
 
-const native = vi.hoisted(() => ({ output: null as ((message: ArrayBuffer) => void) | null }));
+const native = vi.hoisted(() => ({
+  output: null as ((message: ArrayBuffer) => void) | null,
+  streamState: null as ((event: { payload: StreamStateEvent }) => void) | null,
+  startJournal: vi.fn(
+    async (
+      ...[, source]: [
+        connectionId: string,
+        source: string,
+        lines: number,
+        follow: boolean,
+        password: string | null,
+        output: unknown,
+        bounds: LogTimeBounds | null,
+      ]
+    ) => ({ streamId: `stream-${source}` }),
+  ),
+}));
 vi.mock("@tauri-apps/api/core", () => ({
   Channel: class {
     set onmessage(handler: (message: ArrayBuffer) => void) {
@@ -14,10 +31,15 @@ vi.mock("@tauri-apps/api/core", () => ({
     }
   },
 }));
-vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => undefined }));
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: async (event: string, handler: typeof native.streamState) => {
+    if (event === "stream-state-changed") native.streamState = handler;
+    return () => undefined;
+  },
+}));
 vi.mock("../lib/api", () => ({
   api: {
-    startJournalStream: async () => ({ streamId: "stream-a" }),
+    startJournalStream: native.startJournal,
     stopLogStream: async () => undefined,
     listServices: async () => [],
     listContainers: async () => [],
@@ -56,6 +78,7 @@ let container: HTMLDivElement | null = null;
 afterEach(() => {
   root?.unmount();
   container?.remove();
+  native.startJournal.mockClear();
 });
 
 async function mount() {
@@ -68,7 +91,12 @@ async function mount() {
       connection={connection()}
       settings={settings}
       logTailOptions={[200]}
-      servicesCache={{ items: [unit], fetchedAt: Date.now(), loading: false, error: null }}
+      servicesCache={{
+        items: [unit, { ...unit, id: "backup.timer", description: "Nightly snapshots" }],
+        fetchedAt: Date.now(),
+        loading: false,
+        error: null,
+      }}
       containersCache={{ items: [], fetchedAt: Date.now(), loading: false, error: null }}
       selectedSource={{ type: "systemd", id: unit.id }}
       onServicesCacheChange={() => undefined}
@@ -87,4 +115,79 @@ it("has no automatically detectable accessibility violations while streaming", a
   await page.getByRole("button", { name: /^Errors/ }).click();
   const results = await runAxe(container!);
   expect(results.violations.map((violation) => violation.id)).toEqual([]);
+});
+
+it("suggests matching sources as you type and commits only the chosen journal", async () => {
+  await mount();
+  const input = page.getByRole("combobox", { name: "Journal" });
+  await input.fill("nightly");
+  await expect.element(page.getByRole("option", { name: /backup.timer/ })).toBeVisible();
+  await expect
+    .element(page.getByRole("option", { name: "worker.service" }))
+    .not.toBeInTheDocument();
+  expect(native.startJournal.mock.calls.map((call) => call[1])).toEqual(["worker.service"]);
+
+  await input.fill("no matching source");
+  await expect.element(page.getByText("No matching log sources.")).toBeVisible();
+  await userEvent.keyboard("{Escape}");
+  await expect.element(input).toHaveValue("worker.service");
+  await expect.element(page.getByRole("listbox")).not.toBeInTheDocument();
+
+  await input.fill("system journal");
+  await expect.element(page.getByRole("option", { name: /Full system journal/ })).toBeVisible();
+  const results = await runAxe(container!);
+  expect(results.violations.map((violation) => violation.id)).toEqual([]);
+  await userEvent.keyboard("{Enter}");
+  await expect.element(input).toHaveValue("Full system journal");
+  await expect
+    .element(page.getByText("[systemd Full system journal] stream started"))
+    .toBeVisible();
+  expect(native.startJournal.mock.calls.map((call) => call[1])).toEqual(["worker.service", "all"]);
+});
+
+it("validates a custom range, reads it from the host and restores follow when cleared", async () => {
+  await mount();
+  const trigger = page.getByRole("button", { name: "Time range", exact: true });
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "Log time range" });
+  await dialog.getByRole("button", { name: "Custom", exact: true }).click();
+  const duration = dialog.getByRole("status");
+  await expect.element(duration).toBeVisible();
+  await dialog.getByLabelText("From").fill("2026-11-10T12:00");
+  await dialog.getByLabelText("To").fill("2026-11-11T12:00");
+  await expect.element(duration).toHaveTextContent("Duration · 1 day");
+  await dialog.getByLabelText("To").fill("2026-11-11T14:00");
+  await expect.element(duration).toHaveTextContent("Duration · 1 day, 2 hours");
+  await dialog.getByLabelText("From").fill("2026-11-10T12:30");
+  await expect.element(duration).toHaveTextContent("Duration · 1 day, 1 hour, 30 minutes");
+  const from = "2026-11-01T09:30";
+  const to = "2026-11-01T10:00";
+  await dialog.getByLabelText("From").fill(to);
+  await dialog.getByLabelText("To").fill(from);
+  await expect.element(duration).toHaveTextContent("Duration · —");
+  await dialog.getByRole("button", { name: "Read logs" }).click();
+  await expect.element(dialog.getByRole("alert")).toHaveTextContent("End must be after start.");
+  expect(native.startJournal.mock.calls).toHaveLength(1);
+  await dialog.getByLabelText("From").fill(from);
+  await dialog.getByLabelText("To").fill(to);
+  await expect.element(duration).toHaveTextContent("Duration · 30 minutes");
+  const axe = await runAxe(dialog.element());
+  expect(axe.violations.map(({ id }) => id)).toEqual([]);
+  await dialog.getByRole("button", { name: "Read logs" }).click();
+  await expect.element(page.getByText("Reading entries from worker.service…")).toBeVisible();
+  expect(native.startJournal.mock.calls.at(-1)?.[3]).toBe(false);
+  expect(native.startJournal.mock.calls.at(-1)?.[6]).toEqual({
+    start: new Date(from).getTime() / 1000,
+    end: new Date(to).getTime() / 1000,
+  });
+  native.streamState?.({
+    payload: { state: "stopped", streamId: "stream-worker.service", reason: null },
+  });
+  await expect.element(page.getByText("No entries in this time range.")).toBeVisible();
+  const follow = page.getByRole("checkbox", { name: "Receive new lines" });
+  await expect.element(follow).toBeDisabled();
+  await page.getByRole("button", { name: /Time range.*Custom range/ }).click();
+  await dialog.getByRole("button", { name: "Clear range" }).click();
+  await expect.element(follow).toBeChecked();
+  await expect.element(trigger).toHaveFocus();
 });

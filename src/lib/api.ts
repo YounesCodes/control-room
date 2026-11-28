@@ -1,6 +1,7 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { beginHostOperation } from "./host-processing";
 import type { FileJob, RemoteFolder, TransferProgress } from "./file-transfers";
+import type { LogTimeBounds } from "./log-time-range";
 import type {
   AppSettings,
   FontCatalog,
@@ -249,6 +250,7 @@ export const api = {
     follow: boolean,
     sudoPassword: string | null,
     output: Channel<ArrayBuffer>,
+    timeRange: LogTimeBounds | null = null,
   ) =>
     invokeHostOperation<StreamStarted>(
       "start_journal_stream",
@@ -257,6 +259,7 @@ export const api = {
         service,
         lines,
         follow,
+        timeRange,
         sudoPassword,
         output,
       },
@@ -269,6 +272,7 @@ export const api = {
     follow: boolean,
     sudoPassword: string | null,
     output: Channel<ArrayBuffer>,
+    timeRange: LogTimeBounds | null = null,
   ) =>
     invokeHostOperation<StreamStarted>(
       "start_docker_log_stream",
@@ -277,6 +281,7 @@ export const api = {
         container,
         lines,
         follow,
+        timeRange,
         sudoPassword,
         output,
       },

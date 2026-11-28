@@ -8,19 +8,33 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import { Channel } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ArrowDown, Eraser, FileClock, Pause, Play, Square, WrapText, X } from "lucide-react";
+import {
+  ArrowDown,
+  CalendarClock,
+  Eraser,
+  FileClock,
+  Pause,
+  Play,
+  Square,
+  WrapText,
+  X,
+} from "lucide-react";
 import { CredentialDialog } from "../components/CredentialDialog";
-import { Bone, ErrorState, Skeleton, SkeletonLines } from "../components/PanelState";
+import { LogSourcePicker, type LogSourceOption } from "../components/LogSourcePicker";
+import { LogTimeRangeDialog } from "../components/LogTimeRangeDialog";
 import { api, errorMessage } from "../lib/api";
 import { BoundedLogBuffer, logRenderDelay } from "../lib/log-buffer";
+import { logTimeBounds, logTimeLabel, type LogTimeRange } from "../lib/log-time-range";
 import {
   highlightSegments,
   LogLineCache,
   lineMatches,
   type LogLevelFilter,
+  type LogSegmentRole,
   type ParsedLogLine,
 } from "../lib/log-lines";
 import { isCacheFresh, reconcileSelection } from "../lib/workspace-cache";
@@ -39,9 +53,16 @@ import type {
 
 type StreamStatus = "stopped" | "starting" | "running" | "stopping";
 type SudoPurpose = "sources" | "stream";
-type StreamTarget = { type: LogSourceType; id: string; tail: number; follow: boolean };
+type StreamTarget = {
+  type: LogSourceType;
+  id: string;
+  tail: number;
+  follow: boolean;
+  timeRange: LogTimeRange | null;
+};
 const MAX_EARLY_STREAM_EVENTS = 16;
 const HELD_LINES_DELAY = 400;
+const ALL_JOURNAL = "all";
 const LEVEL_FILTERS: { value: LogLevelFilter; label: string; title?: string }[] = [
   { value: "all", label: "All" },
   {
@@ -57,27 +78,42 @@ const LEVEL_FILTERS: { value: LogLevelFilter; label: string; title?: string }[] 
   },
 ];
 const numberFormat = new Intl.NumberFormat("en-US");
+const rangeDateFormat = new Intl.DateTimeFormat(undefined, {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
 
 const CHUNK_LINES = 100;
 const LINE_HEIGHT = 1.55;
 type LogRowData = { number: number; line: ParsedLogLine };
+const TIMESTAMP_ROLES = new Set<LogSegmentRole>(["date", "separator", "time", "fraction", "zone"]);
 
 function LogRow({ number, line, query }: LogRowData & { query: string }) {
   const parts = query ? highlightSegments(line.segments, query) : null;
-  const content = line.segments.map((segment, index) => {
+  const stamp: ReactNode[] = [];
+  const rest: ReactNode[] = [];
+  line.segments.forEach((segment, index) => {
     const text = parts
       ? parts[index].map((part, partIndex) =>
           part.match ? <mark key={partIndex}>{part.text}</mark> : part.text,
         )
       : segment.text;
-    return segment.role === "message" ? (
-      <Fragment key={index}>{text}</Fragment>
-    ) : (
-      <span key={index} className={`log-${segment.role}`}>
-        {text}
-      </span>
-    );
+    const element =
+      segment.role === "message" ? (
+        <Fragment key={index}>{text}</Fragment>
+      ) : (
+        <span key={index} className={`log-${segment.role}`}>
+          {text}
+        </span>
+      );
+    (TIMESTAMP_ROLES.has(segment.role) ? stamp : rest).push(element);
   });
+  const content = (
+    <>
+      {stamp.length > 0 && <span className="log-stamp">{stamp}</span>}
+      {rest}
+    </>
+  );
   return (
     <div
       className="log-line"
@@ -159,7 +195,14 @@ export function LogsPane({
   const [sourceType, setSourceType] = useState<LogSourceType>(
     windowsHost ? "docker" : (selectedSource?.type ?? "systemd"),
   );
-  const [sourceId, setSourceId] = useState(selectedSource?.id ?? (macosHost ? "all" : ""));
+  const [sourceId, setSourceId] = useState(
+    selectedSource?.type === sourceType
+      ? selectedSource.id
+      : sourceType === "systemd"
+        ? ALL_JOURNAL
+        : "",
+  );
+  const journalLabel = macosHost ? "All unified logs" : "Full system journal";
   // launchd services are named `domain/label`, not systemd unit names.
   const explicitSystemdSource =
     sourceType === "systemd" &&
@@ -168,6 +211,9 @@ export function LogsPane({
     (isSystemdUnitName(sourceId) || (macosHost && sourceId.includes("/")));
   const [tail, setTail] = useState(settings.defaultLogTail);
   const [follow, setFollow] = useState(true);
+  const [timeRange, setTimeRange] = useState<LogTimeRange | null>(null);
+  const [rangeDialogOpen, setRangeDialogOpen] = useState(false);
+  const [rangeRead, setRangeRead] = useState(false);
   const [streamStatus, setStreamStatus] = useState<StreamStatus>("stopped");
   const [paused, setPaused] = useState(false);
   const [logs, setLogs] = useState({ text: "", firstLine: 1 });
@@ -188,11 +234,12 @@ export function LogsPane({
   const pausedRef = useRef(false);
   const streamIdRef = useRef<string | null>(null);
   const streamGenerationRef = useRef(0);
-  const sourceRequestRef = useRef(0);
+  const sourceRequestsRef = useRef({ systemd: 0, docker: 0 });
   const flushTimerRef = useRef<number | null>(null);
   const heldTimerRef = useRef<number | null>(null);
   const lineCacheRef = useRef(new LogLineCache());
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const rangeButtonRef = useRef<HTMLButtonElement>(null);
   const disposedRef = useRef(false);
   const startingRef = useRef(false);
   const startRequestRef = useRef(0);
@@ -302,7 +349,7 @@ export function LogsPane({
   ) {
     const cache = type === "systemd" ? servicesCacheRef.current : containersCacheRef.current;
     if (!force && isCacheFresh(cache)) return;
-    const request = ++sourceRequestRef.current;
+    const request = ++sourceRequestsRef.current[type];
     if (type === "systemd") {
       onServicesCacheChange({ ...servicesCacheRef.current, loading: true, error: null });
     } else {
@@ -311,16 +358,16 @@ export function LogsPane({
     try {
       if (type === "systemd") {
         const items = await api.listServices(connection.id);
-        if (request !== sourceRequestRef.current) return;
+        if (request !== sourceRequestsRef.current[type]) return;
         onServicesCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
       } else {
         const items = await api.listContainers(connection.id, sudoPassword);
-        if (request !== sourceRequestRef.current) return;
+        if (request !== sourceRequestsRef.current[type]) return;
         onContainersCacheChange({ items, fetchedAt: Date.now(), loading: false, error: null });
-        setSudoPurpose(null);
+        setSudoPurpose((purpose) => (purpose === "sources" ? null : purpose));
       }
     } catch (caught) {
-      if (request !== sourceRequestRef.current) return;
+      if (request !== sourceRequestsRef.current[type]) return;
       const message = errorMessage(caught);
       if (type === "systemd") {
         onServicesCacheChange({ ...servicesCacheRef.current, loading: false, error: message });
@@ -333,15 +380,16 @@ export function LogsPane({
   useEffect(() => {
     void loadSources(sourceType);
     return () => {
-      sourceRequestRef.current += 1;
+      sourceRequestsRef.current.systemd += 1;
+      sourceRequestsRef.current.docker += 1;
     };
   }, [connection.id]);
 
   useEffect(() => {
-    if (explicitSystemdSource) return;
+    if (sourceType === "systemd" && (sourceId === ALL_JOURNAL || explicitSystemdSource)) return;
     const items = sourceType === "systemd" ? servicesCache.items : containersCache.items;
-    if (macosHost && sourceType === "systemd" && sourceId === "all") return;
-    const next = reconcileSelection(items, sourceId) ?? "";
+    const next =
+      reconcileSelection(items, sourceId) ?? (sourceType === "systemd" ? ALL_JOURNAL : "");
     if (next === sourceId) return;
     setSourceId(next);
     onSourceChange(next ? { type: sourceType, id: next } : null);
@@ -441,12 +489,13 @@ export function LogsPane({
   function stopStream() {
     wantsStreamRef.current = false;
     startRequestRef.current += 1;
+    setRangeRead(false);
     return stop();
   }
 
   async function start(
     sudoPassword: string | null = null,
-    target: StreamTarget = { type: sourceType, id: sourceId, tail, follow },
+    target: StreamTarget = { type: sourceType, id: sourceId, tail, follow, timeRange },
     fresh = false,
   ) {
     if (!target.id) return;
@@ -455,7 +504,9 @@ export function LogsPane({
     const stopped = await stop();
     if (request !== startRequestRef.current || disposedRef.current) return;
     if (!stopped) return;
-    if (fresh) clearBuffers();
+    setTimeRange(target.timeRange);
+    if (fresh || target.timeRange) clearBuffers();
+    setRangeRead(Boolean(target.timeRange));
     const generation = ++streamGenerationRef.current;
     setError(null);
     setJournalRestricted(false);
@@ -469,11 +520,19 @@ export function LogsPane({
     earlyStateRef.current.clear();
     earlyNoticeRef.current.clear();
     decoderRef.current = new TextDecoder();
-    const targetItems = target.type === "systemd" ? servicesCache.items : containersCache.items;
-    activeBufferRef.current.append(
-      `${activeBufferRef.current.byteCount ? "\n" : ""}[${target.type} ${sourceLabel(targetItems, target.id)}] stream started\n`,
-    );
-    flushNow();
+    if (!target.timeRange) {
+      const targetLabel =
+        target.type === "systemd"
+          ? target.id === ALL_JOURNAL
+            ? journalLabel
+            : target.id
+          : (containersCache.items.find((container) => container.id === target.id)?.name ??
+            target.id);
+      activeBufferRef.current.append(
+        `${activeBufferRef.current.byteCount ? "\n" : ""}[${target.type} ${targetLabel}] stream started\n`,
+      );
+      flushNow();
+    }
 
     const output = new Channel<ArrayBuffer>();
     output.onmessage = (message) => {
@@ -482,23 +541,26 @@ export function LogsPane({
     };
 
     try {
+      const bounds = target.timeRange ? logTimeBounds(target.timeRange) : null;
       const started =
         target.type === "systemd"
           ? await api.startJournalStream(
               connection.id,
               target.id,
               target.tail,
-              target.follow,
+              target.follow && !bounds,
               sudoPassword,
               output,
+              bounds,
             )
           : await api.startDockerLogStream(
               connection.id,
               target.id,
               target.tail,
-              target.follow,
+              target.follow && !bounds,
               sudoPassword,
               output,
+              bounds,
             );
       if (disposedRef.current || generation !== streamGenerationRef.current) {
         await api.stopLogStream(started.streamId).catch(() => undefined);
@@ -548,7 +610,7 @@ export function LogsPane({
     setError(null);
     setJournalRestricted(false);
     if (!wantsStreamRef.current) return;
-    if (id) void start(null, { type, id, tail, follow }, true);
+    if (id) void start(null, { type, id, tail, follow, timeRange }, true);
     else void stopStream();
   }
 
@@ -561,8 +623,8 @@ export function LogsPane({
 
   function changeType(next: LogSourceType) {
     if (next === sourceType) return;
-    const items = next === "systemd" ? servicesCache.items : containersCache.items;
-    const nextId = macosHost && next === "systemd" ? "all" : (items[0]?.id ?? "");
+    const nextId = next === "systemd" ? ALL_JOURNAL : (containersCache.items[0]?.id ?? "");
+    setSudoPurpose(null);
     setSourceType(next);
     setSourceId(nextId);
     onSourceChange(nextId ? { type: next, id: nextId } : null);
@@ -572,10 +634,28 @@ export function LogsPane({
 
   function changeReadOptions(options: { tail: number; follow: boolean }) {
     if (wantsStreamRef.current)
-      void start(null, { type: sourceType, id: sourceId, ...options }, true);
+      void start(null, { type: sourceType, id: sourceId, timeRange, ...options }, true);
+  }
+
+  function closeRangeDialog() {
+    setRangeDialogOpen(false);
+    rangeButtonRef.current?.focus();
+  }
+
+  function applyTimeRange(next: LogTimeRange | null) {
+    closeRangeDialog();
+    if (sourceId && (next || wantsStreamRef.current)) {
+      void start(null, { type: sourceType, id: sourceId, tail, follow, timeRange: next }, true);
+    } else {
+      setTimeRange(next);
+      clearBuffers();
+      setError(null);
+      setJournalRestricted(false);
+    }
   }
 
   function clearBuffers() {
+    setRangeRead(false);
     activeBufferRef.current.clear();
     pausedBufferRef.current.clear();
     clearHeldLines();
@@ -614,6 +694,8 @@ export function LogsPane({
     [lines, query, levelFilter, filtering],
   );
   const visibleChunks = useMemo(() => chunkRows(visibleLines), [visibleLines]);
+  const showOutput =
+    visibleLines.length > 0 && (!timeRange || levelCounts.all > 0 || journalRestricted);
   const lastLine = logs.firstLine + lines.length - 1;
   const gutterDigits = Math.max(3, String(Math.max(lastLine, 1)).length);
 
@@ -621,14 +703,14 @@ export function LogsPane({
     const added = Math.max(0, lastLine - previousLastLineRef.current);
     previousLastLineRef.current = lastLine;
     const output = outputRef.current;
-    if (!output || filtering) return;
+    if (!output || filtering || timeRange) return;
     if (atLatest) {
       output.scrollTop = output.scrollHeight;
       setUnreadLines(0);
     } else if (added > 0) {
       setUnreadLines((current) => current + added);
     }
-  }, [lastLine, logs, filtering, atLatest]);
+  }, [lastLine, logs, filtering, atLatest, timeRange]);
 
   function handleOutputScroll() {
     const output = outputRef.current;
@@ -646,80 +728,53 @@ export function LogsPane({
   }
 
   const sourceCache = sourceType === "systemd" ? servicesCache : containersCache;
-  const sourceOptions =
-    macosHost && sourceType === "systemd"
-      ? [{ id: "all", name: "All unified logs" }, ...sourceCache.items]
-      : sourceCache.items;
-  // macOS hosts can always stream the whole unified log.
-  const sourceListOptional = explicitSystemdSource || (macosHost && sourceType === "systemd");
-  if (sourceCache.loading && !sourceCache.items.length && !sourceListOptional)
-    return (
-      <section className="feature-page logs-page">
-        <header className="page-heading compact-heading">
-          <div className="page-heading-title">
-            <h2>Logs</h2>
-            <Bone shape="caption" width="56px" />
-          </div>
-        </header>
-        <div className="log-controls">
-          <div className="skeleton-field">
-            <Bone shape="caption" width="44px" />
-            <Bone shape="control" width="96px" />
-          </div>
-          <div className="skeleton-field source-select">
-            <Bone shape="caption" width="36px" />
-            <Bone shape="control" width="100%" />
-          </div>
-          <div className="skeleton-field">
-            <Bone shape="caption" width="36px" />
-            <Bone shape="control" width="68px" />
-          </div>
-          <div className="log-transport">
-            <Bone shape="button" width="78px" />
-            <Bone shape="button" width="72px" />
-          </div>
-        </div>
-        <Skeleton label="Finding available log sources…" className="log-panel">
-          <div className="log-view-bar">
-            <Bone shape="control" width="420px" className="log-search" />
-            <Bone shape="control" width="190px" />
-            <Bone shape="icon" />
-          </div>
-          <SkeletonLines count={18} lead />
-        </Skeleton>
-      </section>
-    );
-  if (sourceCache.error && !sourceCache.items.length && !sourceListOptional) {
-    const dockerPermissionError =
-      !windowsHost &&
-      !macosHost &&
-      sourceType === "docker" &&
-      sourceCache.error.toLowerCase().includes("permission denied");
-    return (
-      <>
-        <ErrorState
-          message={sourceCache.error}
-          action={
-            dockerPermissionError ? (
-              <button onClick={() => setSudoPurpose("sources")}>Retry with sudo</button>
-            ) : (
-              <button onClick={() => loadSources(sourceType, true)}>Retry</button>
-            )
-          }
-        />
-        {sudoPurpose === "sources" && (
-          <CredentialDialog
-            connectionLabel={connection.displayName}
-            onClose={() => setSudoPurpose(null)}
-            onSubmit={(password) => loadSources("docker", true, password)}
-          />
-        )}
-      </>
-    );
-  }
-
   const sourceNoun = sourceType === "systemd" ? (macosHost ? "service" : "unit") : "container";
-  const selectedLabel = sourceId ? sourceLabel(sourceOptions, sourceId) : "";
+  const sourceOptions = useMemo<LogSourceOption[]>(() => {
+    if (sourceType === "docker") {
+      return containersCache.items.map((container) => ({
+        id: container.id,
+        label: container.name || container.id,
+        detail: container.image,
+      }));
+    }
+    const options: LogSourceOption[] = [
+      {
+        id: ALL_JOURNAL,
+        label: journalLabel,
+        detail: macosHost ? "System and application messages" : "All units and system messages",
+        journal: true,
+      },
+      ...servicesCache.items.map((unit) => ({
+        id: unit.id,
+        label: unit.id,
+        detail: unit.description !== unit.id ? unit.description : undefined,
+      })),
+    ];
+    if (explicitSystemdSource && !options.some((source) => source.id === sourceId)) {
+      options.push({ id: sourceId, label: sourceId });
+    }
+    return options;
+  }, [
+    sourceType,
+    containersCache.items,
+    servicesCache.items,
+    journalLabel,
+    macosHost,
+    explicitSystemdSource,
+    sourceId,
+  ]);
+  const selectedLabel = sourceOptions.find((source) => source.id === sourceId)?.label ?? sourceId;
+  const sourceDescription =
+    sourceType === "systemd" && sourceId === ALL_JOURNAL
+      ? macosHost
+        ? "the unified log"
+        : "the full system journal"
+      : selectedLabel;
+  const dockerPermissionError =
+    !windowsHost &&
+    !macosHost &&
+    sourceType === "docker" &&
+    sourceCache.error?.toLowerCase().includes("permission denied");
   const statusLabel =
     streamStatus === "starting"
       ? "Starting…"
@@ -728,8 +783,12 @@ export function LogsPane({
         : streamStatus === "running"
           ? paused
             ? "Paused"
-            : "Streaming"
-          : "Stopped";
+            : timeRange
+              ? "Reading"
+              : "Streaming"
+          : timeRange && rangeRead && !error
+            ? "Snapshot"
+            : "Stopped";
 
   return (
     <section className="feature-page logs-page">
@@ -765,54 +824,40 @@ export function LogsPane({
             <option value="docker">Docker</option>
           </select>
         </label>
-        <label className="source-select">
-          <span>{sourceType === "systemd" ? (macosHost ? "Service" : "Unit") : "Container"}</span>
-          <select
-            value={sourceId}
-            onChange={(event) => selectSource(event.target.value)}
-            disabled={!sourceId}
-          >
-            {!sourceId && <option value="">No {sourceNoun}s found</option>}
-            {explicitSystemdSource && !sourceOptions.some((source) => source.id === sourceId) && (
-              <option value={sourceId}>{sourceId}</option>
-            )}
-            {sourceOptions.map((source) => (
-              <option value={source.id} key={source.id}>
-                {"name" in source ? source.name : source.id}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
+        <LogSourcePicker
+          key={sourceType}
+          label={sourceType === "systemd" ? (macosHost ? "Service" : "Journal") : "Container"}
+          placeholder={`Search ${sourceNoun}s`}
+          options={sourceOptions}
+          value={sourceId}
+          status={sourceCache.loading ? `Finding ${sourceNoun}s…` : undefined}
+          onChange={selectSource}
+        />
+        <label
+          title={
+            timeRange ? "A time range reads up to the latest 10,000 matching lines" : undefined
+          }
+        >
           <span>Lines</span>
           <select
-            value={tail}
+            className="log-lines-select"
+            value={timeRange ? "range" : tail}
+            disabled={Boolean(timeRange)}
             onChange={(event) => {
               const next = Number(event.target.value);
               setTail(next);
               changeReadOptions({ tail: next, follow });
             }}
           >
+            {timeRange && <option value="range">—</option>}
             {logTailOptions.map((count) => (
               <option key={count}>{count}</option>
             ))}
           </select>
         </label>
-        <label className="checkbox-label">
-          <input
-            type="checkbox"
-            checked={follow}
-            onChange={(event) => {
-              const next = event.target.checked;
-              setFollow(next);
-              changeReadOptions({ tail, follow: next });
-            }}
-          />{" "}
-          Receive new lines
-        </label>
         <div className="log-transport">
           <button
-            className="secondary-button compact-button log-start"
+            className={`${streamStatus === "stopped" ? "primary-button" : "secondary-button"} compact-button log-start`}
             type="button"
             onClick={() => void (streamStatus === "stopped" ? start() : stopStream())}
             disabled={streamStatus === "stopping" || (streamStatus === "stopped" && !sourceId)}
@@ -830,15 +875,47 @@ export function LogsPane({
             {paused ? <Play size={14} /> : <Pause size={14} />} {paused ? "Resume" : "Pause"}
           </button>
         </div>
+        <label
+          className="checkbox-label"
+          title={timeRange ? "Clear the time range to follow new lines" : undefined}
+        >
+          <input
+            type="checkbox"
+            checked={!timeRange && follow}
+            disabled={Boolean(timeRange)}
+            onChange={(event) => {
+              const next = event.target.checked;
+              setFollow(next);
+              changeReadOptions({ tail, follow: next });
+            }}
+          />{" "}
+          Receive new lines
+        </label>
       </div>
       {sourceCache.error && (
-        <p className="inline-warning">Showing saved sources. Refresh failed: {sourceCache.error}</p>
+        <div className="inline-warning" role="status">
+          <span>
+            {sourceCache.items.length
+              ? `Couldn’t refresh ${sourceNoun}s. `
+              : `Couldn’t load ${sourceNoun}s. `}
+            {sourceCache.error}
+          </span>
+          <button
+            className="inline-action"
+            type="button"
+            onClick={() =>
+              dockerPermissionError ? setSudoPurpose("sources") : void loadSources(sourceType, true)
+            }
+          >
+            {dockerPermissionError ? "Retry with sudo" : "Retry"}
+          </button>
+        </div>
       )}
       {journalRestricted && (
         <div className="inline-warning" role="status">
           <span>
-            This account can’t read the system journal, so this unit’s entries may be missing. Use
-            sudo, or add the account to the adm or systemd-journal group.
+            This account can’t read the system journal, so some entries may be missing. Use sudo, or
+            add the account to the adm or systemd-journal group.
           </span>
           {!windowsHost && (
             <button
@@ -869,6 +946,26 @@ export function LogsPane({
       )}
       <div className="log-panel">
         <div className="log-view-bar">
+          <button
+            ref={rangeButtonRef}
+            className="secondary-button compact-button log-range-button"
+            type="button"
+            aria-haspopup="dialog"
+            aria-label={timeRange ? `Time range · ${logTimeLabel(timeRange)}` : undefined}
+            data-active={Boolean(timeRange) || undefined}
+            title={
+              timeRange?.mode === "custom"
+                ? rangeDateFormat.formatRange(
+                    new Date(timeRange.bounds.start * 1000),
+                    new Date(timeRange.bounds.end * 1000),
+                  )
+                : undefined
+            }
+            onClick={() => setRangeDialogOpen(true)}
+          >
+            <CalendarClock size={15} aria-hidden="true" />
+            {logTimeLabel(timeRange)}
+          </button>
           <label className="search-field log-search">
             <Search size={15} />
             <input
@@ -947,7 +1044,7 @@ export function LogsPane({
             </button>
           </div>
         </div>
-        {visibleLines.length ? (
+        {showOutput ? (
           <div className="log-output-shell">
             <div
               ref={outputRef}
@@ -989,7 +1086,7 @@ export function LogsPane({
         ) : (
           <div className="log-empty">
             <FileClock size={24} aria-hidden="true" />
-            {filtering && lines.length ? (
+            {filtering && levelCounts.all > 0 ? (
               <>
                 <p>
                   {query
@@ -1009,16 +1106,32 @@ export function LogsPane({
               </>
             ) : (
               <p>
-                {streaming
-                  ? `Waiting for output from ${selectedLabel}…`
-                  : sourceId
-                    ? `Start reads the last ${tail} lines of ${selectedLabel}${follow ? ", then new lines as they arrive" : ""}.`
-                    : `Choose a ${sourceNoun} to read its logs.`}
+                {timeRange && sourceId
+                  ? streaming
+                    ? `Reading entries from ${sourceDescription}…`
+                    : error || journalRestricted
+                      ? "The time range could not be read."
+                      : rangeRead
+                        ? "No entries in this time range."
+                        : `Start reads the selected time range from ${sourceDescription}.`
+                  : streaming
+                    ? `Waiting for output from ${sourceDescription}…`
+                    : sourceId
+                      ? `Start reads the last ${tail} lines of ${sourceDescription}${follow ? ", then new lines as they arrive" : ""}.`
+                      : `Choose a ${sourceNoun} to read its logs.`}
               </p>
             )}
           </div>
         )}
       </div>
+      {rangeDialogOpen && (
+        <LogTimeRangeDialog
+          value={timeRange}
+          launchd={macosHost && sourceType === "systemd" && sourceId !== ALL_JOURNAL}
+          onClose={closeRangeDialog}
+          onApply={applyTimeRange}
+        />
+      )}
       {sudoPurpose && (
         <CredentialDialog
           connectionLabel={connection.displayName}
@@ -1032,9 +1145,4 @@ export function LogsPane({
       )}
     </section>
   );
-}
-
-function sourceLabel(items: { id: string; name?: string }[], id: string): string {
-  const item = items.find((source) => source.id === id);
-  return item?.name ?? id;
 }

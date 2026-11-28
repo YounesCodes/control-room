@@ -604,9 +604,45 @@
       }
     },
     "logs": {
-      "states": ["stopped", "populated", "errors", "search", "restricted"],
+      "states": [
+        "stopped",
+        "populated",
+        "errors",
+        "search",
+        "restricted",
+        "source-search",
+        "source-no-matches",
+        "time-range-custom",
+        "time-range-invalid",
+        "time-range-active",
+        "time-range-empty"
+      ],
       "ready": ".app-shell",
       "prepare": {
+        "source-search": [{ "role": "combobox", "name": "Journal", "fill": "example" }],
+        "source-no-matches": [{ "role": "combobox", "name": "Journal", "fill": "nginx" }],
+        "time-range-custom": [
+          { "role": "button", "name": "Time range" },
+          { "role": "button", "name": "Custom" },
+          { "selector": ".log-range-fields label:first-child input", "fill": "2026-10-31T08:00" },
+          { "selector": ".log-range-fields label:last-child input", "fill": "2026-11-01T10:00" }
+        ],
+        "time-range-invalid": [
+          { "role": "button", "name": "Time range" },
+          { "role": "button", "name": "Custom" },
+          { "selector": ".log-range-fields input", "last": true, "fill": "2026-11-01T08:00" },
+          { "role": "button", "name": "Read logs" }
+        ],
+        "time-range-active": [
+          { "role": "button", "name": "Time range" },
+          { "role": "button", "name": "Last 15 min" },
+          { "role": "button", "name": "Read logs" }
+        ],
+        "time-range-empty": [
+          { "role": "button", "name": "Time range" },
+          { "role": "button", "name": "Last 15 min" },
+          { "role": "button", "name": "Read logs" }
+        ],
         "populated": [
           {
             "role": "button",
@@ -653,7 +689,13 @@
         "populated": ".logs-page .log-line:nth-child(49)",
         "errors": ".log-level-filter [data-level='error'][aria-pressed='true']",
         "search": ".logs-page .log-match-count",
-        "restricted": ".logs-page .inline-warning[role='status']"
+        "restricted": ".logs-page .inline-warning[role='status']",
+        "source-search": ".log-source-list [role='option']:first-child",
+        "source-no-matches": ".log-source-status",
+        "time-range-custom": ".log-range-details output >> text=1 day, 2 hours",
+        "time-range-invalid": ".log-range-form [role='alert']",
+        "time-range-active": ".logs-page .log-line:nth-child(48)",
+        "time-range-empty": ".log-empty >> text=No entries in this time range."
       }
     },
     "loading": {
@@ -749,7 +791,7 @@
         "windows-services": ".windows-services-page .list-panel .skeleton",
         "shell-picker": "[role='dialog'] .skeleton",
         "history": ".history-list.skeleton",
-        "logs": ".logs-page .skeleton",
+        "logs": ".logs-page .log-source-field",
         "docker": ".arch-viewport .skeleton",
         "docker-inspector": ".arch-detail .skeleton",
         "ports": ".arch-viewport .skeleton",
