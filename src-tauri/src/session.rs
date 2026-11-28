@@ -6,7 +6,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
     thread,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use parking_lot::{Condvar, Mutex};
@@ -37,7 +37,7 @@ mod windows;
 
 struct ManagedSession {
     master: Mutex<Option<Box<dyn MasterPty + Send>>>,
-    writer: Mutex<Box<dyn Write + Send>>,
+    input: Mutex<TerminalInput>,
     killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
     output_flow: OutputFlow,
     stop_requested: AtomicBool,
@@ -386,7 +386,7 @@ impl SessionManager {
         let session_id = Uuid::new_v4().to_string();
         let managed = Arc::new(ManagedSession {
             master: Mutex::new(Some(pair.master)),
-            writer: Mutex::new(writer),
+            input: Mutex::new(TerminalInput::new(writer, mode.input_after_resize())),
             killer: Mutex::new(killer),
             output_flow: OutputFlow::new(),
             stop_requested: AtomicBool::new(false),
@@ -535,10 +535,7 @@ impl SessionManager {
     }
 
     pub fn write(&self, session_id: &str, data: &[u8]) -> Result<(), String> {
-        let session = self.get(session_id)?;
-        let mut writer = session.writer.lock();
-        writer.write_all(data).map_err(|error| error.to_string())?;
-        writer.flush().map_err(|error| error.to_string())
+        self.get(session_id)?.input.lock().write(data)
     }
 
     pub fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), String> {
@@ -547,13 +544,7 @@ impl SessionManager {
         let master = master
             .as_ref()
             .ok_or_else(|| "Terminal Session is no longer active".to_string())?;
-        resize_pty(
-            master.as_ref(),
-            session.writer.lock().as_mut(),
-            cols,
-            rows,
-            session.mode.input_after_resize(),
-        )
+        resize_pty(master.as_ref(), &mut session.input.lock(), cols, rows)
     }
 
     pub fn acknowledge_output(&self, session_id: &str, bytes: usize) {
@@ -586,12 +577,57 @@ impl SessionManager {
     }
 }
 
+const CONPTY_RESIZE_SETTLE: Duration = Duration::from_millis(50);
+
+struct TerminalInput {
+    writer: Box<dyn Write + Send>,
+    after_resize: Option<&'static [u8]>,
+    unabsorbed_resizes: usize,
+    last_resize: Option<Instant>,
+}
+
+impl TerminalInput {
+    fn new(writer: Box<dyn Write + Send>, after_resize: Option<&'static [u8]>) -> Self {
+        Self {
+            writer,
+            after_resize,
+            unabsorbed_resizes: 0,
+            last_resize: None,
+        }
+    }
+
+    fn resized(&mut self) {
+        if self.after_resize.is_some() {
+            self.unabsorbed_resizes += 1;
+            self.last_resize = Some(Instant::now());
+        }
+    }
+
+    fn write(&mut self, data: &[u8]) -> Result<(), String> {
+        if let (Some(absorber), Some(last_resize)) = (self.after_resize, self.last_resize.take()) {
+            let settled_at = last_resize + CONPTY_RESIZE_SETTLE;
+            let now = Instant::now();
+            if settled_at > now {
+                thread::sleep(settled_at - now);
+            }
+            for _ in 0..std::mem::take(&mut self.unabsorbed_resizes) {
+                self.writer
+                    .write_all(absorber)
+                    .map_err(|error| error.to_string())?;
+            }
+        }
+        self.writer
+            .write_all(data)
+            .map_err(|error| error.to_string())?;
+        self.writer.flush().map_err(|error| error.to_string())
+    }
+}
+
 fn resize_pty(
     master: &dyn MasterPty,
-    writer: &mut dyn Write,
+    input: &mut TerminalInput,
     cols: u16,
     rows: u16,
-    input_after_resize: Option<&[u8]>,
 ) -> Result<(), String> {
     master
         .resize(PtySize {
@@ -601,10 +637,7 @@ fn resize_pty(
             pixel_height: 0,
         })
         .map_err(|error| error.to_string())?;
-    if let Some(input) = input_after_resize {
-        writer.write_all(input).map_err(|error| error.to_string())?;
-        writer.flush().map_err(|error| error.to_string())?;
-    }
+    input.resized();
     Ok(())
 }
 
